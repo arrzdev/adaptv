@@ -193,7 +193,7 @@ obvious, because the long tail is the actual work.
 - Auth: cookie-less bearer flow; OAuth redirect + **deep-link callback**; biometric unlock; token refresh on resume.
 
 ### Build, distribution & updates
-> Full model + the hard **isomorphism boundary** (`createServerFn` cannot reach a native app): see **`docs/design/rendering.md`**. adaptv has no server side (owner, 2026-10-05): server functions are refused on every target, web included, and server logic lives in an API the app calls → `docs/roadmap/server-boundary.md`.
+> Full model + the hard **isomorphism boundary** (`createServerFn` cannot reach a native app): see **`docs/design/rendering.md`**. adaptv has no server side (owner, 2026-10-05): server functions are refused on every target, web included, and server logic lives in an API the app calls → `docs/design/server-boundary.md`.
 - One app → **SSR web** (default) + **static SPA** (native), auto per target; service worker on/off per target; **build-time env (`VITE_*`) is baked into the bundle**, so anything an app points at — a backend, an OTA channel — is chosen when the artifact is built, not when it launches, and each target's bundle carries its own answer.
 - Code signing; unsigned `.ipa` for sideloading vs signed TestFlight/App Store; debug `.apk`.
 - **OTA / live updates** — the bundle is a snapshot; JS/web-only updates can ship over-the-air (Capgo / `@capacitor/live-updates`, Apple 3.3.2); native changes need a store submission.

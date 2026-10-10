@@ -6,7 +6,6 @@ import {
   ALLOWED_START_SPECIFIERS,
   adaptvBanServerApisPlugin,
   describeServerApiBan,
-  findServerRouteHandlers,
   isApplicationSource,
   isBannedServerModule,
 } from "#adaptv/vite/ban-server-apis"
@@ -371,56 +370,6 @@ describe("describeServerApiBan — the decision and the message", () => {
   })
 })
 
-describe("findServerRouteHandlers — the gap no import rule can reach", () => {
-  //`createServerFileRoute` does NOT exist in the pinned @tanstack/react-start.
-  //It was replaced by a `server` property on createFileRoute's options object —
-  //and a config-object property is not an importable symbol, so no import-based
-  //technique (TS, Biome noRestrictedImports, resolveId) can ever see it.
-  it("finds a server property on a createFileRoute options object", () => {
-    const code = `
-      export const Route = createFileRoute("/x")({
-        component: X,
-        server: { handlers: { GET: () => new Response("hi") } },
-      })
-    `
-    expect(findServerRouteHandlers(code)).not.toBeNull()
-  })
-
-  it("reports the offset of the offending property, for a caret frame", () => {
-    const code = `createFileRoute("/x")({ server: { handlers: {} } })`
-    expect(findServerRouteHandlers(code)).toBe(code.indexOf("server:"))
-  })
-
-  it("ignores a route with no server property", () => {
-    const code = `createFileRoute("/x")({ component: X, loader: l })`
-    expect(findServerRouteHandlers(code)).toBeNull()
-  })
-
-  it("ignores `server` outside a createFileRoute call entirely", () => {
-    //an app is allowed its own variable called `server`
-    const code = `const server = { handlers: {} }; export { server }`
-    expect(findServerRouteHandlers(code)).toBeNull()
-  })
-
-  it("ignores a nested `server` key that is just app data", () => {
-    //only the OPTIONS-OBJECT-level `server` is the TanStack API; a `server` field
-    //inside loader data or component props is ordinary application state
-    const code = `createFileRoute("/x")({
-      loader: () => ({ config: { server: { handlers: 1 } } }),
-    })`
-    expect(findServerRouteHandlers(code)).toBeNull()
-  })
-
-  it("does not fire on the word appearing in a comment or string", () => {
-    const code = `
-      // server: { handlers } is banned here
-      const doc = "server: { handlers: {} }"
-      createFileRoute("/x")({ component: X })
-    `
-    expect(findServerRouteHandlers(code)).toBeNull()
-  })
-})
-
 type Reported = { message: string; id?: string; pos?: unknown }
 
 /**
@@ -449,22 +398,6 @@ function callResolveId(source: string, importer: string | undefined) {
     hook.call(fakeContext(sink), source, importer)
   } catch {
     //the throw is the contract; the recorded diagnostic is what we assert on
-  }
-  return sink
-}
-
-function callTransform(code: string, id: string) {
-  const plugin = adaptvBanServerApisPlugin()
-  const sink: Reported[] = []
-  const hook = plugin.transform as unknown as (
-    this: unknown,
-    c: string,
-    i: string,
-  ) => unknown
-  try {
-    hook.call(fakeContext(sink), code, id)
-  } catch {
-    //ditto
   }
   return sink
 }
@@ -512,30 +445,16 @@ describe("adaptvBanServerApisPlugin", () => {
     expect(callResolveId("@tanstack/react-router", APP)).toHaveLength(0)
   })
 
-  it("fails the build on `server: { handlers }` in a route", () => {
-    const code = `createFileRoute("/x")({ server: { handlers: {} } })`
-    const reported = callTransform(code, APP)
-    expect(reported).toHaveLength(1)
-    expect(reported[0]?.message).toContain("server")
-  })
-
-  it("passes the offset so the error renders a caret frame", () => {
-    //this is why the scan returns an offset instead of a boolean: a bare message
-    //with no position is materially harder to act on
-    const code = `createFileRoute("/x")({ server: { handlers: {} } })`
-    const reported = callTransform(code, APP)
-    expect(reported[0]?.pos).toBe(code.indexOf("server:"))
-  })
-
-  it("does not scan dependency code", () => {
-    const code = `createFileRoute("/x")({ server: { handlers: {} } })`
-    expect(callTransform(code, DEP)).toHaveLength(0)
-  })
-
-  it("leaves a clean route alone", () => {
-    expect(
-      callTransform(`createFileRoute("/x")({ component: X })`, APP),
-    ).toHaveLength(0)
+  it("leaves the compiler's RPC imports to the server boundary, which names the server function", () => {
+    //the compiler writes them into the dev's module; refusing them here would name an
+    //import the dev never wrote, and win over the report that names what they did
+    for (const source of [
+      "@tanstack/react-start/client-rpc",
+      "@tanstack/react-start/server-rpc",
+      "@tanstack/react-start/ssr-rpc",
+    ])
+      expect(callResolveId(source, APP), source).toHaveLength(0)
+    expect(callResolveId("@tanstack/react-start/rsc", APP)).toHaveLength(1)
   })
 })
 

@@ -104,16 +104,16 @@ was never the thing stopping anyone.*
 > and breaks on a phone is not offered on the web either, so adaptv has no server side at all, and a
 > web-only app gets the same rule as every other app.
 >
-> What still changes is **coverage, not the rule**: the ban should read the compiler's own set of
-> server functions instead of matching specifiers, and refuse direct imports of every engine package
-> (**L20**) → [`../roadmap/server-boundary.md`](../roadmap/server-boundary.md). Everything below is
-> what runs today.
+> What changed is **coverage, not the rule**: since 2026-10-10 the build also reads the compiler's own
+> server functions and the server build's router, so a server function or route is refused however
+> it was written (`src/vite/server-boundary.ts`) → [`../design/server-boundary.md`](../design/server-boundary.md).
+> The specifier ban below stays as the refusal of the engine's server modules by name.
 
 > ### ✅ BUILT (2026-07-20) — `src/vite/ban-server-apis.ts`, 27 unit tests
 >
 > Shipped as the **first entry** in the array `adaptv()` returns, `enforce: "pre"`. Decision logic is
-> factored into pure functions (`isBannedServerModule`, `isApplicationSource`, `describeServerApiBan`,
-> `findServerRouteHandlers`) so it is testable without standing up a bundler; the hooks are wrappers.
+> factored into pure functions (`isBannedServerModule`, `isApplicationSource`, `describeServerApiBan`)
+> so it is testable without standing up a bundler; the hooks are wrappers.
 >
 > **Verified end-to-end against a real Vite 8 / Rolldown build**, not just in unit tests:
 >
@@ -124,7 +124,11 @@ was never the thing stopping anyone.*
 > | `createFileRoute("/x")({ component })` | exit 0 — no false positive on the router |
 > | `createFileRoute("/x")({ server: { handlers } })` | **exit 1**, caret frame **on the right line** |
 >
-> That last row is the one §2.1 said no import-based technique could ever reach. It is caught by a
+> **Superseded 2026-10-10:** the last row is now refused by the server build's router
+> (`src/vite/server-boundary.ts`), which also catches the indirect shapes below; the brace scan is
+> deleted. What follows is kept as the history of why it existed.
+>
+> That last row is the one §2.1 said no import-based technique could ever reach. It was caught by a
 > brace-depth scan over comment-and-string-stripped source, matching only the **options-object-level**
 > `server` key — so an app's own `server` field inside loader data does not fire. The scan returns a
 > character offset precisely so `this.error()` can render the caret; a boolean would have been
@@ -389,9 +393,9 @@ the DX gap: oxlint ships `--lsp` plus an official VS Code extension, with Zed/Je
 - `biome-shared.json` at the package root, added to `files` + `exports`.
 - ~~`plugins/ban-server-apis.grit` — the call-shape rule **plus** a `createFileRoute($opts)`-where-`$opts`-has-`server` pattern.~~
   **Never shipped.** There is no `plugins/` directory in the package. The gap it was for — the
-  `server: { handlers }` config shape — is closed inside the Vite plugin itself by the brace-depth
-  scan (`findServerRouteHandlers`, the BUILT block at the top of §2), which fails the build with a
-  caret on the right line. A GritQL rule would add an editor squiggle for that one shape and nothing
+  `server: { handlers }` config shape — is closed inside `adaptv()` by reading the server build's
+  router (`src/vite/server-boundary.ts`, since 2026-10-10; a brace-depth scan did it before), which
+  fails the build with the route's file and line. A GritQL rule would add an editor squiggle for that one shape and nothing
   else; §2.4's two documented limits (no binding resolution, no bare-specifier `plugins` path) are
   why it has not been worth carrying.
 - Correct `docs/design/rendering.md §2`'s `createServerFileRoute` entry to `server: { handlers }`.

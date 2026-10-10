@@ -21,6 +21,7 @@ have a documented reason to sit where they do; read §2 before reordering anythi
 | # | Plugin | File | Why here |
 |---|---|---|---|
 | 1 | `adaptvBanServerApisPlugin` | `ban-server-apis.ts` | **`enforce: "pre"`, and FIRST.** The isomorphism ban must win the specifier before the framework plugin resolves it. The one layer a consumer cannot disable, misconfigure, or forget. |
+| 1a | `adaptvServerBoundaryPlugin` | `server-boundary.ts` | Two plugins, right behind the engine-import rule. The `pre` one sees the `client-rpc` import the compiler writes into a server function (Vite's resolver would claim it first at normal order); the other reads the stub after the compiler, fails the client build with every server function and server-request read, and reads the server build's router for server routes. → [`server-boundary.md`](server-boundary.md) |
 | 2 | `adaptvCssLayerOrderPlugin` | `css-layer-order.ts` | Also `pre` — must reach the app's stylesheet **before** `@tailwindcss/vite` compiles the Tailwind import away. |
 | 3 | `adaptvDevCssLoweringPlugin` | `dev-css-lowering.ts` | **Dev only, no `enforce`, and before #4.** Applies the lowering a build applies — Tailwind's pass to a sheet Tailwind compiled, nesting alone to any other — which `@tailwindcss/vite` skips in dev. See §2.5. |
 | 4 | `adaptvTailwindEmptyFallbackPlugin` | `tailwind-empty-fallback.ts` | The mirror image: **no `enforce`**, because it rewrites what `@tailwindcss/vite` **produced** — `pre` sees no utilities yet and `post` is already past Vite's CSS stage. |
