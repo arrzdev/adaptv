@@ -273,4 +273,5 @@ against #292's branch). The task above replaces that accident with a check on pu
 Limits: the router check evaluates the server bundle in the build's own Node process. A SPA or
 native build already does in Start's prerender; a `render: "ssr"` build without prerender does it
 here for the first time, and a deploy preset whose server bundle cannot load in Node fails the build
-at that import. The playground's Nitro (`node-server`) build loads it.
+with `could not load the server router to check for server routes: <reason>`. The playground's Nitro
+(`node-server`) build loads it.

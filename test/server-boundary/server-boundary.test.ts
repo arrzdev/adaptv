@@ -541,6 +541,43 @@ describe("the rules, per fixture (expected: refused, except the control)", () =>
         ].join("\n"),
       )
     })
+
+  it("fail the server build with one line of their own when its router cannot be loaded", async () => {
+    //a server bundle that cannot load in Node, as a deploy preset's may not
+    const dir = mkdtempSync(path.join(tmpdir(), "adaptv-server-boundary-"))
+    writeFileSync(
+      path.join(dir, "server.mjs"),
+      'throw new Error("needs a worker runtime")\nexport const getRouter = () => ({})\n',
+    )
+    const plugin = adaptvServerBoundaryPlugin(dir).find(
+      (p) => p.name === "adaptv:server-boundary",
+    ) as Plugin
+    const writeBundle = plugin.writeBundle as (
+      this: unknown,
+      ...args: unknown[]
+    ) => Promise<void>
+    const context = {
+      environment: { name: "ssr" },
+      error(message: string): never {
+        throw new Error(message)
+      },
+    }
+    await expect(
+      writeBundle.call(
+        context,
+        { dir },
+        {
+          "server.mjs": {
+            type: "chunk",
+            fileName: "server.mjs",
+            exports: ["getRouter"],
+          },
+        },
+      ),
+    ).rejects.toThrow(
+      /^could not load the server router to check for server routes: needs a worker runtime$/,
+    )
+  })
 })
 
 /*
