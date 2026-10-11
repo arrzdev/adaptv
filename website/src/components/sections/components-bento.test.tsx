@@ -11,7 +11,7 @@ describe("components bento", () => {
   // 342 px column at 390), and the cards push the landing 12 px wider.
   it("gives the phone layout one shrinkable column", () => {
     render(<ComponentsBento />)
-    const grid = screen.getByText("Swipe actions").closest(".grid")
+    const grid = screen.getByText("Swipe a row").closest(".grid")
     expect(grid?.className.split(" ")).toContain("grid-cols-1")
   })
 })
