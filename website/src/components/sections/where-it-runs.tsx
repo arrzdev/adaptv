@@ -1,4 +1,8 @@
+import { View } from "adaptv/components"
+import { Check } from "lucide-react"
 import type { SVGProps } from "react"
+import { Reveal } from "@/components/reveal"
+import { Section } from "@/components/section"
 
 /*
  * Platform marks from simple-icons, in one colour. The iOS and macOS marks are Apple's
@@ -52,16 +56,46 @@ const PLATFORMS: { name: string; mark: Mark | null; size: string }[] = [
   { name: "Capacitor", mark: CapacitorMark, size: "h-[21px] md:h-6" },
 ]
 
+const WAYS: { title: string; lines: string[] }[] = [
+  {
+    title: "In a browser tab",
+    lines: [
+      "Inputs don't zoom the page when they get focus.",
+      "Scrolling a list doesn't drag the page behind it.",
+    ],
+  },
+  {
+    title: "Installed from the browser",
+    lines: [
+      "Installs from the browser, no store.",
+      "Works offline.",
+      "Fixes reach users without a store review.",
+    ],
+  },
+  {
+    title: "In the App Store and Google Play",
+    lines: [
+      "Real iOS and Android builds through Capacitor.",
+      "Safe areas and the keyboard are handled.",
+      "Android's Back button closes the open sheet first.",
+    ],
+  },
+]
+
 /**
- * Where an adaptv app runs, as one still row of marks: no motion, no captions. Each mark
- * carries its name as hidden text, so assistive tech reads a plain list of six.
+ * Where an adaptv app runs: the six platform marks, then the three ways the same code
+ * reaches people and what adaptv fixes in each. Every line is true on `main`; one that
+ * stops being true is dropped, not reworded. Each mark carries its name as hidden text,
+ * so assistive tech reads a plain list of six.
  */
-export function Targets() {
+export function WhereItRuns() {
   return (
-    <section className="sheet">
-      <div className="flex flex-col items-center gap-7 px-6 py-12 md:px-10">
-        <p className="text-[14px] text-muted">One app. Every platform.</p>
-        <ul className="grid grid-cols-3 items-center justify-items-center gap-x-8 gap-y-6 md:flex md:gap-12">
+    <Section
+      title="Where it runs"
+      lede="The same code reaches people three ways. adaptv handles what each one gets wrong by default."
+    >
+      <Reveal className="flex flex-col gap-12">
+        <ul className="grid grid-cols-3 items-center justify-items-center gap-x-8 gap-y-6 md:flex md:justify-between md:gap-12">
           {PLATFORMS.map(({ name, mark: Mark, size }) => (
             <li
               key={name}
@@ -82,7 +116,27 @@ export function Targets() {
             </li>
           ))}
         </ul>
-      </div>
-    </section>
+        <div className="grid gap-10 md:grid-cols-3 md:gap-8">
+          {WAYS.map((way) => (
+            <View key={way.title} className="gap-4">
+              <h3 className="font-semibold text-[18px] tracking-[-0.02em]">
+                {way.title}
+              </h3>
+              <ul className="flex flex-col gap-2.5 text-[14.5px] text-muted">
+                {way.lines.map((line) => (
+                  <li key={line} className="flex items-start gap-2">
+                    <Check
+                      className="mt-[3px] size-4 shrink-0 text-success"
+                      strokeWidth={2.5}
+                    />
+                    {line}
+                  </li>
+                ))}
+              </ul>
+            </View>
+          ))}
+        </div>
+      </Reveal>
+    </Section>
   )
 }
