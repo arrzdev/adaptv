@@ -21,7 +21,7 @@ export const POSTS: Post[] = [
     title: "iOS 26 stopped reading theme-color. Here is what it reads instead",
     date: "2026-10-07",
     kind: "Field note",
-    author: "adaptv team",
+    author: "arrz.dev",
     summary:
       "In Safari on iOS 26 the meta tag does nothing, and each browser bar takes its colour from whatever fixed element touches its edge. Six attempts to tint it, the WebKit rules behind them, and the 12px strip that makes it work.",
     seoTitle: "iOS 26 Safari ignores theme-color: how to tint the bars",
@@ -186,7 +186,7 @@ function bandDonor(): HTMLElement | null {
     title: "Freezing the iOS viewport when the keyboard opens",
     date: "2026-10-07",
     kind: "Field note",
-    author: "adaptv team",
+    author: "arrz.dev",
     summary:
       "Focus a field in a bottom sheet on iOS and WebKit scrolls the document and shrinks the viewport under your fixed UI. Six attempts, the scroll lock with its two carve-outs, and the offscreen trick that raises the keyboard without a jump.",
     seoTitle: "Stop the iOS keyboard shifting your PWA viewport",
@@ -328,7 +328,7 @@ document.addEventListener("focus", (event) => {
       "The ghost caret: a text cursor that stays where the field used to be",
     date: "2026-10-07",
     kind: "Field note",
-    author: "adaptv team",
+    author: "arrz.dev",
     summary:
       "Slide a drawer or lift a keyboard under a focused input on iOS and the blinking caret stays behind at the old position. Five versions of the fix, and the one trick that makes WebKit redraw it.",
     seoTitle: "iOS Safari ghost caret: cursor stuck where the input was",
@@ -447,7 +447,7 @@ function restore(field: HTMLInputElement | HTMLTextAreaElement, moved: boolean) 
     title: "The installed iOS app that launches at the wrong height",
     date: "2026-10-07",
     kind: "Field note",
-    author: "adaptv team",
+    author: "arrz.dev",
     summary:
       "On a cold launch from the Home Screen, iOS lays the page out against one height, then another. A centred splash jumps, or sits 31pt off. Seven fixes that did not hold, and the head script that does.",
     seoTitle: "iOS PWA launches at the wrong height: cause and fix",
@@ -602,7 +602,7 @@ function restore(field: HTMLInputElement | HTMLTextAreaElement, moved: boolean) 
     title: "The loupe: a bug CSS cannot reach",
     date: "2026-10-07",
     kind: "Field note",
-    author: "adaptv team",
+    author: "arrz.dev",
     summary:
       "Double-tap a button in an iOS web view and a text magnifier appears over it. No CSS property turns it off. Here is what does — and the three versions of the fix that broke scrolling first.",
     seoTitle: "iOS text loupe in a web app: the bug CSS cannot reach",
@@ -693,7 +693,7 @@ function restore(field: HTMLInputElement | HTMLTextAreaElement, moved: boolean) 
     title: "The keyboard height is known before the keyboard is",
     date: "2026-10-10",
     kind: "Field note",
-    author: "adaptv team",
+    author: "arrz.dev",
     summary:
       "A sheet that waits for the keyboard starts moving one to two frames late. Caching the height from last time fixes that, until a password field raises the keyboard twice.",
     blocks: [
@@ -794,7 +794,7 @@ export function predictKeyboardHeight(el: HTMLElement): number | null {
     title: "A bottom sheet that survives the keyboard",
     date: "2026-10-10",
     kind: "Field note",
-    author: "adaptv team",
+    author: "arrz.dev",
     summary:
       "Two sheet libraries, a spring that iOS cannot composite, and the FLIP engine that replaced them.",
     blocks: [
@@ -880,7 +880,7 @@ return {
     title: "Tailwind v4 draws nothing on Chromium 113 to 118, and says nothing",
     date: "2026-10-10",
     kind: "Field note",
-    author: "adaptv team",
+    author: "arrz.dev",
     summary:
       "Ring, filter, transform and six more utilities compute to none on Chromium 113 to 118. A bisect, and a CSS rewrite that is byte-identical on modern engines.",
     blocks: [
