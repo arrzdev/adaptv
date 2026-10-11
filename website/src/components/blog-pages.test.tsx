@@ -135,3 +135,29 @@ describe("social card", () => {
     })
   })
 })
+
+describe("RSS link", () => {
+  const feed = {
+    rel: "alternate",
+    type: "application/rss+xml",
+    title: "adaptv blog",
+    href: "https://adaptv.tudu.dev/blog/rss.xml",
+  }
+
+  it("is in the index's head", () => {
+    const head = (BlogIndexRoute.options.head as () => Head)()
+    expect(head.links).toContainEqual(feed)
+  })
+
+  it("is in a post's head", () => {
+    const head = (PostRoute.options.head as (ctx: unknown) => Head)({
+      loaderData: {
+        slug: "newest",
+        title: "title newest",
+        summary: "summary newest",
+        date: "2026-10-09",
+      },
+    })
+    expect(head.links).toContainEqual(feed)
+  })
+})
