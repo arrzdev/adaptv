@@ -9,7 +9,7 @@ export const Route = createFileRoute("/docs")({
       title: "Documentation",
       tabTitle: "adaptv docs: React for web, iOS and Android",
       description:
-        "Guides and reference for adaptv: run an app, then components, hooks, capabilities, config and the CLI. Pre-alpha; not on npm yet.",
+        "Guides and reference for adaptv: run an app, then components, hooks, capabilities, config and the CLI. Alpha, on npm as adaptv.",
       path: "/docs",
     }),
 })

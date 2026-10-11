@@ -41,7 +41,7 @@ export function llmsTxt(groups: DocGroup[]) {
     "",
     "> A React framework: one codebase for desktop web, mobile web, an installable home-screen app (PWA), and real iOS and Android apps.",
     "",
-    `Every link below is the markdown version of a page on ${SITE_URL}/docs. adaptv is pre-alpha: the docs say what is true today, and a note on a page says when something is unbuilt.`,
+    `Every link below is the markdown version of a page on ${SITE_URL}/docs. adaptv is in alpha: the docs say what is true today, and a note on a page says when something is unbuilt.`,
   ]
   for (const group of groups) {
     out.push("", `## ${group.section}: ${group.title}`, "")
