@@ -5,6 +5,9 @@ export const page: DocPage = {
   title: "Icons and splash",
   summary:
     "Generate every icon from one image and set the colours the app launches in.",
+  seoTitle: "Generate PWA icons and splash screens for iOS, Android",
+  seoDescription:
+    "Generate every PWA and native icon from one image and set the colours the app launches in, so the splash matches the first frame.",
   blocks: [
     { type: "h2", text: "Generate the icon set" },
     {
@@ -252,6 +255,10 @@ export default function SplashScreen({ revealedAt }: SplashScreenProps) {
         "**The Android icon is a square in a circle.** The source has an opaque background. Use a full-bleed source and check the preview file.",
         "**The splash never goes away.** `ready` never becomes true offline. Add a timeout.",
       ],
+    },
+    {
+      type: "p",
+      text: "See also [adaptv.config.ts](/docs/config), [Native builds](/docs/native-builds) and the field note [The installed iOS app that launches at the wrong height](/blog/ios-cold-start-launch-height).",
     },
   ],
 }

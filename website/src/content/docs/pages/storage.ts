@@ -10,6 +10,9 @@ export const page: DocPage = {
   importLine:
     'import { kv, store, secure, useKv, useStore } from "adaptv/storage"',
   source: "src/storage",
+  seoTitle: "Storage in a React PWA and native app: sync, async, secure",
+  seoDescription:
+    "Three tiers, one API: a synchronous store, an async store for large values and secure storage for secrets, on web and native.",
   blocks: [
     {
       type: "demo",
@@ -323,6 +326,10 @@ export const sessionLifetimeDays = secure.isHardwareBacked() ? 90 : 7`,
           note: "AES-GCM with a key in the Keystore.",
         },
       ],
+    },
+    {
+      type: "p",
+      text: "See also [Capabilities](/docs/capabilities), [Clipboard, share, location and network hooks](/docs/hooks-data) and [Offline and the service worker](/docs/offline).",
     },
   ],
 }

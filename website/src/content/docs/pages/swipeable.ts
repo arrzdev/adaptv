@@ -8,6 +8,9 @@ export const page: DocPage = {
   platforms: ["Web", "PWA", "iOS", "Android"],
   importLine: 'import { Swipeable, useSwipeable } from "adaptv/components"',
   source: "src/components/swipeable.tsx",
+  seoTitle: "Swipeable rows with actions in React",
+  seoDescription:
+    "A row that slides sideways to show actions, with touch and mouse support.",
   blocks: [
     {
       type: "demo",
@@ -229,6 +232,10 @@ export const page: DocPage = {
           note: "The system back gesture takes touches at the very edge.",
         },
       ],
+    },
+    {
+      type: "p",
+      text: "See also [List](/docs/list), [Pressable](/docs/pressable) and [PullToRefresh](/docs/pull-to-refresh).",
     },
   ],
 }

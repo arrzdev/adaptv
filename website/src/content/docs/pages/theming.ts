@@ -5,6 +5,9 @@ export const page: DocPage = {
   title: "Theming",
   summary:
     "Light and dark: the class on `<html>`, `themeColor`, `useTheme`, and what the system bars do on each target.",
+  seoTitle: "Dark mode and theme-color in a PWA, iOS 26 included",
+  seoDescription:
+    "Light and dark mode: the class on html, themeColor, useTheme, and what the system bars do on each target.",
   blocks: [
     {
       type: "p",
@@ -171,6 +174,10 @@ function ThemeToggle() {
           "Remove your own tag. Use `themeColor`.",
         ],
       ],
+    },
+    {
+      type: "p",
+      text: "See also [adaptv.config.ts](/docs/config) and the field note [iOS 26 stopped reading theme-color. Here is what it reads instead](/blog/ios-26-browser-bar-tint).",
     },
   ],
 }

@@ -9,6 +9,9 @@ export const page: DocPage = {
   platforms: ["Web", "PWA", "iOS", "Android"],
   importLine: 'import { ScrollView } from "adaptv/components"',
   source: "src/components/scroll-view.tsx",
+  seoTitle: "Disable rubber band scroll on iOS in a PWA: ScrollView",
+  seoDescription:
+    "A scrolling pane with contained overscroll, so iOS rubber-banding stops dragging the page. One axis, optional edge fade.",
   blocks: [
     {
       type: "demo",
@@ -159,6 +162,10 @@ export const page: DocPage = {
           note: "Chromium may draw its overscroll glow.",
         },
       ],
+    },
+    {
+      type: "p",
+      text: "See also [PullToRefresh](/docs/pull-to-refresh) and [Layout shift](/docs/layout-shift).",
     },
   ],
 }

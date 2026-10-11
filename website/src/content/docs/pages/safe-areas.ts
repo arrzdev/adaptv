@@ -5,6 +5,9 @@ export const page: DocPage = {
   title: "Safe areas",
   summary:
     "Keep content clear of the notch, the status bar and the home indicator.",
+  seoTitle: "Safe area insets in a React PWA and native app",
+  seoDescription:
+    "Keep content clear of the notch, status bar and home indicator with env() insets and Tailwind utilities, on web, installed PWA and native shells.",
   blocks: [
     {
       type: "p",
@@ -122,6 +125,10 @@ function usePeekSnapPoint() {
     {
       type: "p",
       text: "The default [Offline](/docs/offline-boundary) screen already pads all four edges.",
+    },
+    {
+      type: "p",
+      text: "See also [Device and display hooks](/docs/hooks-device), [The frame](/docs/the-frame) and the field note [The installed iOS app that launches at the wrong height](/blog/ios-cold-start-launch-height).",
     },
   ],
 }

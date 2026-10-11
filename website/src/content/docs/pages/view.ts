@@ -9,6 +9,9 @@ export const page: DocPage = {
   platforms: ["Web", "PWA", "iOS", "Android"],
   importLine: 'import { View } from "adaptv/components"',
   source: "src/components/view.tsx",
+  seoTitle: "View: a flex column that pads for safe areas",
+  seoDescription:
+    "A div that is a flex column by default. It never scrolls and can pad for safe areas.",
   blocks: [
     {
       type: "demo",

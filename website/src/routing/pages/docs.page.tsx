@@ -1,13 +1,15 @@
 import { createFileRoute } from "adaptv/router"
 import { DocsHome } from "@/components/docs-home"
-import { DOCS_DESCRIPTION, socialHead } from "@/content/site"
+import { socialHead } from "@/content/site"
 
 export const Route = createFileRoute("/docs")({
   component: DocsHome,
   head: () =>
     socialHead({
       title: "Documentation",
-      description: DOCS_DESCRIPTION,
+      tabTitle: "adaptv docs: React for web, iOS and Android",
+      description:
+        "Guides and reference for adaptv: run an app, then components, hooks, capabilities, config and the CLI. Pre-alpha; not on npm yet.",
       path: "/docs",
     }),
 })

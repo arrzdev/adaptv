@@ -10,6 +10,9 @@ export const page: DocPage = {
   importLine:
     'import { useAppState, useOnResume, useOnPause, useScreenLifecycle, useBackHandler, adaptvBack, useKeepAwake, createBootstrapGate } from "adaptv/hooks"',
   source: "src/hooks",
+  seoTitle: "App lifecycle hooks: foreground, background, back press",
+  seoDescription:
+    "Foreground and background, screen enter and leave, the back press, keeping the screen awake and a ready gate for cold start.",
   blocks: [
     {
       type: "demo",
@@ -424,6 +427,10 @@ const ready = useAppReady()`,
     {
       type: "p",
       text: "See [icons and splash](/docs/icons-and-splash).",
+    },
+    {
+      type: "p",
+      text: "See also [Routing](/docs/routing), [Offline and the service worker](/docs/offline) and the field note [The installed iOS app that launches at the wrong height](/blog/ios-cold-start-launch-height).",
     },
   ],
 }

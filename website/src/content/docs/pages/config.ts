@@ -7,6 +7,9 @@ export const page: DocPage = {
   platforms: ["Web", "PWA", "iOS", "Android"],
   importLine: 'import { defineApp } from "adaptv/config"',
   source: "src/config/app-config.ts",
+  seoTitle: "adaptv.config.ts: manifest, targets and app config",
+  seoDescription:
+    "Every key of defineApp with its type, default and effect. The one config file for the web and native build.",
   blocks: [
     {
       type: "p",

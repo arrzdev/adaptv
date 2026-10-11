@@ -4,6 +4,9 @@ export const page: DocPage = {
   slug: "deploying",
   title: "Deploying the web app",
   summary: "Build the site, host it, set the headers and make it installable.",
+  seoTitle: "Deploy a React PWA: hosting, headers, installable",
+  seoDescription:
+    "Build the site, host it, set the headers and make it installable on iOS and Android home screens.",
   blocks: [
     {
       type: "p",
@@ -173,6 +176,10 @@ SERVER_PRESET=cloudflare_module adaptv build web`,
         "**Users see old code after a deploy.** `sw.js` is cached. Set `no-cache`.",
         "**The build fails on a server import.** See the warning above.",
       ],
+    },
+    {
+      type: "p",
+      text: "See also [adaptv.config.ts](/docs/config).",
     },
   ],
 }

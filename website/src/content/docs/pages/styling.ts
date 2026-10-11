@@ -5,6 +5,9 @@ export const page: DocPage = {
   title: "Styling",
   summary:
     "adaptv works with any CSS. Tailwind is optional. Your class beats adaptv's default look, and tokens are plain CSS custom properties.",
+  seoTitle: "Styling a React PWA and native app with Tailwind or CSS",
+  seoDescription:
+    "adaptv works with any CSS; Tailwind is optional. Your class beats the default look and tokens are plain CSS custom properties.",
   blocks: [
     {
       type: "p",
@@ -190,6 +193,10 @@ export const page: DocPage = {
           'Add `selectable` where text must be copyable, or set `ui: { noSelect: "off" }`.',
         ],
       ],
+    },
+    {
+      type: "p",
+      text: "See also [The six targets](/docs/six-targets).",
     },
   ],
 }

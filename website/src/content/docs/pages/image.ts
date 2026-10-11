@@ -9,6 +9,9 @@ export const page: DocPage = {
   platforms: ["Web", "PWA", "iOS", "Android"],
   importLine: 'import { Image, useImage } from "adaptv/components"',
   source: "src/components/image.tsx",
+  seoTitle: "Image: stop layout shift when pictures load in React",
+  seoDescription:
+    "An img that reserves its box before the file loads, so nothing moves when the picture arrives.",
   blocks: [
     {
       type: "demo",
@@ -218,6 +221,10 @@ import capture from "./ios-list.png?adaptv-image"
     {
       type: "p",
       text: "The same on every target. `fetchpriority` works from iOS 17.2.",
+    },
+    {
+      type: "p",
+      text: "See also [View](/docs/view) and [List](/docs/list).",
     },
   ],
 }

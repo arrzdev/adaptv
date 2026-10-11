@@ -9,6 +9,9 @@ export const page: DocPage = {
   importLine:
     'import { createFileRoute, notFound, useNavigate } from "adaptv/router"',
   source: "src/interface/router.index.ts",
+  seoTitle: "Router API: route files, loaders, navigation hooks",
+  seoDescription:
+    "What adaptv's router and routes entry points export: route files, loaders, navigation hooks and the route config helpers.",
   blocks: [
     {
       type: "p",
@@ -241,6 +244,10 @@ function physical(pathPrefix: string, directory: string): PhysicalRouteNode`,
       signature: "createRouter(options)",
       description:
         "The low-level constructor, exported for generated code. Use `createAdaptvRouter`.",
+    },
+    {
+      type: "p",
+      text: "See also [Lifecycle hooks](/docs/hooks-lifecycle).",
     },
   ],
 }
