@@ -14,7 +14,7 @@ for (const width of WIDTHS) {
     await expect(h1).toBeVisible()
     await page.evaluate(() => document.fonts.ready)
 
-    const layout = await h1.evaluate((el) => {
+    const layout = await h1.evaluate((el: HTMLElement) => {
       const range = document.createRange()
       range.selectNodeContents(el)
       //one rect per text fragment; fragments on the same line box share a top
