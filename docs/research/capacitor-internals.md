@@ -308,8 +308,8 @@ works as long as `VITE_BACKEND_URL` points at the remote backend (not localhost,
 
 ## Upstream issues to watch (was `RESEARCH.md §3`)
 
-> Absorbed when `RESEARCH.md` (deleted 2026-08-30 — see git history) was dissolved. **Links were last verified
-> 2026-07.** Re-check this list before any Capacitor version bump or Android/iOS SDK bump —
+> Absorbed when `RESEARCH.md` (deleted 2026-08-30 — see git history) was dissolved. **Links verified
+> 2026-10.** Re-check this list before any Capacitor version bump or Android/iOS SDK bump —
 > that is the trigger it exists for. The Android-15/SDK-35 item shipped as target API 36 on
 > 2026-09-02 — the record is **B9** in [`../decisions/register.md`](../decisions/register.md).
 
@@ -320,7 +320,9 @@ works as long as `VITE_BACKEND_URL` points at the remote backend (not localhost,
   margins to keep old behavior. **Read before hardening adaptv's edge-to-edge/keyboard:**
   - Capacitor core issue — edge-to-edge < API 35 broken: <https://github.com/ionic-team/capacitor/issues/7951>
   - capawesome keyboard/edge-to-edge bugs: <https://github.com/capawesome-team/capacitor-plugins/issues/490> · <https://github.com/capawesome-team/capacitor-plugins/issues/428>
-  - The community fix plugin (study its approach, or depend on it): <https://capawesome.io/docs/plugins/android-edge-to-edge-support/>
+  - The community fix plugin (study its approach, or depend on it): <https://capawesome.io/docs/sdks/capacitor/android-edge-to-edge-support/>
+  - All three issues are closed now: Capacitor #7951 as fixed (2026-02-24), capawesome #428 as
+    fixed and #490 as not planned.
   - Config lesson from the field: `Keyboard` with `resizeOnFullScreen: false`; don't trust `resize:"ionic"`.
 - **Capacitor 8.5 (checked 2026-09-13).** UIScene arrived in 8.5.0
   ([#8536](https://github.com/ionic-team/capacitor/pull/8536)). Without it, an app built with the

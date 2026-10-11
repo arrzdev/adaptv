@@ -1,5 +1,8 @@
-import { waitFor } from "@testing-library/react"
+import { createRequire } from "node:module"
+import { act, waitFor } from "@testing-library/react"
+import type { Root } from "react-dom/client"
 import {
+  afterAll,
   afterEach,
   beforeAll,
   beforeEach,
@@ -27,6 +30,21 @@ import { renderAppShell } from "#adaptv/vite/app-shell"
  * The root route here is adaptv's own, with its built-in document, because the
  * shell layout inside it is what has to put the height back.
  */
+
+//the root client-entry boots, kept so the file can unmount it: the boot is still running
+//when the test's assertion passes, and a root left mounted keeps scheduling work
+const booted = vi.hoisted(() => ({ roots: [] as Root[] }))
+vi.mock("react-dom/client", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("react-dom/client")>()
+  return {
+    ...actual,
+    createRoot: (...args: Parameters<typeof actual.createRoot>) => {
+      const root = actual.createRoot(...args)
+      booted.roots.push(root)
+      return root
+    },
+  }
+})
 
 vi.mock("#adaptv/routes/router-entry", async () => {
   const { createRoute } = await import("@tanstack/react-router")
@@ -118,6 +136,47 @@ beforeAll(async () => {
     import("#adaptv/shell/native-live-reload-client"),
   ])
 }, 30_000)
+
+//The boot outlives the test: the assertion passes on the splash's first commit, while the
+//router is still rendering the app and the splash handoff still waits on a frame. Every
+//commit of a concurrent root also leaves a passive-effects task in React's scheduler,
+//which reads `window.event` when it runs. Left alone, those land after vitest has torn
+//the happy-dom globals down, as `window is not defined` from `performWorkUntilDeadline`
+//(a passing run whose gate fails, seen on a loaded CI runner). So the file lets the boot
+//finish, unmounts the root inside `act` (the unmount's own passive task goes to act's
+//queue and runs there; the splash handoff sees its cleanup and stops), then waits for
+//the scheduler to run what the earlier commits left in it.
+afterAll(async () => {
+  await waitFor(
+    () => expect(document.body.textContent).toContain("the app rendered"),
+    { timeout: 4000 },
+  )
+  const actEnvironment = globalThis as {
+    IS_REACT_ACT_ENVIRONMENT?: boolean
+  }
+  actEnvironment.IS_REACT_ACT_ENVIRONMENT = true
+  act(() => {
+    for (const root of booted.roots.splice(0)) root.unmount()
+  })
+  delete actEnvironment.IS_REACT_ACT_ENVIRONMENT
+  //react-dom's own scheduler instance, which adaptv does not depend on by name. An idle
+  //task runs after every task ready before it, so once it runs the queue is empty
+  const scheduler = createRequire(
+    createRequire(import.meta.url).resolve("react-dom/client"),
+  )("scheduler") as {
+    unstable_scheduleCallback: (
+      priority: number,
+      callback: () => void,
+    ) => void
+    unstable_IdlePriority: number
+  }
+  await new Promise<void>((resolve) =>
+    scheduler.unstable_scheduleCallback(
+      scheduler.unstable_IdlePriority,
+      resolve,
+    ),
+  )
+})
 
 //one boot per file: client-entry boots at import and the module cache keeps it, so a
 //second test here needs `vi.resetModules()`

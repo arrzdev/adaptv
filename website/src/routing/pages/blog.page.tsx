@@ -1,16 +1,23 @@
 import { Link, View } from "adaptv/components"
 import { createFileRoute } from "adaptv/router"
+import { Inline } from "@/components/inline"
 import { SitePage } from "@/components/site-page"
 import { POSTS } from "@/content/blog"
+import { BLOG_LEDE as LEDE, RSS_LINK } from "@/content/feeds"
 import { socialHead } from "@/content/site"
 import { cn } from "@/utils/cn"
 
-const LEDE =
-  "Releases, and field notes on what a phone actually does when you put a web page in an app."
-
 export const Route = createFileRoute("/blog")({
   component: BlogIndex,
-  head: () => socialHead({ title: "Blog", description: LEDE, path: "/blog" }),
+  head: () =>
+    socialHead({
+      title: "Blog",
+      tabTitle: "iOS PWA field notes: bugs and fixes | adaptv",
+      description:
+        "Field notes on iOS PWA and Safari bugs, with the WebKit rules behind them and the fixes adaptv ships. Keyboard, viewport, theme colour.",
+      path: "/blog",
+      links: [RSS_LINK],
+    }),
 })
 
 //newest first; posts of the same day keep their order in POSTS (sort is stable)
@@ -25,6 +32,9 @@ function BlogIndex() {
             Blog
           </h1>
           <p className="text-[18px] text-subtle leading-relaxed">{LEDE}</p>
+          <p className="text-[15.5px] text-subtle leading-relaxed">
+            <Inline text="The [docs](/docs) cover every component, hook and command; the [home page](/) shows what adaptv is." />
+          </p>
         </View>
         <View className="gap-4">
           {NEWEST_FIRST.map((post) => (

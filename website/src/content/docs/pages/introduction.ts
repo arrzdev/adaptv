@@ -5,6 +5,9 @@ export const page: DocPage = {
   title: "Introduction",
   summary:
     "What adaptv is, what it does for you, what you write, and its status.",
+  seoTitle: "adaptv: one React codebase for web, iOS and Android",
+  seoDescription:
+    "adaptv is a React framework that ships one codebase as a web app, an installed PWA and native iOS and Android apps. Pre-alpha; see what works today.",
   blocks: [
     {
       type: "p",
@@ -80,6 +83,10 @@ adaptv icons --input ./mark.png --output ./public/favicons   # all icons from on
         "[Deploying](/docs/deploying) and [Native builds](/docs/native-builds).",
         "Reference: [View](/docs/view), [hooks](/docs/hooks-device), [config](/docs/config), [CLI](/docs/cli).",
       ],
+    },
+    {
+      type: "p",
+      text: "See also the field note [Freezing the iOS viewport when the keyboard opens](/blog/ios-keyboard-viewport-freeze).",
     },
   ],
 }

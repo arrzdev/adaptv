@@ -8,6 +8,9 @@ export const page: DocPage = {
   platforms: ["Web", "PWA", "iOS", "Android"],
   importLine: 'import { adaptv } from "adaptv/vite"',
   source: "src/vite/adaptv-plugin.ts",
+  seoTitle: "Vite plugin for a React PWA: manifest and service worker",
+  seoDescription:
+    "adaptv() is the one Vite plugin. It reads the config and sets up routing, rendering, the manifest, the service worker and images.",
   blocks: [
     {
       type: "p",
@@ -220,6 +223,10 @@ export const Hero = () => <Image src={hero} alt="The harbour at dawn" />`,
           "The deploy target of an SSR build, when adaptv does not detect it.",
         ],
       ],
+    },
+    {
+      type: "p",
+      text: "See also [adaptv.config.ts](/docs/config) and [Offline and the service worker](/docs/offline).",
     },
   ],
 }

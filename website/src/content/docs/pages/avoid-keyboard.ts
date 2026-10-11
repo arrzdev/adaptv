@@ -9,6 +9,9 @@ export const page: DocPage = {
   importLine:
     'import { AvoidKeyboard, useKeyboardAvoidance } from "adaptv/components"',
   source: "src/components/avoid-keyboard/avoid-keyboard.tsx",
+  seoTitle: "AvoidKeyboard: keep a focused field above the keyboard",
+  seoDescription:
+    "A scroller for React forms that keeps the focused field above the on-screen keyboard on iOS, Android and mobile web.",
   blocks: [
     {
       type: "code",
@@ -186,6 +189,10 @@ export const page: DocPage = {
         { target: "iOS", status: "yes", note: "Exact keyboard height." },
         { target: "Android", status: "yes", note: "Exact keyboard height." },
       ],
+    },
+    {
+      type: "p",
+      text: "See also [Input and TextArea](/docs/input) and the field note [Freezing the iOS viewport when the keyboard opens](/blog/ios-keyboard-viewport-freeze).",
     },
   ],
 }

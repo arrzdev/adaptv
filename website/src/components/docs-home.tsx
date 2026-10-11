@@ -12,7 +12,9 @@ import {
   Zap,
 } from "lucide-react"
 import { DocsShell } from "@/components/docs-layout"
+import { Inline } from "@/components/inline"
 import { ALL_DOCS, DOCS } from "@/content/docs"
+import { DOCS_DESCRIPTION } from "@/content/site"
 
 /*
  * The docs overview. Built from DOCS, so a page registered in the index shows up here
@@ -82,9 +84,10 @@ export function DocsHome() {
             <span className="text-muted">config key and command.</span>
           </h1>
           <p className="max-w-2xl text-[18px] text-muted leading-relaxed">
-            adaptv is a React framework that ships one codebase to the web, the
-            home screen, the App Store and Google Play. Start with a guide, or
-            go straight to the reference.
+            {DOCS_DESCRIPTION}
+          </p>
+          <p className="max-w-2xl text-[15.5px] text-muted leading-relaxed">
+            <Inline text="The [blog](/blog) has field notes on the iOS bugs behind the fixes; the [home page](/) has the overview." />
           </p>
         </View>
 

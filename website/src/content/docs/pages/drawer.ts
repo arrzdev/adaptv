@@ -8,6 +8,9 @@ export const page: DocPage = {
   platforms: ["Web", "PWA", "iOS", "Android"],
   importLine: 'import { Drawer, useDrawer } from "adaptv/components"',
   source: "src/components/drawer/drawer.tsx",
+  seoTitle: "Bottom sheet drawer for React: drag down to close",
+  seoDescription:
+    "A bottom sheet you can drag down to close, that handles the keyboard for forms inside it.",
   blocks: [
     {
       type: "demo",
@@ -312,6 +315,10 @@ const [open, setOpen] = useState(false)
           note: "Exact keyboard height. The back button closes the drawer.",
         },
       ],
+    },
+    {
+      type: "p",
+      text: "See also [Dropdown](/docs/dropdown) and the field note [iOS 26 stopped reading theme-color. Here is what it reads instead](/blog/ios-26-browser-bar-tint).",
     },
   ],
 }

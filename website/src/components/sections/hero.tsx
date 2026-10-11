@@ -8,10 +8,11 @@ export function Hero() {
     <section className="relative w-full overflow-hidden">
       <View className="sheet items-center px-5 pt-20 pb-20 text-center sm:pt-28">
         <h1
-          className="rise max-w-5xl text-balance font-semibold text-[clamp(2.6rem,7.4vw,5.75rem)] leading-[0.98] tracking-[-0.045em]"
+          className="rise max-w-5xl whitespace-nowrap font-semibold text-[clamp(1.5rem,8vw,5.75rem)] leading-[0.98] tracking-[-0.045em]"
           style={{ animationDelay: "60ms" }}
         >
-          Write React once.
+          {/* inline lines: a block span's own box would read as an extra line box */}
+          Write React once
           <br />
           <span className="text-gradient">Feel native everywhere.</span>
         </h1>

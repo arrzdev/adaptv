@@ -10,6 +10,9 @@ export const page: DocPage = {
   importLine:
     'import { useClipboard, useShare, useGeolocation, useIsOffline } from "adaptv/hooks"',
   source: "src/hooks",
+  seoTitle: "React hooks: clipboard, share sheet, location, network",
+  seoDescription:
+    "Copy and paste, the share sheet, the device position and the connection state as React hooks that work on web and native.",
   blocks: [
     {
       type: "demo",
@@ -408,6 +411,10 @@ return (
         },
         { target: "Android", status: "yes", note: "Same as iOS." },
       ],
+    },
+    {
+      type: "p",
+      text: "See also [Storage](/docs/storage).",
     },
   ],
 }

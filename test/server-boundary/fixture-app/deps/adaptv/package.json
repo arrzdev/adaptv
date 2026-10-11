@@ -1,0 +1,7 @@
+{
+  "name": "adaptv",
+  "type": "module",
+  "exports": {
+    "./server-fn": "./server-fn.js"
+  }
+}

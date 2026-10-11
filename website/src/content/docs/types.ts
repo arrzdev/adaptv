@@ -9,6 +9,10 @@ export type DocPage = {
   title: string
   /** One sentence under the title, and the search result's second line. */
   summary: string
+  /** The whole `<title>`, at most 60 characters. Omit for "<title> — adaptv docs". */
+  seoTitle?: string
+  /** The meta description, at most 155 characters. Omit to use `summary`. */
+  seoDescription?: string
   /** Reference pages: where the thing runs. Omit on guides. */
   platforms?: Platform[]
   /** Reference pages: the import line, e.g. `import { Switch } from "adaptv/components"`. */
