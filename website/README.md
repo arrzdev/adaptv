@@ -93,5 +93,7 @@ Still owed: a real-device photo or capture for social cards.
 - **The highlighter** in `components/code.tsx` is forty lines of regex. It renders on the server
   with no async step, which is why it exists; a real grammar replaces it with the content pipeline.
 - **The terminal in "It fails your build, not your users"** is illustrative output, not a capture.
-- Docs search is a client-side filter over titles, summaries and headings, not full text. There
-  is no `llms.txt`, no RSS, no sitemap yet.
+- Docs search is a client-side filter over titles, summaries and headings, not full text.
+- The build writes `/llms.txt`, `/docs/<slug>.md`, `/sitemap.xml` and `/blog/rss.xml` from the
+  docs and posts (`scripts/docs-markdown.ts`, `src/content/feeds.ts`): a new page or post is in
+  them with no list to edit. `public/robots.txt` points crawlers at the sitemap.

@@ -86,9 +86,9 @@ describe("the blog's RSS feed", () => {
       expect(item).toMatch(
         /<pubDate>(Mon|Tue|Wed|Thu|Fri|Sat|Sun), \d{2} [A-Z][a-z]{2} \d{4} 00:00:00 GMT<\/pubDate>/,
       )
-      expect(new Date(item.match(/<pubDate>(.*)<\/pubDate>/)?.[1] ?? "")).toEqual(
-        new Date(`${post.date}T00:00:00Z`),
-      )
+      expect(
+        new Date(item.match(/<pubDate>(.*)<\/pubDate>/)?.[1] ?? ""),
+      ).toEqual(new Date(`${post.date}T00:00:00Z`))
     })
   })
 
@@ -118,10 +118,10 @@ describe("the files the build writes", () => {
   })
 
   it("include robots.txt's pointer to the sitemap", () => {
-    const robots = readFileSync(
-      new URL("../../public/robots.txt", import.meta.url),
-      "utf8",
+    //vitest runs from website/, and happy-dom makes import.meta.url an http URL
+    const robots = readFileSync("public/robots.txt", "utf8")
+    expect(robots).toMatch(
+      /^Sitemap: https:\/\/adaptv\.tudu\.dev\/sitemap\.xml$/m,
     )
-    expect(robots).toMatch(/^Sitemap: https:\/\/adaptv\.tudu\.dev\/sitemap\.xml$/m)
   })
 })

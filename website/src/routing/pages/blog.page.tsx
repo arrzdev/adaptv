@@ -2,15 +2,19 @@ import { Link, View } from "adaptv/components"
 import { createFileRoute } from "adaptv/router"
 import { SitePage } from "@/components/site-page"
 import { POSTS } from "@/content/blog"
+import { BLOG_LEDE as LEDE, RSS_LINK } from "@/content/feeds"
 import { socialHead } from "@/content/site"
 import { cn } from "@/utils/cn"
 
-const LEDE =
-  "Releases, and field notes on what a phone actually does when you put a web page in an app."
-
 export const Route = createFileRoute("/blog")({
   component: BlogIndex,
-  head: () => socialHead({ title: "Blog", description: LEDE, path: "/blog" }),
+  head: () =>
+    socialHead({
+      title: "Blog",
+      description: LEDE,
+      path: "/blog",
+      links: [RSS_LINK],
+    }),
 })
 
 //newest first; posts of the same day keep their order in POSTS (sort is stable)
