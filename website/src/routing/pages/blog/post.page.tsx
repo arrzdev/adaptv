@@ -15,6 +15,8 @@ export const Route = createFileRoute("/blog/$slug")({
       slug: post.slug,
       title: post.title,
       summary: post.summary,
+      seoTitle: post.seoTitle,
+      seoDescription: post.seoDescription,
       date: post.date,
     }
   },
@@ -22,7 +24,8 @@ export const Route = createFileRoute("/blog/$slug")({
     loaderData
       ? socialHead({
           title: loaderData.title,
-          description: loaderData.summary,
+          tabTitle: loaderData.seoTitle,
+          description: loaderData.seoDescription ?? loaderData.summary,
           path: `/blog/${loaderData.slug}`,
           published: loaderData.date,
           links: [RSS_LINK],

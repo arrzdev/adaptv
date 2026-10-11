@@ -9,6 +9,9 @@ export const page: DocPage = {
   platforms: ["Web", "PWA", "iOS", "Android"],
   importLine: 'import { Pressable } from "adaptv/components"',
   source: "src/components/pressable.tsx",
+  seoTitle: "Pressable for the web: touch feedback like React Native",
+  seoDescription:
+    "Press handling for any element: a card, row or tile that reacts like a native control.",
   blocks: [
     {
       type: "demo",
@@ -106,6 +109,10 @@ const [presses, setPresses] = useState(0)
     {
       type: "p",
       text: "Everywhere. On iOS it fixes native `:active`, which does not light again when the finger returns.",
+    },
+    {
+      type: "p",
+      text: "See also [Input and feedback hooks](/docs/hooks-feedback) and [List](/docs/list).",
     },
   ],
 }

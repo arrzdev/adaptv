@@ -4,6 +4,9 @@ export const page: DocPage = {
   slug: "the-frame",
   title: "The frame",
   summary: "Write a page that fills the screen and scrolls inside it.",
+  seoTitle: "Full-screen layout in a PWA: no page scroll, no bounce",
+  seoDescription:
+    "Write a React page that fills the screen and scrolls inside it, so the document never moves and iOS has no page to bounce.",
   blocks: [
     {
       type: "p",
@@ -95,6 +98,10 @@ function Inbox() {
           'Use `safe="top"` or `safe="bottom"`.',
         ],
       ],
+    },
+    {
+      type: "p",
+      text: "See also the field note [The installed iOS app that launches at the wrong height](/blog/ios-cold-start-launch-height).",
     },
   ],
 }

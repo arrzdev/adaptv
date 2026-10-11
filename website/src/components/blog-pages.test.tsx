@@ -125,6 +125,22 @@ describe("social card", () => {
     })
   })
 
+  it("takes a post's seoTitle and seoDescription for the tab and search, the title for the card", () => {
+    const head = (PostRoute.options.head as (ctx: unknown) => Head)({
+      loaderData: {
+        slug: "newest",
+        title: "title newest",
+        summary: "summary newest",
+        seoTitle: "search title",
+        seoDescription: "search description",
+        date: "2026-10-09",
+      },
+    })
+    expect(head.meta).toContainEqual({ title: "search title" })
+    expect(metaContent(head, "description")).toBe("search description")
+    expect(metaContent(head, "og:title")).toBe("title newest")
+  })
+
   it("is in the index's head, as a website", () => {
     const head = (BlogIndexRoute.options.head as () => Head)()
     for (const key of card) expect(metaContent(head, key), key).toBeTruthy()

@@ -6,6 +6,10 @@ export type Post = {
   date: string
   kind: "Field note" | "Release"
   summary: string
+  /** The whole `<title>`, at most 60 characters. Omit for "<title> — adaptv". */
+  seoTitle?: string
+  /** The meta description, at most 155 characters. Omit to use `summary`. */
+  seoDescription?: string
   /** The byline. */
   author?: string
   blocks: Block[]
@@ -20,6 +24,9 @@ export const POSTS: Post[] = [
     author: "adaptv team",
     summary:
       "In Safari on iOS 26 the meta tag does nothing, and each browser bar takes its colour from whatever fixed element touches its edge. Six attempts to tint it, the WebKit rules behind them, and the 12px strip that makes it work.",
+    seoTitle: "iOS 26 Safari ignores theme-color: how to tint the bars",
+    seoDescription:
+      "iOS 26 Safari no longer reads the theme-color meta tag. Each bar takes the colour of the fixed element at its edge. Six attempts and what works.",
     blocks: [
       {
         type: "p",
@@ -168,6 +175,10 @@ function bandDonor(): HTMLElement | null {
         type: "note",
         text: "This is a workaround for undocumented platform behaviour. Re-test it on every iOS release with a recording, because the rules above are not a contract.",
       },
+      {
+        type: "p",
+        text: "See also [Theming](/docs/theming), [Device and display hooks](/docs/hooks-device) and [Drawer](/docs/drawer).",
+      },
     ],
   },
   {
@@ -178,6 +189,9 @@ function bandDonor(): HTMLElement | null {
     author: "adaptv team",
     summary:
       "Focus a field in a bottom sheet on iOS and WebKit scrolls the document and shrinks the viewport under your fixed UI. Six attempts, the scroll lock with its two carve-outs, and the offscreen trick that raises the keyboard without a jump.",
+    seoTitle: "Stop the iOS keyboard shifting your PWA viewport",
+    seoDescription:
+      "Why iOS shifts the page when the keyboard opens in a PWA, and how to freeze the viewport so fixed UI stays put.",
     blocks: [
       {
         type: "p",
@@ -302,6 +316,10 @@ document.addEventListener("focus", (event) => {
         type: "note",
         text: "This is a workaround for platform behaviour. Re-test it on each major iOS release, on a real device, with a sheet that has a text field in it, and remove the parts WebKit makes unnecessary.",
       },
+      {
+        type: "p",
+        text: "See also [The software keyboard](/docs/keyboard), [AvoidKeyboard](/docs/avoid-keyboard) and [Input and feedback hooks](/docs/hooks-feedback).",
+      },
     ],
   },
   {
@@ -313,6 +331,9 @@ document.addEventListener("focus", (event) => {
     author: "adaptv team",
     summary:
       "Slide a drawer or lift a keyboard under a focused input on iOS and the blinking caret stays behind at the old position. Five versions of the fix, and the one trick that makes WebKit redraw it.",
+    seoTitle: "iOS Safari ghost caret: cursor stuck where the input was",
+    seoDescription:
+      "A text cursor stays where an input used to be in iOS Safari and installed PWAs. When it happens, what we tried and the workaround.",
     blocks: [
       {
         type: "p",
@@ -415,6 +436,10 @@ function restore(field: HTMLInputElement | HTMLTextAreaElement, moved: boolean) 
         type: "note",
         text: "This is a workaround for a platform bug. Re-test it on each major iOS release, on a real device, and remove it once WebKit moves the caret with the field.",
       },
+      {
+        type: "p",
+        text: "See also [Input and TextArea](/docs/input), [The software keyboard](/docs/keyboard) and the field note [Freezing the iOS viewport when the keyboard opens](/blog/ios-keyboard-viewport-freeze).",
+      },
     ],
   },
   {
@@ -425,6 +450,9 @@ function restore(field: HTMLInputElement | HTMLTextAreaElement, moved: boolean) 
     author: "adaptv team",
     summary:
       "On a cold launch from the Home Screen, iOS lays the page out against one height, then another. A centred splash jumps, or sits 31pt off. Seven fixes that did not hold, and the head script that does.",
+    seoTitle: "iOS PWA launches at the wrong height: cause and fix",
+    seoDescription:
+      "An installed iOS web app can launch at the wrong height on cold start. What we saw, what we measured and the workaround.",
     blocks: [
       {
         type: "p",
@@ -563,6 +591,10 @@ function restore(field: HTMLInputElement | HTMLTextAreaElement, moved: boolean) 
         type: "note",
         text: "This is a workaround for a platform bug. Re-test it on each major iOS release, on a real device, with a cold launch in dark mode, and remove it if WebKit publishes the geometry before first paint.",
       },
+      {
+        type: "p",
+        text: "See also [Safe areas](/docs/safe-areas), [The frame](/docs/the-frame) and [Icons and splash](/docs/icons-and-splash).",
+      },
     ],
   },
   {
@@ -573,6 +605,9 @@ function restore(field: HTMLInputElement | HTMLTextAreaElement, moved: boolean) 
     author: "adaptv team",
     summary:
       "Double-tap a button in an iOS web view and a text magnifier appears over it. No CSS property turns it off. Here is what does — and the three versions of the fix that broke scrolling first.",
+    seoTitle: "iOS text loupe in a web app: the bug CSS cannot reach",
+    seoDescription:
+      "The iOS text magnifier loupe is a bug in web apps that no CSS property controls. What we found and why it needs a different approach.",
     blocks: [
       {
         type: "p",
@@ -646,6 +681,10 @@ function restore(field: HTMLInputElement | HTMLTextAreaElement, moved: boolean) 
       {
         type: "note",
         text: "This is a workaround for a platform bug, and it carries its own removal instructions in the source: re-test on each major iOS release, on a real device — the Simulator does not reliably reproduce the loupe — and delete it the day WebKit fixes it for good.",
+      },
+      {
+        type: "p",
+        text: "See also [Text](/docs/text), [Input and TextArea](/docs/input) and the field note [The ghost caret: a text cursor that stays where the field used to be](/blog/ios-ghost-caret).",
       },
     ],
   },

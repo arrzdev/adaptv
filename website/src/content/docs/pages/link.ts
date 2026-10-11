@@ -8,6 +8,9 @@ export const page: DocPage = {
   platforms: ["Web", "PWA", "iOS", "Android"],
   importLine: 'import { Link, ExternalLink } from "adaptv/components"',
   source: "src/components/link.tsx",
+  seoTitle: "Link and ExternalLink for a React web and native app",
+  seoDescription:
+    "Link goes to a route in the app. ExternalLink leaves the app, for links out of the app.",
   blocks: [
     {
       type: "demo",
@@ -148,6 +151,10 @@ export const page: DocPage = {
           note: "`ExternalLink` opens in a Custom Tab.",
         },
       ],
+    },
+    {
+      type: "p",
+      text: "See also [Routing](/docs/routing).",
     },
   ],
 }

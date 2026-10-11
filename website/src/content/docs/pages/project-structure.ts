@@ -4,6 +4,9 @@ export const page: DocPage = {
   slug: "project-structure",
   title: "Project structure",
   summary: "The files of an adaptv app, and which ones adaptv writes for you.",
+  seoTitle: "Project structure of an adaptv React app",
+  seoDescription:
+    "The files of an adaptv app, and which ones adaptv writes for you, so you know what to commit and what to leave alone.",
   blocks: [
     {
       type: "p",

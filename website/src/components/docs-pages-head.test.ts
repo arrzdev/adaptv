@@ -72,8 +72,10 @@ describe("a docs page's head", () => {
 describe("the docs home's head", () => {
   const head = (DocsHomeRoute.options.head as () => Head)()
 
-  it("keeps its tab title and has the card and a canonical link", () => {
-    expect(head.meta).toContainEqual({ title: "Documentation — adaptv" })
+  it("has its search title, the card and a canonical link", () => {
+    expect(head.meta).toContainEqual({
+      title: "adaptv docs: React for web, iOS and Android",
+    })
     for (const key of CARD) expect(metaContent(head, key), key).toBeTruthy()
     expect(metaContent(head, "og:url")).toBe("https://adaptv.tudu.dev/docs")
     expect(head.links).toContainEqual({

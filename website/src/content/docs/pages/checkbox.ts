@@ -9,6 +9,9 @@ export const page: DocPage = {
   platforms: ["Web", "PWA", "iOS", "Android"],
   importLine: 'import { Checkbox, useCheckbox } from "adaptv/components"',
   source: "src/components/checkbox.tsx",
+  seoTitle: "Checkbox with indeterminate state in React",
+  seoDescription:
+    "A checkbox with an indeterminate state and a box you paint yourself, that renders a real checkbox input.",
   blocks: [
     {
       type: "demo",
@@ -125,6 +128,10 @@ const some = picked.length > 0 && !all
     {
       type: "p",
       text: "Everywhere. A scroll cancels a touch, so a checkbox in a list does not toggle under a scrolling thumb. On iOS, call `selection()` from [useHaptics](/docs/hooks-feedback) in `onCheckedChange`.",
+    },
+    {
+      type: "p",
+      text: "See also [Switch](/docs/switch), [Input and TextArea](/docs/input) and [Styling](/docs/styling).",
     },
   ],
 }
