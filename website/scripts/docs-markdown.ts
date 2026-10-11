@@ -1,7 +1,8 @@
 /*
- * Writes `/llms.txt` and `/docs/<slug>.md` into the client build, next to the
- * prerendered pages, so the Worker serves them as static files. The text comes from
- * `src/content/docs/markdown.ts`; this file only loads the docs and emits the result.
+ * Writes `/llms.txt`, `/docs/<slug>.md`, `/sitemap.xml` and `/blog/rss.xml` into the
+ * client build, next to the prerendered pages, so the Worker serves them as static
+ * files. The text comes from `src/content/docs/markdown.ts` and `src/content/feeds.ts`;
+ * this file only loads the docs and the posts and emits the result.
  *
  * The docs are loaded with a bare Vite module runner, not the app's build: a page file
  * imports its demo component, and a demo pulls in the whole runtime (`virtual:adaptv/*`
@@ -72,6 +73,9 @@ function contentType(path: string) {
   //the value of LLMS_TXT_PATH: the config loader can't resolve that module's `@/` imports
   if (path === "llms.txt") return "text/plain; charset=utf-8"
   if (/^docs\/[a-z0-9-]+\.md$/.test(path)) return "text/markdown; charset=utf-8"
+  //the values of SITEMAP_PATH and RSS_PATH
+  if (path === "sitemap.xml") return "application/xml; charset=utf-8"
+  if (path === "blog/rss.xml") return "application/rss+xml; charset=utf-8"
   return null
 }
 
@@ -105,9 +109,11 @@ export async function loadMarkdownFiles() {
         load(id) {
           if (id === `\0${ENTRY}`)
             return [
+              `import { POSTS } from "@/content/blog"`,
               `import { DOCS } from "@/content/docs"`,
               `import { docsMarkdownFiles } from "@/content/docs/markdown"`,
-              "export default docsMarkdownFiles(DOCS)",
+              `import { feedFiles } from "@/content/feeds"`,
+              "export default [...docsMarkdownFiles(DOCS), ...feedFiles(DOCS, POSTS)]",
             ].join("\n")
           //`switch-demo` → `export const SwitchDemo`, the one name its page imports
           if (id.startsWith(DEMO)) {
