@@ -5,6 +5,9 @@ export const page: DocPage = {
   title: "Over-the-air updates",
   summary:
     "Ship new JavaScript to installed iOS and Android apps without a store release.",
+  seoTitle: "Over-the-air updates for a React app without a store release",
+  seoDescription:
+    "Ship new JavaScript to installed iOS and Android apps without a store release. What changes over the air and what needs a rebuild.",
   blocks: [
     {
       type: "p",
@@ -238,6 +241,10 @@ export function UpdateNudge() {
         },
         { target: "Android", status: "yes", note: "Same." },
       ],
+    },
+    {
+      type: "p",
+      text: "See also [Native builds](/docs/native-builds), [Update hooks](/docs/hooks-updates) and [adaptv CLI](/docs/cli).",
     },
   ],
 }

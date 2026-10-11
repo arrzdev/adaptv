@@ -4,6 +4,9 @@ export const page: DocPage = {
   slug: "keyboard",
   title: "The software keyboard",
   summary: "Keep inputs visible when the on-screen keyboard opens.",
+  seoTitle: "iOS keyboard covers the input in a PWA: the fix",
+  seoDescription:
+    "Keep inputs visible when the on-screen keyboard opens on iOS and Android. One keyboard signal, a component, a hook and a CSS hook.",
   blocks: [
     {
       type: "p",
@@ -212,6 +215,10 @@ function Composer() {
         "**Different height on a LAN `http://` address.** The page is not a secure context, so the browser keyboard API is missing. The height comes from viewport size.",
         '**A ghost popover on a moving field.** iOS draws autocorrect and selection handles. Set `autoCorrect="off"` and `spellCheck={false}` on the field.',
       ],
+    },
+    {
+      type: "p",
+      text: "See also [Input and feedback hooks](/docs/hooks-feedback) and the field note [Freezing the iOS viewport when the keyboard opens](/blog/ios-keyboard-viewport-freeze).",
     },
   ],
 }

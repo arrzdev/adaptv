@@ -9,6 +9,9 @@ export const page: DocPage = {
   importLine:
     'import { haptics, openExternal, getOnline, subscribeOnline, onResume, BackPriority } from "adaptv/capabilities"',
   source: "src/capabilities",
+  seoTitle: "Device APIs for React web and native: one call, every target",
+  seoDescription:
+    "The device APIs as plain functions with no React: the same calls on every target, with the web fallback stated per call.",
   blocks: [
     { type: "h2", text: "Capability or hook" },
     {
@@ -574,6 +577,10 @@ const off = onUrlOpened(({ url, path }) => {
           description: "Hear when the base changes.",
         },
       ],
+    },
+    {
+      type: "p",
+      text: "See also [Storage](/docs/storage).",
     },
   ],
 }

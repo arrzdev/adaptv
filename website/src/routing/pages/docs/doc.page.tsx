@@ -7,14 +7,19 @@ export const Route = createFileRoute("/docs/$slug")({
   loader: ({ params }) => {
     const page = ALL_DOCS.find((item) => item.slug === params.slug)
     if (!page) throw notFound()
-    return { slug: page.slug, title: page.title, summary: page.summary }
+    return {
+      slug: page.slug,
+      title: page.title,
+      seoTitle: page.seoTitle,
+      description: page.seoDescription ?? page.summary,
+    }
   },
   head: ({ loaderData }) =>
     loaderData
       ? socialHead({
           title: loaderData.title,
-          tabTitle: `${loaderData.title} — adaptv docs`,
-          description: loaderData.summary,
+          tabTitle: loaderData.seoTitle ?? `${loaderData.title} — adaptv docs`,
+          description: loaderData.description,
           path: `/docs/${loaderData.slug}`,
         })
       : { meta: [{ title: "Docs — adaptv docs" }] },

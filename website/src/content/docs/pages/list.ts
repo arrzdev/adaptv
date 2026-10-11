@@ -8,6 +8,9 @@ export const page: DocPage = {
   platforms: ["Web", "PWA", "iOS", "Android"],
   importLine: 'import { List } from "adaptv/components"',
   source: "src/components/list.tsx",
+  seoTitle: "Virtualized list for React: mount only visible rows",
+  seoDescription:
+    "A long vertical list that mounts only the visible rows, so scrolling stays smooth on phones.",
   blocks: [
     {
       type: "demo",
@@ -174,6 +177,10 @@ const rows: Row[] = Array.from({ length: 10_000 }, (_, index) => ({
           note: "A slow `renderItem` shows first on low-end devices.",
         },
       ],
+    },
+    {
+      type: "p",
+      text: "See also [Swipeable](/docs/swipeable) and [Layout shift](/docs/layout-shift).",
     },
   ],
 }

@@ -8,6 +8,9 @@ export const page: DocPage = {
   importLine:
     'import { EdgeSwipeGestures, PwaSplashOverlay, UiNotFound, BootError, UpdateRequired, OrientationGuard } from "adaptv/components"',
   source: "src/components",
+  seoTitle: "App shell components for a React mobile app",
+  seoDescription:
+    "Whole-app screens and listeners for a React app on web, PWA, iOS and Android. What each one does and where it goes in the app.",
   blocks: [
     {
       type: "p",
@@ -412,6 +415,10 @@ export const page: DocPage = {
         },
         { target: "Android", status: "yes" },
       ],
+    },
+    {
+      type: "p",
+      text: "See also [The frame](/docs/the-frame).",
     },
   ],
 }

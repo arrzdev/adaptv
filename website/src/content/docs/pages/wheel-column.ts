@@ -9,6 +9,9 @@ export const page: DocPage = {
   importLine:
     'import { WheelColumn, WHEEL_ITEM_HEIGHT, WHEEL_HEIGHT } from "adaptv/components"',
   source: "src/components/wheel-column.tsx",
+  seoTitle: "WheelColumn: one column of an iOS-style picker wheel",
+  seoDescription:
+    "One column of a picker wheel for React, for building pickers.",
   blocks: [
     {
       type: "demo",
@@ -172,6 +175,10 @@ const [minute, setMinute] = useState(30)
           note: "The fling is shorter than on iOS.",
         },
       ],
+    },
+    {
+      type: "p",
+      text: "See also [Text](/docs/text).",
     },
   ],
 }

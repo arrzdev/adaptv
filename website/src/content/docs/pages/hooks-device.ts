@@ -10,6 +10,9 @@ export const page: DocPage = {
   importLine:
     'import { useDevice, useInsets, useMediaQuery, useOrientation, useReducedMotion, useTheme, useChromeTint, useStatusBar } from "adaptv/hooks"',
   source: "src/hooks",
+  seoTitle: "React hooks for device, safe area and orientation",
+  seoDescription:
+    "Read the device, the safe area, media queries, orientation, motion preference and theme, and set the browser and native status bar.",
   blocks: [
     {
       type: "demo",
