@@ -222,7 +222,7 @@ function SheetTrigger() {
         onClick={() => setOpen(true)}
         className="rounded-full bg-foreground px-6 py-3 font-medium text-[15px] text-background active:scale-95"
       >
-        Open a sheet
+        Open the sheet
       </Button>
       <Drawer open={open} onOpenChange={setOpen}>
         <Drawer.Portal>
@@ -253,33 +253,33 @@ function SheetTrigger() {
 export function ComponentsBento() {
   return (
     <Section
-      title="Components with native gestures"
-      lede="Sheets, swipe rows, wheels and switches. They are unstyled, so your Tailwind classes apply. Everything below is live."
+      title="Try the components here"
+      lede="This is adaptv running on this page, the same code that ships to a phone. Drag, swipe, spin. They come unstyled, so the look is yours."
     >
       <View className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <Card
           className="md:col-span-2"
-          title="Swipe actions"
-          line="Tracks your finger 1:1, never steals a vertical scroll, and only one row opens at a time."
+          title="Swipe a row"
+          line="Follows your finger, leaves vertical scrolling alone, and keeps one row open at a time."
         >
           <SwipeRows />
         </Card>
         <Card
-          title="Wheel picker"
-          line="Free momentum, a real drum projection, and a settle snap that doesn't kill the fling."
+          title="Spin the wheel"
+          line="Flick it: it coasts, slows down and settles on a value without a jump."
         >
           <TimeWheel />
         </Card>
         <Card
-          title="Bottom sheet"
-          line="Drag to dismiss, keyboard-aware, and it closes on the Android back button."
+          title="Open a sheet"
+          line="Pull it down to close it. On a phone it stays above the keyboard; on Android, Back closes it."
         >
           <SheetTrigger />
         </Card>
         <Card
           className="md:col-span-2"
-          title="Form controls and lists"
-          line="Accessible by default, with a haptic tick on a real device. The same component on all six targets."
+          title="Flip a switch"
+          line="Screen readers get the label and the state. On a phone you feel a haptic tick."
         >
           <Switches />
         </Card>
