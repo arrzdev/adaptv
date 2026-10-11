@@ -8,6 +8,9 @@ export const page: DocPage = {
   platforms: ["Web", "PWA", "iOS", "Android"],
   importLine: 'import { Switch, useSwitch } from "adaptv/components"',
   source: "src/components/switch.tsx",
+  seoTitle: "Switch: an on/off toggle for React, unstyled",
+  seoDescription:
+    "An on/off toggle with no paint of its own, so you style it to match your app on every target.",
   blocks: [
     {
       type: "demo",
@@ -88,6 +91,10 @@ const [checked, setChecked] = useState(true)
     {
       type: "p",
       text: "Everywhere. On iOS, pair it with [useHaptics](/docs/hooks-feedback).",
+    },
+    {
+      type: "p",
+      text: "See also [Checkbox](/docs/checkbox), [Styling](/docs/styling) and [Pressable](/docs/pressable).",
     },
   ],
 }

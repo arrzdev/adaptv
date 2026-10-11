@@ -9,6 +9,9 @@ export const page: DocPage = {
   platforms: ["Web", "PWA", "iOS", "Android"],
   importLine: 'import { Text } from "adaptv/components"',
   source: "src/components/text.tsx",
+  seoTitle: "Text: line clamp and iOS text size in React",
+  seoDescription:
+    "A run of text that can clamp to a number of lines, stay selectable and follow the iOS text size.",
   blocks: [
     {
       type: "demo",
@@ -116,6 +119,10 @@ export const page: DocPage = {
           note: "`scaleWithSystem` does nothing. Android font scale is not read.",
         },
       ],
+    },
+    {
+      type: "p",
+      text: "See also [View](/docs/view), [Styling](/docs/styling) and [Input and TextArea](/docs/input).",
     },
   ],
 }

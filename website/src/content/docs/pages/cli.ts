@@ -7,6 +7,9 @@ export const page: DocPage = {
     "Commands, flags, exit codes, environment variables and common errors.",
   platforms: ["Web", "PWA", "iOS", "Android"],
   source: "bin/adaptv.mjs",
+  seoTitle: "adaptv CLI: run, build and ship React to iOS and Android",
+  seoDescription:
+    "Commands, flags, exit codes, environment variables and common errors for running and building the app on web, iOS and Android.",
   blocks: [
     {
       type: "p",
@@ -386,6 +389,10 @@ adaptv --version          # or -v`,
     {
       type: "p",
       text: "`.adaptv/` is git-ignored and safe to delete. It holds the native projects, `builds/`, update archives, `state.json` (fingerprints and chosen devices) and `dev.lock`.",
+    },
+    {
+      type: "p",
+      text: "See also [Quick start](/docs/quick-start).",
     },
   ],
 }

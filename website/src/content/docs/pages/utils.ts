@@ -9,6 +9,9 @@ export const page: DocPage = {
   importLine:
     'import { isNativePlatform, isInstalledApp, getOS } from "adaptv/utils"',
   source: "src/utils",
+  seoTitle: "Detect iOS, Android and installed PWA in React",
+  seoDescription:
+    "Synchronous platform detection for web, installed PWA, iOS and Android, plus the helpers the shell uses to stamp the page.",
   blocks: [
     {
       type: "p",
@@ -187,6 +190,10 @@ export const SHEET_EASE: EasingBezier = [0.32, 0.72, 0, 1]`,
             '`true` if a scope is on for a shell. `"app"` is on for `"standalone"` and `"native"`.',
         },
       ],
+    },
+    {
+      type: "p",
+      text: "See also [The six targets](/docs/six-targets).",
     },
   ],
 }

@@ -4,6 +4,9 @@ export const page: DocPage = {
   slug: "quick-start",
   title: "Quick start",
   summary: "Run an adaptv app today, and learn the files a minimal app needs.",
+  seoTitle: "Quick start: run a React app on web, iOS and Android",
+  seoDescription:
+    "Run an adaptv app in the browser and on a simulator, and learn the few files a minimal app needs. adaptv is pre-alpha and not on npm yet.",
   blocks: [
     {
       type: "note",
@@ -184,6 +187,10 @@ function Home() {
     {
       type: "p",
       text: "Next: [The frame](/docs/the-frame), [Routing](/docs/routing), [Native builds](/docs/native-builds).",
+    },
+    {
+      type: "p",
+      text: "See also [adaptv CLI](/docs/cli).",
     },
   ],
 }

@@ -5,6 +5,9 @@ export const page: DocPage = {
   title: "Native builds",
   summary:
     "Run the app on a simulator, an emulator or a phone, and build an .ipa and an .apk.",
+  seoTitle: "Turn a React web app into an iOS and Android app",
+  seoDescription:
+    "Run the app on a simulator, an emulator or a phone, and build an .ipa and an .apk from the same React code as the website.",
   blocks: [
     {
       type: "p",
@@ -191,6 +194,10 @@ adaptv build all -o ./dist/     # iOS and Android into ./dist/`,
         ],
         ["No JDK found.", "Install Android Studio, or set `JAVA_HOME`."],
       ],
+    },
+    {
+      type: "p",
+      text: "See also [adaptv CLI](/docs/cli) and [Quick start](/docs/quick-start).",
     },
   ],
 }
