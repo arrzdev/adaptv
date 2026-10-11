@@ -25,6 +25,7 @@ type PriorityPickerProps = {
   onChange: (priority: number | null) => void
 }
 
+//#region landing: the website shows this excerpt in its "Write" tab
 export function PriorityPicker({ value, onChange }: PriorityPickerProps) {
   return (
     <View className="flex flex-col gap-y-2">
@@ -45,6 +46,7 @@ export function PriorityPicker({ value, onChange }: PriorityPickerProps) {
                 isSelected && "bg-secondary hover:bg-secondary",
               )}
               aria-pressed={isSelected}
+              //#endregion
             >
               <span className="inline-flex items-center gap-x-2">
                 {option.dotClassName && (
