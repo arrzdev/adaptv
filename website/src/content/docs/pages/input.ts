@@ -10,6 +10,9 @@ export const page: DocPage = {
   importLine:
     'import { Input, TextArea, useInput, useTextArea } from "adaptv/components"',
   source: "src/components/input.tsx",
+  seoTitle: "Input and TextArea for mobile React forms",
+  seoDescription:
+    "A single-line field with icon slots and a multiline field that grows with its text, for forms that sit under the on-screen keyboard.",
   blocks: [
     {
       type: "demo",
@@ -198,6 +201,10 @@ const [notes, setNotes] = useState("")
     {
       type: "p",
       text: "`onSubmitKey` fires on desktop only. `enterKeyHint` and `inputMode` shape the keyboard on phones. To keep a field above the keyboard, see [AvoidKeyboard](/docs/avoid-keyboard).",
+    },
+    {
+      type: "p",
+      text: "See also [The software keyboard](/docs/keyboard) and the field note [The ghost caret: a text cursor that stays where the field used to be](/blog/ios-ghost-caret).",
     },
   ],
 }

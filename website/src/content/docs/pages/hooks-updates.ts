@@ -9,6 +9,9 @@ export const page: DocPage = {
   importLine:
     'import { useServiceWorkerUpdate, useServiceWorkerMessage, sendToServiceWorker, useStoreRelease } from "adaptv/hooks"',
   source: "src/hooks",
+  seoTitle: "Prompt users to reload for a new PWA version in React",
+  seoDescription:
+    "Offer a waiting service-worker update, talk to your service-worker modules and detect when a native install is behind.",
   blocks: [
     {
       type: "p",
@@ -235,6 +238,10 @@ return null`,
         },
         { target: "Android", status: "yes", note: "Same as iOS." },
       ],
+    },
+    {
+      type: "p",
+      text: "See also [Deploying the web app](/docs/deploying).",
     },
   ],
 }

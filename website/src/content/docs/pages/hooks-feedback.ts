@@ -10,6 +10,9 @@ export const page: DocPage = {
   importLine:
     'import { useKeyboard, useHaptics, useHapticTick, useVibrate, useGestureEngine, useClickFix, useFreezeViewport } from "adaptv/hooks"',
   source: "src/hooks",
+  seoTitle: "React hooks for keyboard, haptics and press feedback",
+  seoDescription:
+    "The on-screen keyboard, haptics, the press engine, taps on canvas surfaces and freezing the viewport under an overlay.",
   blocks: [
     {
       type: "demo",
@@ -511,6 +514,10 @@ return <canvas {...handlers} />`,
         { target: "iOS", status: "yes" },
         { target: "Android", status: "yes" },
       ],
+    },
+    {
+      type: "p",
+      text: "See also the field note [Freezing the iOS viewport when the keyboard opens](/blog/ios-keyboard-viewport-freeze).",
     },
   ],
 }

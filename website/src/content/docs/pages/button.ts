@@ -10,6 +10,9 @@ export const page: DocPage = {
   importLine:
     'import { Button, useButton, type ButtonHandle } from "adaptv/components"',
   source: "src/components/button.tsx",
+  seoTitle: "Button: a React button with press feedback and haptics",
+  seoDescription:
+    "A real button element with the press engine, optional haptics and icon slots, built for touch screens.",
   blocks: [
     {
       type: "demo",
@@ -128,6 +131,10 @@ export const page: DocPage = {
         },
         { target: "Android", status: "yes" },
       ],
+    },
+    {
+      type: "p",
+      text: "See also [Input and feedback hooks](/docs/hooks-feedback) and [Layout shift](/docs/layout-shift).",
     },
   ],
 }

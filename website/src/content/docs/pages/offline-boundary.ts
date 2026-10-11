@@ -8,6 +8,9 @@ export const page: DocPage = {
   platforms: ["Web", "PWA", "iOS", "Android"],
   importLine: 'import { Offline } from "adaptv/components"',
   source: "src/components/offline.tsx",
+  seoTitle: "OfflineBoundary: an offline screen for a React app",
+  seoDescription:
+    "A ready-made screen with a title, a line of text and a retry button for when the network or data is missing.",
   blocks: [
     {
       type: "demo",
@@ -118,6 +121,10 @@ export const page: DocPage = {
         },
         { target: "Android", status: "yes", note: "Same as iOS." },
       ],
+    },
+    {
+      type: "p",
+      text: "See also [Clipboard, share, location and network hooks](/docs/hooks-data) and [Button](/docs/button).",
     },
   ],
 }

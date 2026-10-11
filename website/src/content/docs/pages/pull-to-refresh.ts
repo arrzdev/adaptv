@@ -9,6 +9,9 @@ export const page: DocPage = {
   importLine:
     'import { PullToRefresh, usePullToRefresh } from "adaptv/components"',
   source: "src/components/pull-to-refresh.tsx",
+  seoTitle: "Pull to refresh in a React PWA, iOS included",
+  seoDescription:
+    "Pull down from the top of a scroller to refresh, on web and native from the same component.",
   blocks: [
     {
       type: "demo",
@@ -143,6 +146,10 @@ const scrollRef = useRef<HTMLDivElement>(null)
         },
         { target: "Android", status: "yes" },
       ],
+    },
+    {
+      type: "p",
+      text: "See also [The frame](/docs/the-frame) and [List](/docs/list).",
     },
   ],
 }

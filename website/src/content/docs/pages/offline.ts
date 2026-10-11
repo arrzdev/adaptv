@@ -5,6 +5,9 @@ export const page: DocPage = {
   title: "Offline and the service worker",
   summary:
     "Make the web build boot offline, and show a screen when data is missing.",
+  seoTitle: "Make a React PWA work offline with a service worker",
+  seoDescription:
+    "Make the web build boot offline with a generated service worker, and show a screen when data is missing instead of a blank page.",
   blocks: [
     {
       type: "p",
@@ -200,6 +203,10 @@ cacheRoute({
         "**Reset a broken worker.** In DevTools, open Application, then Service Workers, then Unregister. There is no API for this.",
         "**A chunk fails to load after a deploy.** Your host removed the old build's files. See [Deploying](/docs/deploying).",
       ],
+    },
+    {
+      type: "p",
+      text: "See also [Update hooks](/docs/hooks-updates) and [Vite plugin](/docs/vite-plugin).",
     },
   ],
 }

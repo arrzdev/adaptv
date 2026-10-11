@@ -8,6 +8,9 @@ export const page: DocPage = {
   platforms: ["Web", "PWA", "iOS", "Android"],
   importLine: 'import { Dropdown } from "adaptv/components"',
   source: "src/components/dropdown/dropdown.tsx",
+  seoTitle: "Dropdown menu attached to a button in React",
+  seoDescription:
+    "A menu attached to a button that opens from a button, on touch and mouse.",
   blocks: [
     {
       type: "demo",
@@ -214,6 +217,10 @@ export const page: DocPage = {
           note: "Hardware back closes the menu first.",
         },
       ],
+    },
+    {
+      type: "p",
+      text: "See also [Drawer](/docs/drawer), [Button](/docs/button) and [Pressable](/docs/pressable).",
     },
   ],
 }

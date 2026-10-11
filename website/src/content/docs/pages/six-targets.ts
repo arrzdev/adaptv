@@ -4,6 +4,9 @@ export const page: DocPage = {
   slug: "six-targets",
   title: "The six targets",
   summary: "Style and branch for a tab, an installed app or a native build.",
+  seoTitle: "Web, PWA, iOS, Android: styling per target in React",
+  seoDescription:
+    "Style and branch your React app for a browser tab, an installed PWA or a native build with one set of variants and one platform check.",
   blocks: [
     {
       type: "ul",
@@ -51,6 +54,10 @@ getOS() // "ios" | "android" | other`,
       type: "note",
       text: 'Do not use `matchMedia("(display-mode: standalone)")` for this. It is false in a native app.',
       tone: "warn",
+    },
+    {
+      type: "p",
+      text: "See also [Utils](/docs/utils), [Styling](/docs/styling) and [Safe areas](/docs/safe-areas).",
     },
   ],
 }

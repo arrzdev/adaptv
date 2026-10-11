@@ -5,6 +5,9 @@ export const page: DocPage = {
   title: "Rendering",
   summary:
     "What `render` changes for the web build, why a native bundle is always static, and why the build refuses server-only code.",
+  seoTitle: "SPA or prerender for a React PWA: what render changes",
+  seoDescription:
+    "What the render option changes for the web build, why a native bundle is always static, and why the build refuses server-only code.",
   blocks: [
     {
       type: "p",
@@ -120,6 +123,10 @@ export const Route = createFileRoute("/orders")({
         "**No service worker in `dev`.** Test the worker with `adaptv preview web`.",
         "**A hosting plugin in `vite.config.ts`.** adaptv already adds the server build.",
       ],
+    },
+    {
+      type: "p",
+      text: "See also [Vite plugin](/docs/vite-plugin) and [Routing](/docs/routing).",
     },
   ],
 }

@@ -5,6 +5,9 @@ export const page: DocPage = {
   title: "Routing",
   summary:
     "List your routes in one config file. Write one file per page. adaptv builds the router and the root route.",
+  seoTitle: "File-based routing for a React web and native app",
+  seoDescription:
+    "List routes in one config file, write one file per page, and adaptv builds the router and the root route for every target.",
   blocks: [
     {
       type: "p",
@@ -148,6 +151,10 @@ export const Nav = () => (
         "**A `server: { handlers }` key on a route.** The build refuses it.",
         "**Screen enter and leave.** A mount is the enter and an unmount is the leave. Use [useScreenLifecycle](/docs/hooks-lifecycle). Backgrounding the app unmounts nothing: use `useOnResume`.",
       ],
+    },
+    {
+      type: "p",
+      text: "See also [Project structure](/docs/project-structure).",
     },
   ],
 }

@@ -4,6 +4,9 @@ export const page: DocPage = {
   slug: "layout-shift",
   title: "Layout shift",
   summary: "Stop buttons moving under a thumb.",
+  seoTitle: "Stop layout shift under a thumb in a mobile React app",
+  seoDescription:
+    "Stop buttons moving as content loads, so a tap lands where the finger aimed. Reserved boxes, stable rows and what to avoid.",
   blocks: [
     {
       type: "p",
@@ -20,6 +23,10 @@ export const page: DocPage = {
     {
       type: "p",
       text: "adaptv sets the theme and platform on `<html>` before the first paint, so `dark:` and `app:` styles do not jump. On iOS and in the browser, the keyboard opens over the page. On Android native the window shrinks. See [Keyboard](/docs/keyboard). `patches.viewportFreeze: false` turns the freeze off.",
+    },
+    {
+      type: "p",
+      text: "See also [List](/docs/list) and [Pressable](/docs/pressable).",
     },
   ],
 }
