@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react"
 import { Prose } from "@/components/prose"
 import { SitePage } from "@/components/site-page"
 import { POSTS } from "@/content/blog"
+import { RSS_LINK } from "@/content/feeds"
 import { socialHead } from "@/content/site"
 
 export const Route = createFileRoute("/blog/$slug")({
@@ -24,6 +25,7 @@ export const Route = createFileRoute("/blog/$slug")({
           description: loaderData.summary,
           path: `/blog/${loaderData.slug}`,
           published: loaderData.date,
+          links: [RSS_LINK],
         })
       : {},
   component: PostRoute,
