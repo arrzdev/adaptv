@@ -1,68 +1,36 @@
 import { View } from "adaptv/components"
-import chopchopAndroid from "@/assets/hero/chopchop-android.webp?adaptv-image"
-import chopchopIos from "@/assets/hero/chopchop-ios.webp?adaptv-image"
-import { PhoneFrame } from "@/components/frames"
+import { TallyDesktop } from "@/components/showcase/tally-desktop"
+import { TallyPhone } from "@/components/showcase/tally-phone"
+
+const LABEL =
+  "Tally, a budget app, in a desktop browser window and on a phone: the same app with a sidebar on desktop and a tab bar on the phone."
 
 /**
- * The hero's picture: ChopChop, a task app built on adaptv, on two phones. Each screen is
- * one file in src/assets/hero/, rendered by scripts/capture-chopchop.ts, so a device
- * screenshot of the same screen replaces it without a code change.
+ * The hero's picture: Tally, one budget app drawn in HTML and CSS, in a desktop browser
+ * window with the phone overlapping its bottom-right corner. A still picture: one label for
+ * assistive tech, nothing to focus, no pointer events.
  *
- * A plain <img> rather than adaptv's Image: Image keeps the picture hidden until hydration
- * says it loaded, and the iPhone is the page's largest paint.
+ * Both views are laid out at a fixed size and scaled to their box in CSS (`.fit`), and every
+ * box's height comes from an aspect ratio, so nothing is measured and nothing moves after the
+ * first paint. The web font swaps in late, so a label is one text node (`${a} of ${b}`, not
+ * `{a} of {b}`) and text sits left-aligned after a fixed edge: a swap changes widths and
+ * moves nothing, and the hero's CLS stays 0.
  */
 export function DeviceStage() {
   return (
-    <View className="stage-in relative mt-[72px] w-full items-center">
-      <div className="aurora pointer-events-none absolute -inset-x-16 -top-20 -bottom-16" />
-      {/* items-start: stretched, the iPhone would grow to the Android frame's offset height */}
-      <View row className="relative w-full items-start justify-center">
-        <PhoneFrame
-          platform="android"
-          //on a phone the front one is centred and this one shows its left quarter, cut by the screen edge
-          className="mt-8 w-[70vw] shrink-0 -rotate-2 max-sm:absolute max-sm:left-[calc(50%-60vw)] sm:-mr-10 sm:w-[280px]"
-        >
-          <Screen
-            image={chopchopAndroid}
-            alt="ChopChop's new-task sheet, a task being added with High priority, in an Android frame."
-          />
-        </PhoneFrame>
-        <PhoneFrame
-          platform="ios"
-          className="relative w-[70vw] shrink-0 rotate-2 sm:w-[280px]"
-        >
-          <Screen
-            image={chopchopIos}
-            alt="ChopChop's task list, six tasks with priorities and due dates, in an iPhone frame."
-            priority
-          />
-        </PhoneFrame>
+    <div
+      role="img"
+      aria-label={LABEL}
+      className="stage-in pointer-events-none relative mt-[72px] w-full max-w-[1000px] select-none"
+    >
+      <View aria-hidden="true" className="relative w-full">
+        <div className="aurora absolute -inset-x-16 -top-20 -bottom-16" />
+        <div className="@container relative aspect-[1000/580] min-h-0 w-full">
+          <TallyDesktop />
+        </div>
+        {/* on a phone it sits in front, pulled up over the window's bottom-right corner */}
+        <TallyPhone className="relative -mt-[30%] w-[46%] self-end md:absolute md:right-0 md:-bottom-14 md:mt-0 md:w-[260px] xl:-right-14" />
       </View>
-    </View>
-  )
-}
-
-function Screen({
-  image,
-  alt,
-  priority = false,
-}: {
-  image: typeof chopchopIos
-  alt: string
-  /** The page's largest paint: fetched first and decoded in step with the paint. */
-  priority?: boolean
-}) {
-  return (
-    <img
-      src={image.src}
-      width={image.width}
-      height={image.height}
-      alt={alt}
-      fetchPriority={priority ? "high" : undefined}
-      decoding={priority ? undefined : "async"}
-      draggable={false}
-      //a failed image shows its alt on the dark screen, not only the broken-image icon
-      className="block h-auto w-full select-none bg-[#0a0a0c] text-white/70 text-xs"
-    />
+    </div>
   )
 }
