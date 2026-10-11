@@ -34,18 +34,19 @@ for (const width of WIDTHS) {
       }
     })
 
-    expect(layout.text.split("\n").map((line) => line.trim())).toEqual([
+    //soft: one run reports every rule a width breaks
+    expect.soft(layout.text.split("\n").map((line) => line.trim())).toEqual([
       "Write React once",
       "Feel native everywhere.",
     ])
-    expect(layout.lines, "line boxes").toBe(2)
-    expect(layout.height, "h1 height").toBeLessThan(layout.lineHeight * 2.5)
-    expect(layout.left, "text starts inside the viewport").toBeGreaterThanOrEqual(0)
-    expect(layout.right, "text ends inside the viewport").toBeLessThanOrEqual(layout.innerWidth)
-    expect(layout.scrollWidth, "horizontal scroll").toBeLessThanOrEqual(layout.innerWidth)
+    expect.soft(layout.lines, "line boxes").toBe(2)
+    expect.soft(layout.height, "h1 height").toBeLessThan(layout.lineHeight * 2.5)
+    expect.soft(layout.left, "text starts inside the viewport").toBeGreaterThanOrEqual(0)
+    expect.soft(layout.right, "text ends inside the viewport").toBeLessThanOrEqual(layout.innerWidth)
+    expect.soft(layout.scrollWidth, "horizontal scroll").toBeLessThanOrEqual(layout.innerWidth)
     //the desktop size stays where it was: clamp(..., 5.75rem)
-    expect(layout.fontSize).toBeLessThanOrEqual(92)
-    if (width >= 1280) expect(layout.fontSize).toBe(92)
+    expect.soft(layout.fontSize).toBeLessThanOrEqual(92)
+    if (width >= 1280) expect.soft(layout.fontSize).toBe(92)
   })
 }
 
@@ -57,7 +58,8 @@ test("hero has the faded 48 px grid behind it", async ({ page }) => {
     const s = getComputedStyle(el)
     return { size: s.backgroundSize, image: s.backgroundImage, mask: s.maskImage }
   })
-  expect(style.size).toBe("48px 48px")
+  //one size per gradient layer
+  expect(style.size).toMatch(/^48px 48px(, 48px 48px)*$/)
   expect(style.image).toContain("linear-gradient")
   expect(style.mask).toContain("radial-gradient")
 })
