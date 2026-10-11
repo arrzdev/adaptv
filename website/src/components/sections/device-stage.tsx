@@ -28,8 +28,8 @@ export function DeviceStage() {
         <div className="@container relative aspect-[1000/580] min-h-0 w-full">
           <TallyDesktop />
         </div>
-        {/* on a phone it sits in front, pulled up over the window's bottom-right corner */}
-        <TallyPhone className="relative -mt-[30%] w-[46%] self-end md:absolute md:right-0 md:-bottom-14 md:mt-0 md:w-[260px] xl:-right-14" />
+        {/* on a phone it sits in front, pulled up over the window's bottom-right corner; a tablet gets a smaller phone, as the window is scaled too */}
+        <TallyPhone className="relative -mt-[30%] w-[46%] self-end md:absolute md:right-0 md:-bottom-14 md:mt-0 md:w-[200px] lg:w-[260px] xl:-right-14" />
       </View>
     </div>
   )
