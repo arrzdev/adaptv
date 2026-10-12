@@ -420,6 +420,19 @@ const PICKER = readFileSync(
   "utf8",
 )
 
+/**
+ * The JSX tags an excerpt leaves open, in order: `<Name` pushes, `/>` and `</Name>` pop.
+ * Empty when the excerpt starts and ends on whole elements (TUD-865).
+ */
+function openTags(code: string) {
+  const stack: string[] = []
+  for (const [, close, name, selfClose] of code.matchAll(/<(\/?)([A-Za-z][\w.]*)|(\/>)/g)) {
+    if (selfClose || close) stack.pop()
+    else stack.push(name)
+  }
+  return stack
+}
+
 /** The Reveal that wraps the step tabs (`components/reveal.tsx`). */
 function revealOf(idea: Locator) {
   return idea.locator("[data-reveal]").filter({ has: idea.page().getByRole("tablist") })
@@ -460,6 +473,11 @@ test.describe("From idea to installed", () => {
     //every line is the playground file's own, not a copy that drifts
     for (const line of lines.filter((l) => l.trim()))
       expect.soft(PICKER, "line comes from priority-picker.tsx").toContain(line)
+    //whole elements: nothing left open, and the last line closes one (TUD-865)
+    expect.soft(openTags(text), "tags left open in the excerpt").toEqual([])
+    expect
+      .soft(lines.at(-1)?.trim(), "the last line closes an element")
+      .toMatch(/^<\/[\w.]+>$|\/>$/)
     const overflow = await code.evaluate((el) => ({
       scrollHeight: el.scrollHeight,
       clientHeight: el.clientHeight,
