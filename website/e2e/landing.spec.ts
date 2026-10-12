@@ -102,6 +102,40 @@ test.describe("Tally showcase", () => {
     })
   }
 
+  //TUD-866 (design sign-off TUD-836): from 768 px the phone sits beside the window, not over
+  //its table. The Amount column and the green income row (landing-v2 §2.4) stay in sight.
+  for (const width of [768, 1024, 1440, 1920]) {
+    test(`the phone leaves the Amount column and the income row visible at ${width} px @webkit`, async ({
+      page,
+    }) => {
+      await open(page, width)
+      const stage = showcase(page)
+      await expect(stage).toBeVisible()
+      const desktop = stage.getByTestId("tally-desktop")
+      const p = await box(stage.getByTestId("tally-phone"))
+      const amounts = desktop.locator("table tr > :nth-child(4)")
+      const income = desktop.locator("table tr", { hasText: "+$3,150.00" })
+      //the header and the five transactions
+      await expect(amounts).toHaveCount(6)
+      await expect(income).toHaveCount(1)
+
+      const covered = (b: Awaited<ReturnType<typeof box>>) =>
+        b.left < p.right && b.right > p.left && b.top < p.bottom && b.bottom > p.top
+      for (const [i, cell] of (await amounts.all()).entries()) {
+        const b = await box(cell)
+        const label = `Amount cell ${i} (${await cell.innerText()}) is under the phone`
+        expect.soft(covered(b), label).toBe(false)
+      }
+      expect.soft(covered(await box(income)), "the income row is under the phone").toBe(false)
+
+      const scroll = await page.evaluate(() => ({
+        scrollWidth: document.documentElement.scrollWidth,
+        innerWidth: window.innerWidth,
+      }))
+      expect(scroll.scrollWidth, "horizontal scroll").toBeLessThanOrEqual(scroll.innerWidth)
+    })
+  }
+
   test("is drawn in HTML and CSS: no image, canvas or video inside", async ({ page }) => {
     await open(page, 1440)
     const stage = showcase(page)
