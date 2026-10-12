@@ -367,6 +367,20 @@ const PICKER = readFileSync(
   "utf8",
 )
 
+/** The Reveal that wraps the step tabs (`components/reveal.tsx`). */
+function revealOf(idea: Locator) {
+  return idea.locator("[data-reveal]").filter({ has: idea.page().getByRole("tablist") })
+}
+
+/** A Reveal's computed opacity and vertical offset, in CSS px. */
+function motionOf(reveal: Locator) {
+  return reveal.evaluate((el) => {
+    const cs = getComputedStyle(el)
+    const m = new DOMMatrixReadOnly(cs.transform === "none" ? undefined : cs.transform)
+    return { opacity: Number(cs.opacity), y: m.m42 }
+  })
+}
+
 test.describe("From idea to installed", () => {
   test("Write shows a 12–20 line excerpt of the real file, without a scroll box", async ({
     page,
@@ -374,7 +388,7 @@ test.describe("From idea to installed", () => {
     await open(page, 1440)
     const idea = section(page, "From idea to installed app")
     await expect(idea).toContainText(
-      "Write React, run it on your phone, ship it everywhere.",
+      "Write React, run it on your phone, ship it to the web, iOS and Android.",
     )
     await expect(idea.getByRole("tab")).toHaveText(["Write", "Run", "Ship"])
     await expect(idea.getByRole("tab", { name: "Write" })).toHaveAttribute(
@@ -402,11 +416,64 @@ test.describe("From idea to installed", () => {
     )
   })
 
+  test("the tabs fade up as they scroll in, frame by frame", async ({ page }) => {
+    await open(page, 1440)
+    const idea = section(page, "From idea to installed app")
+    const reveal = revealOf(idea)
+    await expect(reveal, "one Reveal wraps the tabs").toHaveCount(1)
+    //below the fold on load: hidden and 24 px low, waiting for its entrance
+    expect(await motionOf(reveal)).toEqual({ opacity: 0, y: 24 })
+
+    //every frame from before the scroll until the 0.7 s fade has long ended
+    await reveal.evaluate((el) => {
+      const w = window as unknown as { revealPath: { opacity: number; y: number }[] }
+      w.revealPath = []
+      const t0 = performance.now()
+      const tick = () => {
+        const cs = getComputedStyle(el)
+        const m = new DOMMatrixReadOnly(cs.transform === "none" ? undefined : cs.transform)
+        w.revealPath.push({ opacity: Number(cs.opacity), y: m.m42 })
+        if (performance.now() - t0 < 1800) requestAnimationFrame(tick)
+        else document.documentElement.dataset.revealSampled = ""
+      }
+      requestAnimationFrame(tick)
+    })
+    await idea.getByRole("tablist").scrollIntoViewIfNeeded()
+    await page.locator("html[data-reveal-sampled]").waitFor({ state: "attached" })
+    const path = await page.evaluate(
+      () => (window as unknown as { revealPath: { opacity: number; y: number }[] }).revealPath,
+    )
+
+    expect(path[0], "starts hidden and low").toEqual({ opacity: 0, y: 24 })
+    expect(path.at(-1), "ends in place").toEqual({ opacity: 1, y: 0 })
+    const between = path.filter((f) => f.opacity > 0 && f.opacity < 1)
+    //a fade, not a jump: at 60 fps the 0.7 s ease paints about 40 frames
+    expect(between.length, "frames in mid-fade").toBeGreaterThanOrEqual(8)
+    for (let i = 1; i < path.length; i++) {
+      const [a, b] = [path[i - 1], path[i]]
+      expect.soft(b.opacity, `frame ${i}: opacity only rises`).toBeGreaterThanOrEqual(a.opacity)
+      expect.soft(b.y, `frame ${i}: it only moves up`).toBeLessThanOrEqual(a.y + 0.01)
+      expect.soft(b.y, `frame ${i}: no overshoot past its place`).toBeGreaterThanOrEqual(0)
+      //no frame that drops it in place while still invisible, or shows it fully while low
+      if (b.opacity === 1) expect.soft(b.y, `frame ${i}: opaque only in place`).toBeLessThan(1)
+    }
+  })
+
+  test("under reduced motion the tabs are in place from the start", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" })
+    await open(page, 1440)
+    const reveal = revealOf(section(page, "From idea to installed app"))
+    await expect(reveal).toHaveCount(1)
+    expect(await motionOf(reveal)).toEqual({ opacity: 1, y: 0 })
+  })
+
   test("captions, and switching tabs moves nothing below the panel", async ({ page }) => {
     await open(page, 1440)
     const idea = section(page, "From idea to installed app")
     const tablist = idea.getByRole("tablist")
     await tablist.scrollIntoViewIfNeeded()
+    //the base gap is read once the entrance has settled, not halfway up its 24 px rise
+    await expect.poll(() => motionOf(revealOf(idea))).toEqual({ opacity: 1, y: 0 })
     const below = page.getByRole("heading", { name: "Start with the quick start" })
     const gap = async () => {
       const [a, b] = await Promise.all([box(tablist), box(below)])
