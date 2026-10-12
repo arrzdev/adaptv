@@ -188,23 +188,57 @@ describe("doctor's diagnostics are a user-facing surface too", () => {
  */
 describe("the server-API ban is a user-facing surface", () => {
   it("names no engine beyond the import the dev wrote", async () => {
-    const { describeServerApiBan, SERVER_ROUTE_HANDLERS_MESSAGE } =
-      await loadAdaptvModule("vite/ban-server-apis.ts")
-    const source = "@tanstack/react-start"
-    const message =
-      describeServerApiBan(source, "/app/src/routes/index.tsx") ?? ""
-    //the scan below is vacuous on an empty message, and a null here means the
-    //fixture stopped being application source, not that the ban went quiet
-    expect(message).not.toBe("")
-    const leaks = message
-      .replaceAll(source, "")
-      .split("\n")
-      .filter((line) => namesPlumbing(line))
-    expect(leaks).toEqual([])
+    const { describeServerApiBan } = await loadAdaptvModule(
+      "vite/ban-server-apis.ts",
+    )
+    //one specifier per door the ban covers: the root, a subpath, another package
+    for (const source of [
+      "@tanstack/react-start",
+      "@tanstack/react-start/client-rpc",
+      "@tanstack/start-client-core",
+    ]) {
+      const message =
+        describeServerApiBan(source, "/app/src/routes/index.tsx") ?? ""
+      //the scan below is vacuous on an empty message, and a null here means the
+      //fixture stopped being application source, not that the ban went quiet
+      expect(message, source).not.toBe("")
+      const leaks = message
+        .replaceAll(source, "")
+        .split("\n")
+        .filter((line) => namesPlumbing(line))
+      expect(leaks, source).toEqual([])
+    }
+  })
+
+  it("names none in the server boundary's report, on any line, so the CLI can print it whole", async () => {
+    const { describeBoundary } = await loadAdaptvModule(
+      "vite/server-boundary.ts",
+    )
+    const report = describeBoundary([
+      {
+        kind: "server function",
+        file: "src/fns/todos.ts",
+        line: 3,
+        what: "getTodos",
+        routes: ["/", "/todos"],
+      },
+      {
+        kind: "server request",
+        file: "src/lib/auth.ts",
+        line: 1,
+        what: "server request",
+        routes: ["every route"],
+      },
+      {
+        kind: "server route",
+        file: "src/routes/api.tsx",
+        line: 5,
+        what: "/api",
+        routes: [],
+      },
+    ])
     expect(
-      SERVER_ROUTE_HANDLERS_MESSAGE.split("\n").filter((line) =>
-        namesPlumbing(line),
-      ),
+      report.split("\n").filter((line) => namesPlumbing(line)),
     ).toEqual([])
   })
 
@@ -218,11 +252,14 @@ describe("the server-API ban is a user-facing surface", () => {
         "utf8",
       ),
     )
-    //The KEYS are the banned specifiers, which is what the rule is about — structural,
-    //like the dependency graph. The messages are what the dev reads.
-    const paths =
-      shared.linter.rules.style.noRestrictedImports.options.paths
-    const messages = Object.values(paths).map((p) => p.message)
+    //The KEYS and pattern GROUPS are the banned specifiers, which is what the rule is
+    //about — structural, like the dependency graph. The messages are what the dev reads,
+    //from `paths` and `patterns` alike.
+    const options = shared.linter.rules.style.noRestrictedImports.options
+    const messages = [
+      ...Object.values(options.paths ?? {}).map((p) => p.message),
+      ...(options.patterns ?? []).map((p) => p.message),
+    ]
     expect(messages.length).toBeGreaterThan(0)
     expect(messages.filter((m) => namesPlumbing(m))).toEqual([])
   })
