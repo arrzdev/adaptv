@@ -25,7 +25,6 @@ type PriorityPickerProps = {
   onChange: (priority: number | null) => void
 }
 
-//#region landing: the website shows this excerpt in its "Write" tab
 export function PriorityPicker({ value, onChange }: PriorityPickerProps) {
   return (
     <View className="flex flex-col gap-y-2">
@@ -33,6 +32,7 @@ export function PriorityPicker({ value, onChange }: PriorityPickerProps) {
         Priority
       </Text>
       {/* a chip row is its own scroller — the sheet around it only scrolls vertically */}
+      {/* #region landing: the website shows this excerpt in its "Write" tab */}
       <ScrollView horizontal className="-mx-6 gap-x-2 px-6">
         {PRIORITY_OPTIONS.map((option) => {
           const isSelected = value === option.value
@@ -46,24 +46,27 @@ export function PriorityPicker({ value, onChange }: PriorityPickerProps) {
                 isSelected && "bg-secondary hover:bg-secondary",
               )}
               aria-pressed={isSelected}
-              //#endregion
             >
-              <span className="inline-flex items-center gap-x-2">
-                {option.dotClassName && (
-                  <span
-                    aria-hidden
-                    className={cn(
-                      "size-2 rounded-full",
-                      option.dotClassName,
-                    )}
-                  />
-                )}
-                {option.label}
-              </span>
+              <PriorityChip option={option} />
             </GhostButton>
           )
         })}
       </ScrollView>
+      {/* #endregion */}
     </View>
+  )
+}
+
+function PriorityChip({ option }: { option: PriorityOption }) {
+  return (
+    <span className="inline-flex items-center gap-x-2">
+      {option.dotClassName && (
+        <span
+          aria-hidden
+          className={cn("size-2 rounded-full", option.dotClassName)}
+        />
+      )}
+      {option.label}
+    </span>
   )
 }
