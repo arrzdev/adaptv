@@ -63,10 +63,9 @@ export function BrowserFrame({
         className,
       )}
     >
-      <View
-        row
-        className="h-10 shrink-0 items-center gap-3 border-border border-b bg-sunken px-4"
-      >
+      {/* three fixed columns, the last one empty: a spacer element after the address bar
+          could be parsed after a first paint, and the bar centred again when it arrived */}
+      <View className="grid h-10 shrink-0 grid-cols-[42px_1fr_46px] items-center gap-3 border-border border-b bg-sunken px-4">
         <View row className="gap-1.5">
           <span className="size-2.5 rounded-full bg-[#ff5f57]" />
           <span className="size-2.5 rounded-full bg-[#febc2e]" />
@@ -79,7 +78,6 @@ export function BrowserFrame({
           <Lock className="size-2.5" />
           {url}
         </View>
-        <span className="w-[46px]" />
       </View>
       <View className="relative min-h-0 flex-1 bg-background text-foreground">
         {children}
