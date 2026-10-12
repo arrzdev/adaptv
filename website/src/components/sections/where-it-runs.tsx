@@ -86,7 +86,7 @@ export function WhereItRuns() {
       lede="The same code reaches people three ways. adaptv handles what each one gets wrong by default."
     >
       <Reveal className="flex flex-col gap-12">
-        <ul className="grid grid-cols-3 items-center justify-items-center gap-x-8 gap-y-6 md:flex md:justify-between md:gap-12">
+        <ul className="flex items-center gap-10">
           {PLATFORMS.map(({ name, mark: Mark, size }) => (
             <li
               key={name}
