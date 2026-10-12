@@ -17,6 +17,140 @@ export type Post = {
 
 export const POSTS: Post[] = [
   {
+    slug: "ios-pwa-safe-area-insets-zero",
+    title: "Safe-area insets that read 0 in an iOS PWA, and what to check",
+    date: "2026-10-12",
+    kind: "Field note",
+    author: "arrz.dev",
+    summary:
+      "env(safe-area-inset-*) reads 0 in a Safari tab, is right in the installed app and can look wrong after a rotate. The viewport-fit=cover rule behind it, the timing trap, and how adaptv reads the insets.",
+    seoTitle: "iOS PWA safe-area insets read 0: causes and fixes",
+    seoDescription:
+      "env(safe-area-inset-*) reads 0 in a Safari tab and in a page without viewport-fit=cover. What decides the value, and how adaptv's insets handle it.",
+    blocks: [
+      {
+        type: "p",
+        text: "You pad the home indicator with `env(safe-area-inset-bottom)`. In a Safari tab the padding is 0. In the installed app it is right. After a rotate it sits on the wrong edge, or one frame late. Three symptoms, and they come from three different rules.",
+      },
+      {
+        type: "h2",
+        text: "Symptom 1: 0 in a page that does not ask for the whole screen",
+      },
+      {
+        type: "p",
+        text: "The insets say how far the screen's unsafe area reaches into the viewport. By default Safari keeps the page inside the safe area, so there is nothing to report and the insets are 0. The page opts in to the whole screen with `viewport-fit=cover` in the viewport meta tag. WebKit introduced the key and the `env()` insets together in [Designing Websites for iPhone X](https://webkit.org/blog/7929/designing-websites-for-iphone-x/), and [MDN](https://developer.mozilla.org/en-US/docs/Web/CSS/env) documents the four `safe-area-inset-*` values.",
+      },
+      {
+        type: "code",
+        label: "index.html",
+        lang: "text",
+        code: `<meta
+  name="viewport"
+  content="width=device-width, initial-scale=1, viewport-fit=cover"
+>`,
+      },
+      {
+        type: "p",
+        text: "adaptv writes this tag for you: the generated app shell carries `viewport-fit=cover` (`src/vite/app-shell.ts`, checked in `src/vite/app-shell.test.ts`), and the runtime viewport content keeps it with or without zoom (`src/shell/head.ts`, checked in `src/shell/head.test.ts`). If you ship your own `index.html`, check that the string is there. If you replace the viewport tag at runtime, keep it in the new value.",
+      },
+      {
+        type: "h2",
+        text: "Symptom 2: small or 0 in a tab, real in the installed app",
+      },
+      {
+        type: "p",
+        text: "A browser tab keeps its own bars, so the page has little or no unsafe area to report. The installed app draws edge to edge, and that is where the notch and the home indicator reach into the page. The [Safe areas](/docs/safe-areas) page lists what each target reports: all four are `0` on desktop, small or zero values in a browser tab that can change as the address bar collapses, and the real notch and home-indicator insets in an installed PWA and native iOS.",
+      },
+      {
+        type: "p",
+        text: "So a 0 in a tab is not a bug in your CSS. Test the padding in the installed app, and write it so that 0 is a valid answer: `pb-safe-or-4` gives the inset but never less than 4 spacing units, and `pt-safe-offset-4` gives the inset plus 16px.",
+      },
+      { type: "h2", text: "Symptom 3: the right value, at the wrong moment" },
+      {
+        type: "p",
+        text: "An installed app does not get its geometry in one go. On one Face ID iPhone (iOS version not recorded) the first layout painted at about 496 ms with `safe-area-inset-top` at 0, and the real value, 62, was published at about 667 ms. The table and the WebKit bugs that describe the same delay for WKWebView are in [The installed iOS app that launches at the wrong height](/blog/ios-cold-start-launch-height). The numbers are from one device, and the explanation of the delay is the authors' reading, not WebKit's.",
+      },
+      {
+        type: "p",
+        text: "The practical rule: do not read the inset once, early, and keep the number. CSS that uses `env()` follows the value on its own, and so do the adaptv utilities that wrap it. A number read in JavaScript has to be re-read. `useInsets()` returns zeros on the server and on the first render, then measures in an effect. It measures again on `orientationchange`, on a visual viewport resize and on a change to the `style` attribute of `<html>` (`src/hooks/use-insets.ts`; the rotate case is in `src/hooks/use-insets.test.ts`). It is still one React update behind the CSS, which is why the docs say to use it only when the inset feeds a calculation.",
+      },
+      { type: "h2", text: "Before and after" },
+      {
+        type: "p",
+        text: "The version that breaks: the inset read once into JavaScript and cached.",
+      },
+      {
+        type: "code",
+        label: "before.tsx",
+        lang: "tsx",
+        code: `// Read once at module load: 0 before the insets are published,
+// and stale after a rotate.
+const bottom = Number.parseFloat(
+  getComputedStyle(document.documentElement)
+    .getPropertyValue("--my-bottom") || "0",
+)
+
+export function Bar() {
+  return <div style={{ paddingBottom: bottom }}>...</div>
+}`,
+      },
+      {
+        type: "p",
+        text: "The version that holds: CSS owns the value, and the hook is only for arithmetic.",
+      },
+      {
+        type: "code",
+        label: "after.tsx",
+        lang: "tsx",
+        code: `import { View } from "adaptv/components"
+import { useInsets } from "adaptv/hooks"
+
+// Padding: pure CSS, applied before first paint, follows rotation.
+export function Bar() {
+  return (
+    <View safe="bottom" className="border-t px-4 pt-3">
+      ...
+    </View>
+  )
+}
+
+// A number for a calculation: re-measured on rotate and resize.
+function usePeekSnapPoint() {
+  const insets = useInsets()
+  return window.innerHeight - insets.bottom - 28
+}`,
+      },
+      {
+        type: "p",
+        text: "Underneath, every adaptv utility and the hook resolve through four variables, `--adaptv-inset-top`, `-right`, `-bottom` and `-left`. They are defined once in `src/styles/safe-area.css` as `var(--safe-area-inset-top, env(safe-area-inset-top, 0px))`. On iOS nothing injects the first variable, so the value falls through to the native `env()`. On Android the Capacitor shell supplies it, because `env()` reads 0 in Android WebView before version 140. The variables are always defined: `0px` where there is no inset. The playground's `safe-area` e2e spec checks that the hook and the measured CSS agree on all four sides.",
+      },
+      { type: "h2", text: "Checklist" },
+      {
+        type: "ol",
+        items: [
+          "The viewport meta contains `viewport-fit=cover`. In a generated adaptv shell it does.",
+          "You are testing in the installed app, not a Safari tab.",
+          "Padding comes from CSS (`env()` or the adaptv utilities), not a number read once in JavaScript.",
+          "0 is a valid answer: add a floor with `safe-or-N` where a gap matters.",
+          "Numbers for calculations come from a hook that re-measures after rotate and resize.",
+        ],
+      },
+      { type: "h2", text: "What we have not checked" },
+      {
+        type: "ul",
+        items: [
+          "The 496 ms and 667 ms figures are from one iPhone with the iOS version not recorded. We have not timed them on other devices.",
+          "That a page without `viewport-fit=cover` reports 0 comes from the WebKit post above. We did not re-measure it on a device for this note.",
+          "Rotation is covered by a unit test of the hook and by CSS following `env()`. We have not recorded a rotate on a device.",
+        ],
+      },
+      {
+        type: "p",
+        text: "See also [Safe areas](/docs/safe-areas), [Device and display hooks](/docs/hooks-device) and [The frame](/docs/the-frame). To try adaptv, start with the [Quick start](/docs/quick-start).",
+      },
+    ],
+  },
+  {
     slug: "ios-26-browser-bar-tint",
     title: "iOS 26 stopped reading theme-color. Here is what it reads instead",
     date: "2026-10-07",
