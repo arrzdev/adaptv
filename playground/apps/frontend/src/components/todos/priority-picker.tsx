@@ -32,7 +32,6 @@ export function PriorityPicker({ value, onChange }: PriorityPickerProps) {
         Priority
       </Text>
       {/* a chip row is its own scroller — the sheet around it only scrolls vertically */}
-      {/* #region landing: the website shows this excerpt in its "Write" tab */}
       <ScrollView horizontal className="-mx-6 gap-x-2 px-6">
         {PRIORITY_OPTIONS.map((option) => {
           const isSelected = value === option.value
@@ -52,7 +51,6 @@ export function PriorityPicker({ value, onChange }: PriorityPickerProps) {
           )
         })}
       </ScrollView>
-      {/* #endregion */}
     </View>
   )
 }
