@@ -345,18 +345,34 @@ test.describe("Where it runs", () => {
     expect(await rows(titles)).toHaveLength(1)
   })
 
-  test("the four platform marks: one row on desktop, two rows on a phone", async ({ page }) => {
+  test("the four platform marks: one left-aligned row with one fixed gap at every width", async ({
+    page,
+  }) => {
     await open(page, 1440)
-    const marks = section(page, "Where it runs")
-      .getByRole("list")
-      .first()
-      .getByRole("listitem")
+    const list = section(page, "Where it runs").getByRole("list").first()
+    const marks = list.getByRole("listitem")
     await expect(marks).toHaveText(["iOS", "Android", "PWA", "Capacitor"])
-    expect(await rows(marks)).toHaveLength(1)
 
-    await page.setViewportSize({ width: 390, height: 900 })
-    expect(await rows(marks)).toHaveLength(2)
-    //and the columns stack
+    //design sign-off TUD-836: a 3-column grid left Capacitor alone on a phone, and
+    //justify-between spread the marks to a gap that changed with the width
+    const gaps = new Set<number>()
+    for (const width of [390, 768, 1440, 1920]) {
+      await page.setViewportSize({ width, height: 900 })
+      expect.soft(await rows(marks), `one row at ${width} px`).toHaveLength(1)
+      const [l, items] = await Promise.all([
+        box(list),
+        marks.evaluateAll((els) => els.map((el) => el.getBoundingClientRect())),
+      ])
+      expect.soft(Math.round(items[0].left - l.left), `starts at the left at ${width} px`).toBe(0)
+      expect
+        .soft(Math.round(items.at(-1)!.right), `fits in the viewport at ${width} px`)
+        .toBeLessThanOrEqual(l.innerWidth)
+      for (let i = 1; i < items.length; i++)
+        gaps.add(Math.round(items[i].left - items[i - 1].right))
+    }
+    expect([...gaps], "one gap between marks, at every width").toHaveLength(1)
+
+    //and the three columns below still stack on a phone
     const titles = section(page, "Where it runs").getByRole("heading", { level: 3 })
     expect(await rows(titles)).toHaveLength(3)
   })
