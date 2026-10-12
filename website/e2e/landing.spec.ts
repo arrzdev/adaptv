@@ -222,6 +222,8 @@ test.describe("Tally showcase", () => {
     test(`the web font swap moves nothing in the hero at ${width} px`, async ({
       page,
     }) => {
+      //two full page loads: on a loaded VM each one has taken 12-15 s
+      test.setTimeout(60_000)
       await open(page, width)
       const geist = await box(showcase(page))
       //the intro's box is as tall as its lines in Geist: a copy edit that wraps it to 3 or 5
