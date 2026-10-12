@@ -159,6 +159,17 @@
 }
 :root:not(.dark) .aurora { opacity: 0.5; }
 
+/*
+ * The hero showcase: a box laid out at a fixed width (--fit) and scaled down to its
+ * container's width, never up. CSS alone, so no measuring effect moves it after the first
+ * paint: tan(atan2(a, b)) is a / b as a plain number. The container sets the height.
+ */
+.fit {
+  width: var(--fit);
+  transform-origin: 0 0;
+  scale: min(1, tan(atan2(100cqw, var(--fit))));
+}
+
 .text-gradient {
   background: linear-gradient(92deg, #8b95ff 0%, #c08bff 45%, #ff8fb4 100%);
   -webkit-background-clip: text;
@@ -174,13 +185,13 @@
   from { opacity: 0; transform: translateY(14px); }
   to { opacity: 1; transform: none; }
 }
-/* no fade: the iPhone is the page's largest paint, and a transparent element has not painted */
+/* no fade: the showcase is the page's largest paint, and a transparent element has not painted */
 @keyframes stage-in {
   from { transform: translateY(24px); }
   to { transform: none; }
 }
 .rise { animation: rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
-/* the hero's phones rise once, after the buttons */
+/* the hero's showcase rises once, after the buttons */
 .stage-in { animation: stage-in 0.3s ease-out 0.24s both; }
 @keyframes caret { 50% { opacity: 0; } }
 .caret { animation: caret 1s steps(1) infinite; }
