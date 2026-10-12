@@ -374,7 +374,7 @@ test.describe("From idea to installed", () => {
     await open(page, 1440)
     const idea = section(page, "From idea to installed app")
     await expect(idea).toContainText(
-      "Write React, run it on your phone, ship it everywhere.",
+      "Write React, run it on your phone, ship it to the web, iOS and Android.",
     )
     await expect(idea.getByRole("tab")).toHaveText(["Write", "Run", "Ship"])
     await expect(idea.getByRole("tab", { name: "Write" })).toHaveAttribute(
