@@ -373,6 +373,7 @@ test.describe("Where it runs", () => {
     expect([...gaps], "one gap between marks, at every width").toHaveLength(1)
 
     //and the three columns below still stack on a phone
+    await page.setViewportSize({ width: 390, height: 900 })
     const titles = section(page, "Where it runs").getByRole("heading", { level: 3 })
     expect(await rows(titles)).toHaveLength(3)
   })
