@@ -8,6 +8,7 @@ import {
   useState,
 } from "react"
 import { CodePanel } from "@/components/code"
+import { Reveal } from "@/components/reveal"
 import { Section } from "@/components/section"
 import { Terminal } from "@/components/terminal"
 import buildWeb from "@/content/captures/build-web.ansi?raw"
@@ -189,7 +190,9 @@ export function IdeaToInstalled() {
       title="From idea to installed app"
       lede="Write React, run it on your phone, ship it to the web, iOS and Android."
     >
-      <StepTabs />
+      <Reveal>
+        <StepTabs />
+      </Reveal>
     </Section>
   )
 }
