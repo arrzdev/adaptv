@@ -30,7 +30,7 @@ export const POSTS: Post[] = [
     blocks: [
       {
         type: "p",
-        text: "You pad the home indicator with `env(safe-area-inset-bottom)`. In a Safari tab the padding is 0. In the installed app it is right. After a rotate it sits on the wrong edge, or one frame late. Three symptoms, and they come from three different rules.",
+        text: "You pad the home indicator with `env(safe-area-inset-bottom)`. In a Safari tab the padding is 0. In the installed app it is right. After a rotate it sits on the wrong edge, or a render late. Three symptoms, and they come from three different rules.",
       },
       {
         type: "h2",
@@ -38,7 +38,7 @@ export const POSTS: Post[] = [
       },
       {
         type: "p",
-        text: "The insets say how far the screen's unsafe area reaches into the viewport. By default Safari keeps the page inside the safe area, so there is nothing to report and the insets are 0. The page opts in to the whole screen with `viewport-fit=cover` in the viewport meta tag. WebKit introduced the key and the `env()` insets together in [Designing Websites for iPhone X](https://webkit.org/blog/7929/designing-websites-for-iphone-x/), and [MDN](https://developer.mozilla.org/en-US/docs/Web/CSS/env) documents the four `safe-area-inset-*` values.",
+        text: "The insets say how far the screen's unsafe area reaches into the viewport. By default Safari keeps the page inside the safe area, so there is nothing to report, and we expect the insets to be 0. The page opts in to the whole screen with `viewport-fit=cover` in the viewport meta tag. WebKit introduced the key and the safe-area insets (first as `constant()`, `env()` since iOS 11.2) in [Designing Websites for iPhone X](https://webkit.org/blog/7929/designing-websites-for-iphone-x/), and [MDN](https://developer.mozilla.org/en-US/docs/Web/CSS/env) documents the four `safe-area-inset-*` values.",
       },
       {
         type: "code",
@@ -68,7 +68,7 @@ export const POSTS: Post[] = [
       { type: "h2", text: "Symptom 3: the right value, at the wrong moment" },
       {
         type: "p",
-        text: "An installed app does not get its geometry in one go. On one Face ID iPhone (iOS version not recorded) the first layout painted at about 496 ms with `safe-area-inset-top` at 0, and the real value, 62, was published at about 667 ms. The table and the WebKit bugs that describe the same delay for WKWebView are in [The installed iOS app that launches at the wrong height](/blog/ios-cold-start-launch-height). The numbers are from one device, and the explanation of the delay is the authors' reading, not WebKit's.",
+        text: "An installed app does not get its geometry in one go. On one Face ID iPhone (iOS version not recorded) the first layout painted at about 496 ms with `safe-area-inset-top` at 0, and the real value, 62, was published at about 667 ms. The table and the WebKit bugs that describe a similar delay in WKWebView are in [The installed iOS app that launches at the wrong height](/blog/ios-cold-start-launch-height). The numbers are from one device, and the explanation of the delay is the authors' reading, not WebKit's.",
       },
       {
         type: "p",
@@ -140,7 +140,7 @@ function usePeekSnapPoint() {
         type: "ul",
         items: [
           "The 496 ms and 667 ms figures are from one iPhone with the iOS version not recorded. We have not timed them on other devices.",
-          "That a page without `viewport-fit=cover` reports 0 comes from the WebKit post above. We did not re-measure it on a device for this note.",
+          "That a page without `viewport-fit=cover` reports 0 is how we read the default insetting the WebKit post above describes; the post does not state the value, and we did not measure it on a device for this note.",
           "Rotation is covered by a unit test of the hook and by CSS following `env()`. We have not recorded a rotate on a device.",
         ],
       },
