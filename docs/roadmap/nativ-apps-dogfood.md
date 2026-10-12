@@ -10,11 +10,11 @@
 
 ## 0. Why
 
-ChopChop and Veralens are the two apps the landing shows under "Built with adaptv"
-(`website/src/components/sections/built-with.tsx`). Both run on `packages/nativ`, an in-repo copy of
-the framework from before it was extracted, renamed and published, so the section has to say so.
-When both apps install `adaptv` from npm and `packages/nativ` is gone from both repos, that caveat
-goes, and adaptv has two real consumers that catch a broken release before anyone else does.
+ChopChop and Veralens were the two apps the landing showed under "Built with adaptv", until
+landing-v2 (TUD-735) cut the section. Both run on `packages/nativ`, an in-repo copy of the framework
+from before it was extracted, renamed and published, so the section had to say so. When both apps
+install `adaptv` from npm and `packages/nativ` is gone from both repos, adaptv has two real
+consumers that catch a broken release before anyone else does.
 
 The source for the ChopChop half is the `adaptv-migration-report` document on TUD-423 (steps 1–3 of
 [`migration-skill.md`](migration-skill.md), chopchop `apps/frontend` at `8d02cdc`). The Veralens half
@@ -105,8 +105,8 @@ because K3 is open and its 43 L20 call sites are mechanical but many.
    package is ask-first in that repo.
 4. **Veralens**: the `Navigate` rewrite (K2), `cn`, the L20 imports, config, worker and deploy in
    one switch PR, with the K3 check in it. Then delete its `packages/nativ`.
-5. **Landing**: drop the `packages/nativ` caveat from `built-with.tsx` (follows TUD-440). Then move
-   this file out of `roadmap/`.
+5. **Landing**: "Built with adaptv" was cut (TUD-735); if it comes back with these apps, it needs no
+   `packages/nativ` caveat. Then move this file out of `roadmap/`.
 
 ## 5. The check that proves it
 
