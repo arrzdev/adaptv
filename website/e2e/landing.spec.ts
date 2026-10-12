@@ -345,13 +345,13 @@ test.describe("Where it runs", () => {
     expect(await rows(titles)).toHaveLength(1)
   })
 
-  test("the six platform marks: one row on desktop, 3 × 2 on a phone", async ({ page }) => {
+  test("the four platform marks: one row on desktop, two rows on a phone", async ({ page }) => {
     await open(page, 1440)
     const marks = section(page, "Where it runs")
       .getByRole("list")
       .first()
       .getByRole("listitem")
-    await expect(marks).toHaveText(["iOS", "Android", "Windows", "macOS", "PWA", "Capacitor"])
+    await expect(marks).toHaveText(["iOS", "Android", "PWA", "Capacitor"])
     expect(await rows(marks)).toHaveLength(1)
 
     await page.setViewportSize({ width: 390, height: 900 })
