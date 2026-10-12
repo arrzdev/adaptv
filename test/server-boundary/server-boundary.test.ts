@@ -17,17 +17,17 @@ import type { Plugin } from "vite"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { adaptvBanServerApisPlugin } from "#adaptv/vite/ban-server-apis.ts"
 import { adaptvEngineImportsPlugin } from "#adaptv/vite/engine-imports.ts"
+import { adaptvServerBoundaryPlugin } from "#adaptv/vite/server-boundary.ts"
 
 /*
- * The server boundary's detection spike. → docs/roadmap/server-boundary.md §3
+ * The server boundary's detection spike. → docs/design/server-boundary.md §3
  *
  * One fixture app, built by the pinned Start plugin, with a probe that records what
  * each detection candidate reports: the compiler's own set of server functions, the
- * reachability of the client RPC runtime, and server routes. Then each fixture file
- * goes through the two rules that run today (`ban-server-apis.ts` and
- * `engine-imports.ts`), and its expected verdict is a test: `it` where today's rules
- * refuse it, `it.fails` with the reason where they do not. When the detection ships,
- * each `it.fails` becomes an `it`.
+ * reachability of the client RPC runtime, and server routes. Then each fixture route
+ * is built alone, by Start, through the three rules that run in `adaptv()`
+ * (`ban-server-apis.ts`, `engine-imports.ts`, `server-boundary.ts`), and its expected
+ * verdict is a test. The dev server gets the same two refusals.
  *
  * Start is used directly, not through `adaptv()`: the question is what Start exposes
  * to a Vite plugin, and the full plugin needs an app config this fixture does not
@@ -38,8 +38,9 @@ import { adaptvEngineImportsPlugin } from "#adaptv/vite/engine-imports.ts"
 const fixture = fileURLToPath(new URL("./fixture-app", import.meta.url))
 const repoModules = path.join(process.cwd(), "node_modules")
 
-//a client and a server build of eight routes, while the gate runs every other suite
-const BUILD_TIMEOUT = 180_000
+//a client and a server build per route, eleven of them, while the gate runs every
+//other suite
+const BUILD_TIMEOUT = 300_000
 
 let appRoot: string
 const roots: string[] = []
@@ -48,11 +49,20 @@ afterAll(() => {
     rmSync(dir, { recursive: true, force: true })
 })
 
-/** The fixture copied out, with its dependencies linked the way a hoisting install would. */
-function stageApp(): string {
+/**
+ * The fixture copied out, with its dependencies linked the way a hoisting install would.
+ * `routes` keeps only those route files beside the root route.
+ */
+function stageApp(routes?: (file: string) => boolean): string {
   const root = mkdtempSync(path.join(tmpdir(), "adaptv-server-boundary-"))
   roots.push(root)
   cpSync(fixture, root, { recursive: true })
+  if (routes) {
+    const dir = path.join(root, "src/routes")
+    for (const file of readdirSync(dir))
+      if (file !== "__root.tsx" && !routes(`routes/${file}`))
+        rmSync(path.join(dir, file))
+  }
   mkdirSync(path.join(root, "node_modules/@tanstack"), { recursive: true })
   const link = (name: string, target: string) =>
     symlinkSync(target, path.join(root, "node_modules", name), "dir")
@@ -107,6 +117,8 @@ const seen = {
   rpcReachableFrom: new Set<string>(),
   //candidate 3: the route tree as the client environment loads it
   clientRouteTree: "",
+  //§3.4: a middleware, as the client environment compiles it
+  clientMiddleware: "",
 }
 
 function probe(): Plugin[] {
@@ -146,6 +158,8 @@ function probe(): Plugin[] {
           seen.resolverManifest = code
         if (env === "client" && id.endsWith("routeTree.gen.ts"))
           seen.clientRouteTree = code
+        if (env === "client" && file === "fns/middleware.ts")
+          seen.clientMiddleware = code
         return null
       },
       buildEnd() {
@@ -172,8 +186,15 @@ function probe(): Plugin[] {
 let ssrServerRoutes: Record<string, boolean>
 let clientBundle: string
 
+//the request-API routes are measured on their own (§3.4): Start refuses one of
+//them, and the other adds the server runtime to the graph candidate 2 walks
+const REQUEST_ROUTES = [
+  "routes/request-api.tsx",
+  "routes/adaptv-request.tsx",
+]
+
 beforeAll(async () => {
-  appRoot = stageApp()
+  appRoot = stageApp((file) => !REQUEST_ROUTES.includes(file))
   const { createBuilder } = await import("vite")
   const { tanstackStart } = await import(
     "@tanstack/react-start/plugin/vite"
@@ -235,16 +256,26 @@ describe("candidate 1: the compiler's own set of server functions", () => {
   })
 })
 
+describe("§3.4: `createMiddleware`", () => {
+  it("leaves no mark in the client: its server half is stripped and nothing is imported", () => {
+    expect(seen.clientMiddleware).toContain("createMiddleware()")
+    expect(seen.clientMiddleware).not.toContain(".server(")
+    expect(seen.clientMiddleware).not.toMatch(/-rpc["']/)
+    expect([...seen.rpcEntryImporters]).not.toContain("fns/middleware.ts")
+  })
+})
+
 describe("candidate 2: reachability of the client RPC runtime", () => {
   it("is imported directly by exactly the modules the compiler rewrote", () => {
     expect([...seen.rpcEntryImporters].sort()).toEqual(SERVER_FN_FILES)
   })
 
   it("is reachable through the engine's own index too, so a transitive walk over-reports", () => {
-    //`lib/server.ts` only re-exports the factory; it reaches the runtime through
-    //`start-client-core`'s index, which imports the fetcher
+    //`lib/server.ts` only re-exports the factory, and `fns/middleware.ts` only makes a
+    //middleware; both reach the runtime through `start-client-core`'s index, which
+    //imports the fetcher
     expect([...seen.rpcReachableFrom].sort()).toEqual(
-      [...SERVER_FN_FILES, "lib/server.ts"].sort(),
+      [...SERVER_FN_FILES, "fns/middleware.ts", "lib/server.ts"].sort(),
     )
   })
 })
@@ -281,6 +312,7 @@ describe("candidate 3: server routes", () => {
       "/adaptv-subpath": false,
       "/client-core": false,
       "/local-reexport": false,
+      "/middleware": false,
       "/literal-server-route": true,
       "/indirect-server-route": true,
       "/imported-server-route": true,
@@ -289,42 +321,119 @@ describe("candidate 3: server routes", () => {
   })
 })
 
+/** Start alone, on the fixture with one route: what it does by itself. */
+async function startAlone(route: string): Promise<{
+  error: string | null
+  clientModules: string[]
+}> {
+  const root = stageApp((file) => file === route)
+  const clientModules: string[] = []
+  const { createBuilder } = await import("vite")
+  const { tanstackStart } = await import(
+    "@tanstack/react-start/plugin/vite"
+  )
+  const builder = await createBuilder({
+    root,
+    configFile: false,
+    logLevel: "silent",
+    plugins: [
+      {
+        name: "probe:graph",
+        buildEnd() {
+          if (this.environment.name === "client")
+            clientModules.push(...this.getModuleIds())
+        },
+      },
+      tanstackStart(),
+    ],
+  })
+  try {
+    await builder.buildApp()
+    return { error: null, clientModules }
+  } catch (error) {
+    return { error: String((error as Error).message), clientModules }
+  }
+}
+
+let requestApi: Awaited<ReturnType<typeof startAlone>>
+let adaptvRequest: Awaited<ReturnType<typeof startAlone>>
+
+beforeAll(async () => {
+  requestApi = await startAlone("routes/request-api.tsx")
+  adaptvRequest = await startAlone("routes/adaptv-request.tsx")
+}, BUILD_TIMEOUT)
+
+describe("§3.4: the server's request (`getRequest`, cookies)", () => {
+  it("is refused by Start itself in the client environment, by the specifier", () => {
+    expect(requestApi.error).toMatch(/Import denied in client environment/)
+  })
+
+  it("builds clean through a package that re-exports it, and ships the server runtime to the client", () => {
+    expect(adaptvRequest.error).toBeNull()
+    expect(
+      adaptvRequest.clientModules.some((id) =>
+        /[/\\]start-server-core[/\\]/.test(id),
+      ),
+    ).toBe(true)
+  })
+})
+
 /*
- * Today's coverage. Each fixture file is the entry of a plain client build with the
- * two rules that run today and nothing else, so a refusal is theirs.
+ * The rules, per fixture. Each fixture route is built alone, by Start, through the
+ * three rules `adaptv()` runs (the specifier ban, the engine-import rule and the server
+ * boundary), so a refusal is theirs and a pass went through the server build too.
  */
 
 const RULE_TEXT =
-  /server-only and cannot|missing from the app's package\.json/
+  /server-only and cannot|missing from the app's package\.json|adaptv apps have no server side/
 
 type Verdict = { refused: string | null; other: string | null }
 
-async function todaysVerdict(
-  entry: string,
+/** The server boundary's report, out of the bundler's frame and stack around it. */
+function report(message: string | null): string | null {
+  if (message === null) return null
+  const lines = message.split("\n").filter((line) => !/^\s+at /.test(line))
+  const start = lines.findIndex((line) => line.includes("this app has"))
+  if (start === -1) return message
+  const end = lines.findIndex(
+    (line, i) => i > start && line.startsWith("Move "),
+  )
+  return [
+    (lines[start] as string).slice(
+      (lines[start] as string).indexOf("this app has"),
+    ),
+    ...lines.slice(start + 1, end + 1),
+  ].join("\n")
+}
+
+async function verdict(
+  route: string,
   declares: string[] = [],
 ): Promise<Verdict> {
-  const root = stageApp()
+  const root = stageApp((file) => file === route)
   if (declares.length > 0) {
     const pkgPath = path.join(root, "package.json")
     const pkg = JSON.parse(readFileSync(pkgPath, "utf8"))
     for (const name of declares) pkg.dependencies[name] = "*"
     writeFileSync(pkgPath, JSON.stringify(pkg))
   }
-  const { build } = await import("vite")
+  const { createBuilder } = await import("vite")
+  const { tanstackStart } = await import(
+    "@tanstack/react-start/plugin/vite"
+  )
   try {
-    await build({
+    const builder = await createBuilder({
       root,
       configFile: false,
       logLevel: "silent",
       plugins: [
         adaptvBanServerApisPlugin(),
         adaptvEngineImportsPlugin(root),
+        ...adaptvServerBoundaryPlugin(root),
+        tanstackStart(),
       ],
-      build: {
-        write: false,
-        rollupOptions: { input: path.join(root, "src", entry) },
-      },
     })
+    await builder.buildApp()
     return { refused: null, other: null }
   } catch (error) {
     const message = String((error as Error).message)
@@ -343,78 +452,211 @@ const CASES = {
     ["@tanstack/start-client-core"],
   ],
   localReexport: ["routes/local-reexport.tsx"],
+  middleware: ["routes/middleware.tsx"],
+  requestApi: ["routes/request-api.tsx"],
+  adaptvRequest: ["routes/adaptv-request.tsx"],
   literalServerRoute: ["routes/literal-server-route.tsx"],
   indirectServerRoute: ["routes/indirect-server-route.tsx"],
   spreadServerRoute: ["routes/spread-server-route.tsx"],
   importedServerRoute: ["routes/imported-server-route.tsx"],
 } as const satisfies Record<string, readonly [string, string[]?]>
 
-const today = {} as Record<keyof typeof CASES, Verdict>
+const rules = {} as Record<keyof typeof CASES, Verdict>
 
 beforeAll(async () => {
-  for (const [name, [entry, declares]] of Object.entries(CASES))
-    today[name as keyof typeof CASES] = await todaysVerdict(entry, [
+  for (const [name, [route, declares]] of Object.entries(CASES))
+    rules[name as keyof typeof CASES] = await verdict(route, [
       ...(declares ?? []),
     ])
 }, BUILD_TIMEOUT)
 
-describe("today's rules, per fixture (expected: refused, except the control)", () => {
+describe("the rules, per fixture (expected: refused, except the control)", () => {
   it("fail no fixture for a reason of their own, so every verdict below is the rules'", () => {
-    for (const verdict of Object.values(today))
-      expect(verdict.other).toBeNull()
+    for (const [name, v] of Object.entries(rules))
+      expect(v.other, name).toBeNull()
   })
 
-  it("allow the control, a loader returning a field named `server`", () => {
-    expect(today.control.refused).toBeNull()
+  it("allow the control, a loader returning a field named `server`, through the client and the server build", () => {
+    expect(rules.control.refused).toBeNull()
   })
 
-  it.fails(
-    "refuse `createServerFn` from an adaptv subpath — they do not: the specifier is adaptv's own, and the re-export lives in `node_modules`, which both rules exempt",
-    () => {
-      expect(today.adaptvSubpath.refused).not.toBeNull()
-    },
-  )
-
-  it("refuse `createServerFn` from `@tanstack/start-client-core` when the app does not list it (the engine-import rule)", () => {
-    expect(today.clientCore.refused).toMatch(
-      /missing from the app's package\.json/,
+  it("refuse `createServerFn` from an adaptv subpath: the compiler stubbed it, wherever the factory came from", () => {
+    expect(report(rules.adaptvSubpath.refused)).toBe(
+      [
+        "this app has 1 server function, and adaptv apps have no server side",
+        "  src/fns/adaptv-subpath.ts:3   viaAdaptvSubpath   reached from /adaptv-subpath",
+        "Move this logic to your API and call it over the network, or into a route 'loader'.",
+      ].join("\n"),
     )
   })
 
-  it.fails(
-    "refuse `createServerFn` from `@tanstack/start-client-core` when the app lists it — they do not: the ban names `@tanstack/react-start` and `/server` only (#292)",
-    () => {
-      expect(today.clientCoreDeclared.refused).not.toBeNull()
-    },
-  )
+  it("refuse `createServerFn` from `@tanstack/start-client-core` when the app does not list it (the ban's package family, ahead of the engine-import rule)", () => {
+    expect(rules.clientCore.refused).toMatch(
+      /"@tanstack\/start-client-core" is server-only and cannot/,
+    )
+  })
+
+  it("refuse `createServerFn` from `@tanstack/start-client-core` when the app lists it (the ban's package family)", () => {
+    expect(rules.clientCoreDeclared.refused).toMatch(
+      /"@tanstack\/start-client-core" is server-only and cannot/,
+    )
+  })
 
   it("refuse `createServerFn` through a local re-export (the re-exporting file imports the banned root)", () => {
-    expect(today.localReexport.refused).toMatch(/server-only and cannot/)
+    expect(rules.localReexport.refused).toMatch(/server-only and cannot/)
   })
 
-  it("refuse a server route whose options literal names `server`", () => {
-    expect(today.literalServerRoute.refused).toMatch(
-      /server-only and cannot/,
+  it("refuse `createMiddleware` imported from the banned root (the ban)", () => {
+    expect(rules.middleware.refused).toMatch(/server-only and cannot/)
+  })
+
+  it("refuse the server's request imported from the banned subpath (the ban, ahead of Start's own refusal)", () => {
+    expect(rules.requestApi.refused).toMatch(
+      /"@tanstack\/react-start\/server" is server-only and cannot/,
     )
   })
 
-  it("refuse a server route whose options are a same-file `const` — by accident: the scan reads the first object literal after `createFileRoute`, which here is the options", () => {
-    expect(today.indirectServerRoute.refused).toMatch(
-      /server-only and cannot/,
+  it("refuse the server's request through a package that re-exports it: the server runtime is in the client graph", () => {
+    expect(report(rules.adaptvRequest.refused)).toBe(
+      [
+        "this app has 1 server request read, and adaptv apps have no server side",
+        "  src/fns/adaptv-request.ts:1   server request   reached from /adaptv-request",
+        "Move this logic to your API and call it over the network, or into a route 'loader'.",
+      ].join("\n"),
     )
   })
 
-  it.fails(
-    "refuse a server route whose options are a same-file `const` behind another object literal — they do not: the scan stops at the first object literal, which has no `server` key",
-    () => {
-      expect(today.spreadServerRoute.refused).not.toBeNull()
+  for (const [name, file, line] of [
+    ["literalServerRoute", "literal-server-route", 4],
+    ["indirectServerRoute", "indirect-server-route", 12],
+    ["spreadServerRoute", "spread-server-route", 16],
+    ["importedServerRoute", "imported-server-route", 5],
+  ] as const)
+    it(`refuse a server route from the server build's router: ${file}`, () => {
+      expect(report(rules[name].refused)).toBe(
+        [
+          "this app has 1 server route, and adaptv apps have no server side",
+          `  src/routes/${file}.tsx:${line}   /${file}`,
+          "Move this logic to your API and call it over the network, or into a route 'loader'.",
+        ].join("\n"),
+      )
+    })
+
+  it("fail the server build with one line of their own when its router cannot be loaded", async () => {
+    //a server bundle that cannot load in Node, as a deploy preset's may not
+    const dir = mkdtempSync(path.join(tmpdir(), "adaptv-server-boundary-"))
+    writeFileSync(
+      path.join(dir, "server.mjs"),
+      'throw new Error("needs a worker runtime")\nexport const getRouter = () => ({})\n',
+    )
+    const plugin = adaptvServerBoundaryPlugin(dir).find(
+      (p) => p.name === "adaptv:server-boundary",
+    ) as Plugin
+    const writeBundle = plugin.writeBundle as (
+      this: unknown,
+      ...args: unknown[]
+    ) => Promise<void>
+    const context = {
+      environment: { name: "ssr" },
+      error(message: string): never {
+        throw new Error(message)
+      },
+    }
+    await expect(
+      writeBundle.call(
+        context,
+        { dir },
+        {
+          "server.mjs": {
+            type: "chunk",
+            fileName: "server.mjs",
+            exports: ["getRouter"],
+          },
+        },
+      ),
+    ).rejects.toThrow(
+      /^could not load the server router to check for server routes: needs a worker runtime$/,
+    )
+  })
+})
+
+/*
+ * The dev server: a server function is refused when its module is requested, and a page
+ * while the server's router has a server route.
+ */
+
+async function devServer(routes: (file: string) => boolean) {
+  const root = stageApp(routes)
+  const { createServer } = await import("vite")
+  const { tanstackStart } = await import(
+    "@tanstack/react-start/plugin/vite"
+  )
+  const server = await createServer({
+    root,
+    configFile: false,
+    logLevel: "silent",
+    server: { port: 0, host: "127.0.0.1", ws: false },
+    //no dependency scan: its rerun after a new import would make the request wait
+    optimizeDeps: { noDiscovery: true, include: [] },
+    plugins: [...adaptvServerBoundaryPlugin(root), tanstackStart()],
+  })
+  await server.listen()
+  return server
+}
+
+describe("in `vite dev`", () => {
+  it(
+    "refuses a server function in the module that defines it, with the route that loaded it",
+    async () => {
+      const server = await devServer(
+        (file) => file === "routes/adaptv-subpath.tsx",
+      )
+      try {
+        const client = server.environments.client
+        await client.transformRequest("/src/routes/adaptv-subpath.tsx")
+        await expect(
+          client.transformRequest("/src/fns/adaptv-subpath.ts"),
+        ).rejects.toThrow(
+          /src\/fns\/adaptv-subpath\.ts:3 {3}viaAdaptvSubpath {3}reached from \/adaptv-subpath/,
+        )
+      } finally {
+        await server.close()
+      }
     },
+    BUILD_TIMEOUT,
   )
 
-  it.fails(
-    "refuse a server route whose options are imported — they do not: the scan reads only the call's own object literal",
-    () => {
-      expect(today.importedServerRoute.refused).not.toBeNull()
+  it(
+    "refuses a page while the server's router has a server route, and serves one when it has none",
+    async () => {
+      for (const [route, refused] of [
+        ["routes/imported-server-route.tsx", true],
+        ["routes/index.tsx", false],
+      ] as const) {
+        const server = await devServer((file) => file === route)
+        try {
+          const address = server.httpServer?.address()
+          const port =
+            typeof address === "object" && address ? address.port : 0
+          const response = await fetch(`http://127.0.0.1:${port}/`, {
+            headers: { accept: "text/html" },
+          })
+          const body = await response.text()
+          expect(
+            body.includes("adaptv apps have no server side"),
+            route,
+          ).toBe(refused)
+          if (refused) {
+            expect(response.status).toBe(500)
+            expect(body).toContain(
+              "src/routes/imported-server-route.tsx:5",
+            )
+          }
+        } finally {
+          await server.close()
+        }
+      }
     },
+    BUILD_TIMEOUT,
   )
 })
