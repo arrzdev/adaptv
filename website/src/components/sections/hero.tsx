@@ -22,9 +22,10 @@ export function Hero() {
           className="rise mt-7 max-w-[38rem] text-balance text-[17px] text-subtle leading-relaxed sm:text-[19px]"
           style={{ animationDelay: "120ms" }}
         >
-          One React codebase for the browser, the home screen, the App Store and
-          Google Play. adaptv stops scroll chaining and input zoom, and handles
-          safe areas, the keyboard and offline.
+          adaptv is a React framework: one codebase ships as a web app, an
+          installable PWA and native iOS and Android apps. It stops scroll
+          chaining and input zoom, and handles safe areas, the keyboard and
+          offline.
         </p>
 
         <View
@@ -33,7 +34,8 @@ export function Hero() {
           style={{ animationDelay: "180ms" }}
         >
           <Link
-            to="/docs"
+            to="/docs/$slug"
+            params={{ slug: "quick-start" }}
             className="group flex h-11 flex-row items-center gap-2 rounded-full bg-foreground px-6 font-medium text-[15px] text-background transition-transform hover:scale-[1.02]"
           >
             Get started

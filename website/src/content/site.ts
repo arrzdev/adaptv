@@ -8,9 +8,9 @@ export const SITE_URL = "https://adaptv.tudu.dev"
 
 //The same two strings as `title` and `description` in adaptv.config.ts, which the root
 //route writes on every page; the landing repeats them in its social card.
-export const SITE_TITLE = "adaptv — one React codebase, every screen"
+export const SITE_TITLE = "adaptv: one React codebase for web, iOS and Android"
 export const SITE_DESCRIPTION =
-  "One React codebase for desktop web, mobile web, an installable home-screen app, and real iOS and Android apps that don't feel like a website in a box."
+  "adaptv is a React framework that ships one codebase as a web app, an installed PWA and native iOS and Android apps. Open source, pre-alpha."
 
 //The docs home's lede, and its description
 export const DOCS_DESCRIPTION =
