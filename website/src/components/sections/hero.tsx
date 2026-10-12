@@ -23,8 +23,8 @@ export function Hero() {
           style={{ animationDelay: "120ms" }}
         >
           One React codebase for the browser, the home screen, the App Store and
-          Google Play. adaptv stops scroll chaining, tap flashes and input zoom,
-          and handles safe areas, the keyboard and offline.
+          Google Play. adaptv stops scroll chaining and input zoom, and handles
+          safe areas, the keyboard and offline.
         </p>
 
         <View
