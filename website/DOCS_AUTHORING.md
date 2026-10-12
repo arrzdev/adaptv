@@ -19,6 +19,8 @@ and the docs say what is true today.
 - Public import paths are the `exports` of `../package.json`: `adaptv/components`,
   `/hooks`, `/capabilities`, `/storage`, `/config`, `/router`, `/routes`, `/utils`, `/ota`,
   `/vite`, `/sw`, `/styles.css`. Only document what those barrels (`../src/interface/*.index.ts`) export.
+  `src/content/docs/imports.test.ts` fails when a page imports a subpath or a name the built
+  package (`../dist/*.d.mts`) does not export; run `pnpm build` at the root, then `pnpm test` here.
 - JSDoc in the source is the best starting text. Rewrite it for a reader who has never seen the
   repo: drop decision-register ids (L20, O7, B9), internal file paths and history.
 - The engines underneath (the router, the native shell) can be named when it helps someone debug,
