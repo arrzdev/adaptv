@@ -213,6 +213,40 @@ test.describe("Tally showcase", () => {
     )
     expect(cls).toBe(0)
   })
+
+  //The CLS above is 0 only when Geist arrives before the first paint. This one does not race
+  //the network: the hero is laid out once in the fallback font (Geist blocked) and once in
+  //Geist, and the showcase must sit at the same place in both (TUD-861: the intro wrapped to
+  //3 lines in the fallback and 4 in Geist, and the swap pushed the showcase down 31 px).
+  for (const width of [640, 768, 1024, 1440]) {
+    test(`the web font swap moves nothing in the hero at ${width} px`, async ({
+      page,
+    }) => {
+      await open(page, width)
+      const geist = await box(showcase(page))
+      //the intro's box is as tall as its lines in Geist: a copy edit that wraps it to 3 or 5
+      //lines must change its reserved height too
+      const intro = page.getByText(/^adaptv is a React framework/)
+      const fit = await intro.evaluate((el) => {
+        const range = document.createRange()
+        range.selectNodeContents(el)
+        const lines = new Set([...range.getClientRects()].map((r) => Math.round(r.top)))
+        const lineHeight = Number.parseFloat(getComputedStyle(el).lineHeight)
+        return { text: lines.size * lineHeight, box: el.getBoundingClientRect().height }
+      })
+      expect(Math.abs(fit.text - fit.box)).toBeLessThan(1)
+      await page.route(/fonts\.(googleapis|gstatic)\.com/, (route) => route.abort())
+      await open(page, width)
+      //no Geist face at all: the stylesheet that declares it never loaded
+      expect(
+        await page.evaluate(() =>
+          [...document.fonts].some((f) => f.family.includes("Geist")),
+        ),
+      ).toBe(false)
+      const fallback = await box(showcase(page))
+      expect(fallback.top).toBe(geist.top)
+    })
+  }
 })
 
 test.describe("section order", () => {
