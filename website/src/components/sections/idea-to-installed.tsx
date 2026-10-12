@@ -8,7 +8,6 @@ import {
   useState,
 } from "react"
 import { CodePanel } from "@/components/code"
-import { Reveal } from "@/components/reveal"
 import { Section } from "@/components/section"
 import { Terminal } from "@/components/terminal"
 import buildWeb from "@/content/captures/build-web.ansi?raw"
@@ -29,13 +28,28 @@ function DevOutput() {
   return <Terminal command="adaptv dev web --host" capture={devWeb} />
 }
 
-function BuildCode() {
+/**
+ * The lines between `//#region landing` and `//#endregion` in the playground file, the
+ * marker lines left out: a short excerpt that reads at a glance and stays the real code.
+ */
+function excerpt(source: string) {
+  const lines = source.split("\n")
+  const start = lines.findIndex((line) =>
+    line.trim().startsWith("//#region landing"),
+  )
+  const end = lines.findIndex((line) => line.trim() === "//#endregion")
+  return lines.slice(start + 1, end).join("\n")
+}
+
+const PICKER_EXCERPT = excerpt(pickerSource)
+
+function WriteCode() {
   return (
     <CodePanel
       samples={[
-        { label: "priority-picker.tsx", lang: "tsx", code: pickerSource },
+        { label: "priority-picker.tsx", lang: "tsx", code: PICKER_EXCERPT },
       ]}
-      className="min-w-0 [&_pre]:max-h-[300px] [&_pre]:overflow-auto md:[&_pre]:max-h-[360px]"
+      className="min-w-0"
     />
   )
 }
@@ -71,21 +85,22 @@ type Step = {
 
 const STEPS: Step[] = [
   {
-    id: "build",
-    label: "Build",
-    caption: "Write plain React and Tailwind. Nothing new to learn.",
-    Panel: BuildCode,
+    id: "write",
+    label: "Write",
+    caption:
+      "Plain React components. Behaviour comes from props, looks from className.",
+    Panel: WriteCode,
   },
   {
     id: "run",
     label: "Run",
-    caption: "One dev server. Every platform reloads as you edit.",
+    caption: "One dev server. Your phone reloads as you edit.",
     Panel: DevOutput,
   },
   {
     id: "ship",
     label: "Ship",
-    caption: "One command builds every platform.",
+    caption: "One command builds it.",
     Panel: ShipOutput,
   },
 ]
@@ -156,7 +171,7 @@ function StepTabs() {
         id={`${base}-panel`}
         role="tabpanel"
         aria-labelledby={`${base}-tab-${step.id}`}
-        className="grid min-h-[420px] grid-cols-1 content-start gap-5 md:min-h-[480px]"
+        className="grid min-h-[610px] grid-cols-1 content-start gap-5 md:min-h-[590px]"
       >
         {/* the key restarts the crossfade on every switch */}
         <View key={step.id} className="step-in gap-5">
@@ -172,11 +187,9 @@ export function IdeaToInstalled() {
   return (
     <Section
       title="From idea to installed app"
-      lede="Write plain React. Put it on your phone and ship."
+      lede="Write React, run it on your phone, ship it everywhere."
     >
-      <Reveal>
-        <StepTabs />
-      </Reveal>
+      <StepTabs />
     </Section>
   )
 }
