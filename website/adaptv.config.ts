@@ -9,9 +9,9 @@ export default defineApp({
   //one (bin/lib/load-config.mjs). Drop it when the CLI agrees with the type.
   appId: "dev.adaptv.website",
   name: "adaptv",
-  title: "adaptv — one React codebase, every screen",
+  title: "adaptv: one React codebase for web, iOS and Android",
   description:
-    "One React codebase for desktop web, mobile web, an installable home-screen app, and real iOS and Android apps that don't feel like a website in a box.",
+    "adaptv is a React framework that ships one codebase as a web app, an installed PWA and native iOS and Android apps. Open source, pre-alpha.",
   //Every page is the same for every visitor, so the build writes each one as a file
   //and the Worker serves it from assets. Rendered per request instead, a page view
   //cost enough Worker CPU to fail with error 1102 about one time in eight (TUD-131).
