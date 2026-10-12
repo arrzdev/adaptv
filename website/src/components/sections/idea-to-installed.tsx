@@ -8,6 +8,7 @@ import {
   useState,
 } from "react"
 import { CodePanel } from "@/components/code"
+import { Reveal } from "@/components/reveal"
 import { Section } from "@/components/section"
 import { Terminal } from "@/components/terminal"
 import buildWeb from "@/content/captures/build-web.ansi?raw"
@@ -29,16 +30,20 @@ function DevOutput() {
 }
 
 /**
- * The lines between `//#region landing` and `//#endregion` in the playground file, the
- * marker lines left out: a short excerpt that reads at a glance and stays the real code.
+ * The lines between the `#region landing` and `#endregion` markers in the playground file,
+ * in any comment syntax (inside JSX children `//` is text, so there they are block
+ * comments), the marker lines left out and dedented by the first line's indent: a short
+ * excerpt of whole elements that reads at a glance and stays the real code.
  */
 function excerpt(source: string) {
   const lines = source.split("\n")
-  const start = lines.findIndex((line) =>
-    line.trim().startsWith("//#region landing"),
+  const start = lines.findIndex((line) => line.includes("#region landing"))
+  const end = lines.findIndex(
+    (line, i) => i > start && line.includes("#endregion"),
   )
-  const end = lines.findIndex((line) => line.trim() === "//#endregion")
-  return lines.slice(start + 1, end).join("\n")
+  const body = lines.slice(start + 1, end)
+  const indent = body[0].length - body[0].trimStart().length
+  return body.map((line) => line.slice(indent)).join("\n")
 }
 
 const PICKER_EXCERPT = excerpt(pickerSource)
@@ -187,9 +192,11 @@ export function IdeaToInstalled() {
   return (
     <Section
       title="From idea to installed app"
-      lede="Write React, run it on your phone, ship it everywhere."
+      lede="Write React, run it on your phone, ship it to the web, iOS and Android."
     >
-      <StepTabs />
+      <Reveal>
+        <StepTabs />
+      </Reveal>
     </Section>
   )
 }

@@ -213,6 +213,42 @@ test.describe("Tally showcase", () => {
     )
     expect(cls).toBe(0)
   })
+
+  //The CLS above is 0 only when Geist arrives before the first paint. This one does not race
+  //the network: the hero is laid out once in the fallback font (Geist blocked) and once in
+  //Geist, and the showcase must sit at the same place in both (TUD-861: the intro wrapped to
+  //3 lines in the fallback and 4 in Geist, and the swap pushed the showcase down 31 px).
+  for (const width of [640, 768, 1024, 1440]) {
+    test(`the web font swap moves nothing in the hero at ${width} px`, async ({
+      page,
+    }) => {
+      //two full page loads: on a loaded VM each one has taken 12-15 s
+      test.setTimeout(60_000)
+      await open(page, width)
+      const geist = await box(showcase(page))
+      //the intro's box is as tall as its lines in Geist: a copy edit that wraps it to 3 or 5
+      //lines must change its reserved height too
+      const intro = page.getByText(/^adaptv is a React framework/)
+      const fit = await intro.evaluate((el) => {
+        const range = document.createRange()
+        range.selectNodeContents(el)
+        const lines = new Set([...range.getClientRects()].map((r) => Math.round(r.top)))
+        const lineHeight = Number.parseFloat(getComputedStyle(el).lineHeight)
+        return { text: lines.size * lineHeight, box: el.getBoundingClientRect().height }
+      })
+      expect(Math.abs(fit.text - fit.box)).toBeLessThan(1)
+      await page.route(/fonts\.(googleapis|gstatic)\.com/, (route) => route.abort())
+      await open(page, width)
+      //no Geist face at all: the stylesheet that declares it never loaded
+      expect(
+        await page.evaluate(() =>
+          [...document.fonts].some((f) => f.family.includes("Geist")),
+        ),
+      ).toBe(false)
+      const fallback = await box(showcase(page))
+      expect(fallback.top).toBe(geist.top)
+    })
+  }
 })
 
 test.describe("section order", () => {
@@ -309,18 +345,35 @@ test.describe("Where it runs", () => {
     expect(await rows(titles)).toHaveLength(1)
   })
 
-  test("the six platform marks: one row on desktop, 3 × 2 on a phone", async ({ page }) => {
+  test("the four platform marks: one left-aligned row with one fixed gap at every width", async ({
+    page,
+  }) => {
     await open(page, 1440)
-    const marks = section(page, "Where it runs")
-      .getByRole("list")
-      .first()
-      .getByRole("listitem")
-    await expect(marks).toHaveText(["iOS", "Android", "Windows", "macOS", "PWA", "Capacitor"])
-    expect(await rows(marks)).toHaveLength(1)
+    const list = section(page, "Where it runs").getByRole("list").first()
+    const marks = list.getByRole("listitem")
+    await expect(marks).toHaveText(["iOS", "Android", "PWA", "Capacitor"])
 
+    //design sign-off TUD-836: a 3-column grid left Capacitor alone on a phone, and
+    //justify-between spread the marks to a gap that changed with the width
+    const gaps = new Set<number>()
+    for (const width of [390, 768, 1440, 1920]) {
+      await page.setViewportSize({ width, height: 900 })
+      expect.soft(await rows(marks), `one row at ${width} px`).toHaveLength(1)
+      const [l, items] = await Promise.all([
+        box(list),
+        marks.evaluateAll((els) => els.map((el) => el.getBoundingClientRect())),
+      ])
+      expect.soft(Math.round(items[0].left - l.left), `starts at the left at ${width} px`).toBe(0)
+      expect
+        .soft(Math.round(items.at(-1)!.right), `fits in the viewport at ${width} px`)
+        .toBeLessThanOrEqual(l.innerWidth)
+      for (let i = 1; i < items.length; i++)
+        gaps.add(Math.round(items[i].left - items[i - 1].right))
+    }
+    expect([...gaps], "one gap between marks, at every width").toHaveLength(1)
+
+    //and the three columns below still stack on a phone
     await page.setViewportSize({ width: 390, height: 900 })
-    expect(await rows(marks)).toHaveLength(2)
-    //and the columns stack
     const titles = section(page, "Where it runs").getByRole("heading", { level: 3 })
     expect(await rows(titles)).toHaveLength(3)
   })
@@ -367,6 +420,33 @@ const PICKER = readFileSync(
   "utf8",
 )
 
+/**
+ * The JSX tags an excerpt leaves open, in order: `<Name` pushes, `/>` and `</Name>` pop.
+ * Empty when the excerpt starts and ends on whole elements (TUD-865).
+ */
+function openTags(code: string) {
+  const stack: string[] = []
+  for (const [, close, name, selfClose] of code.matchAll(/<(\/?)([A-Za-z][\w.]*)|(\/>)/g)) {
+    if (selfClose || close) stack.pop()
+    else stack.push(name)
+  }
+  return stack
+}
+
+/** The Reveal that wraps the step tabs (`components/reveal.tsx`). */
+function revealOf(idea: Locator) {
+  return idea.locator("[data-reveal]").filter({ has: idea.page().getByRole("tablist") })
+}
+
+/** A Reveal's computed opacity and vertical offset, in CSS px. */
+function motionOf(reveal: Locator) {
+  return reveal.evaluate((el) => {
+    const cs = getComputedStyle(el)
+    const m = new DOMMatrixReadOnly(cs.transform === "none" ? undefined : cs.transform)
+    return { opacity: Number(cs.opacity), y: m.m42 }
+  })
+}
+
 test.describe("From idea to installed", () => {
   test("Write shows a 12–20 line excerpt of the real file, without a scroll box", async ({
     page,
@@ -374,7 +454,7 @@ test.describe("From idea to installed", () => {
     await open(page, 1440)
     const idea = section(page, "From idea to installed app")
     await expect(idea).toContainText(
-      "Write React, run it on your phone, ship it everywhere.",
+      "Write React, run it on your phone, ship it to the web, iOS and Android.",
     )
     await expect(idea.getByRole("tab")).toHaveText(["Write", "Run", "Ship"])
     await expect(idea.getByRole("tab", { name: "Write" })).toHaveAttribute(
@@ -393,6 +473,11 @@ test.describe("From idea to installed", () => {
     //every line is the playground file's own, not a copy that drifts
     for (const line of lines.filter((l) => l.trim()))
       expect.soft(PICKER, "line comes from priority-picker.tsx").toContain(line)
+    //whole elements: nothing left open, and the last line closes one (TUD-865)
+    expect.soft(openTags(text), "tags left open in the excerpt").toEqual([])
+    expect
+      .soft(lines.at(-1)?.trim(), "the last line closes an element")
+      .toMatch(/^<\/[\w.]+>$|\/>$/)
     const overflow = await code.evaluate((el) => ({
       scrollHeight: el.scrollHeight,
       clientHeight: el.clientHeight,
@@ -402,11 +487,64 @@ test.describe("From idea to installed", () => {
     )
   })
 
+  test("the tabs fade up as they scroll in, frame by frame", async ({ page }) => {
+    await open(page, 1440)
+    const idea = section(page, "From idea to installed app")
+    const reveal = revealOf(idea)
+    await expect(reveal, "one Reveal wraps the tabs").toHaveCount(1)
+    //below the fold on load: hidden and 24 px low, waiting for its entrance
+    expect(await motionOf(reveal)).toEqual({ opacity: 0, y: 24 })
+
+    //every frame from before the scroll until the 0.7 s fade has long ended
+    await reveal.evaluate((el) => {
+      const w = window as unknown as { revealPath: { opacity: number; y: number }[] }
+      w.revealPath = []
+      const t0 = performance.now()
+      const tick = () => {
+        const cs = getComputedStyle(el)
+        const m = new DOMMatrixReadOnly(cs.transform === "none" ? undefined : cs.transform)
+        w.revealPath.push({ opacity: Number(cs.opacity), y: m.m42 })
+        if (performance.now() - t0 < 1800) requestAnimationFrame(tick)
+        else document.documentElement.dataset.revealSampled = ""
+      }
+      requestAnimationFrame(tick)
+    })
+    await idea.getByRole("tablist").scrollIntoViewIfNeeded()
+    await page.locator("html[data-reveal-sampled]").waitFor({ state: "attached" })
+    const path = await page.evaluate(
+      () => (window as unknown as { revealPath: { opacity: number; y: number }[] }).revealPath,
+    )
+
+    expect(path[0], "starts hidden and low").toEqual({ opacity: 0, y: 24 })
+    expect(path.at(-1), "ends in place").toEqual({ opacity: 1, y: 0 })
+    const between = path.filter((f) => f.opacity > 0 && f.opacity < 1)
+    //a fade, not a jump: at 60 fps the 0.7 s ease paints about 40 frames
+    expect(between.length, "frames in mid-fade").toBeGreaterThanOrEqual(8)
+    for (let i = 1; i < path.length; i++) {
+      const [a, b] = [path[i - 1], path[i]]
+      expect.soft(b.opacity, `frame ${i}: opacity only rises`).toBeGreaterThanOrEqual(a.opacity)
+      expect.soft(b.y, `frame ${i}: it only moves up`).toBeLessThanOrEqual(a.y + 0.01)
+      expect.soft(b.y, `frame ${i}: no overshoot past its place`).toBeGreaterThanOrEqual(0)
+      //no frame that drops it in place while still invisible, or shows it fully while low
+      if (b.opacity === 1) expect.soft(b.y, `frame ${i}: opaque only in place`).toBeLessThan(1)
+    }
+  })
+
+  test("under reduced motion the tabs are in place from the start", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" })
+    await open(page, 1440)
+    const reveal = revealOf(section(page, "From idea to installed app"))
+    await expect(reveal).toHaveCount(1)
+    expect(await motionOf(reveal)).toEqual({ opacity: 1, y: 0 })
+  })
+
   test("captions, and switching tabs moves nothing below the panel", async ({ page }) => {
     await open(page, 1440)
     const idea = section(page, "From idea to installed app")
     const tablist = idea.getByRole("tablist")
     await tablist.scrollIntoViewIfNeeded()
+    //the base gap is read once the entrance has settled, not halfway up its 24 px rise
+    await expect.poll(() => motionOf(revealOf(idea))).toEqual({ opacity: 1, y: 0 })
     const below = page.getByRole("heading", { name: "Start with the quick start" })
     const gap = async () => {
       const [a, b] = await Promise.all([box(tablist), box(below)])

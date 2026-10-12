@@ -65,7 +65,7 @@ jobs:
 
       - name: Checkout
         if: steps.moved.outputs.run != 'false'
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup
         if: steps.moved.outputs.run != 'false'
@@ -107,7 +107,7 @@ jobs:
 
       - name: Playwright report
         if: failure() && steps.e2e.outcome == 'failure'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-report-chromium
           path: playground/playwright-report/
@@ -150,7 +150,7 @@ jobs:
             script: test:e2e:sw:prompt
     steps:
       - name: Checkout
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup
         uses: ./.github/actions/setup
@@ -173,7 +173,7 @@ jobs:
 
       - name: Playwright report
         if: failure() && steps.e2e.outcome == 'failure'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-report-${{ matrix.suite }}-${{ matrix.engine }}
           path: playground/playwright-report/

@@ -25,9 +25,9 @@ describe("hero", () => {
   // flash claim (TUD-757)
   it("sub-line names the fixes adaptv makes on every element", () => {
     render(<Hero />)
-    const sub = screen.getByText(/^One React codebase/)
+    const sub = screen.getByText(/^adaptv is a React framework/)
     expect(sub.textContent?.replace(/\s+/g, " ").trim()).toBe(
-      "One React codebase for the browser, the home screen, the App Store and Google Play. adaptv stops scroll chaining and input zoom, and handles safe areas, the keyboard and offline.",
+      "adaptv is a React framework: one codebase ships as a web app, an installable PWA and native iOS and Android apps. It stops scroll chaining and input zoom, and handles safe areas, the keyboard and offline.",
     )
   })
 })
