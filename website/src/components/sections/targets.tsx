@@ -1,13 +1,9 @@
-import { View } from "adaptv/components"
-import { Check } from "lucide-react"
 import type { SVGProps } from "react"
-import { Reveal } from "@/components/reveal"
-import { Section } from "@/components/section"
 
 /*
- * Platform marks from simple-icons, in one colour. The iOS mark is Apple's
- * wordmark, never the Apple logo; the Android robot is CC BY 3.0 and credited in the
- * footer. Each viewBox is cropped to its glyph so heights line up by eye.
+ * Platform marks from simple-icons, in one colour. The iOS mark is Apple's wordmark,
+ * never the Apple logo; the Android robot is CC BY 3.0 and credited in the footer. Each
+ * viewBox is cropped to its glyph so heights line up by eye.
  */
 type Mark = (props: SVGProps<SVGSVGElement>) => React.JSX.Element
 
@@ -40,94 +36,36 @@ const CapacitorMark: Mark = (props) => (
   </svg>
 )
 
-const PLATFORMS: { name: string; mark: Mark | null; size: string }[] = [
+const PLATFORMS: { name: string; mark: Mark; size: string }[] = [
   { name: "iOS", mark: IosMark, size: "h-[15px] md:h-[18px]" },
   { name: "Android", mark: AndroidMark, size: "h-5 md:h-6" },
   { name: "PWA", mark: PwaMark, size: "h-[15px] md:h-[18px]" },
   { name: "Capacitor", mark: CapacitorMark, size: "h-[21px] md:h-6" },
 ]
 
-const WAYS: { title: string; lines: string[] }[] = [
-  {
-    title: "In a browser tab",
-    lines: [
-      "Inputs don't zoom the page when they get focus.",
-      "Scrolling a list doesn't drag the page behind it.",
-    ],
-  },
-  {
-    title: "Installed from the browser",
-    lines: [
-      "Installs from the browser, no store.",
-      "Works offline.",
-      "Fixes reach users without a store review.",
-    ],
-  },
-  {
-    title: "In the App Store and Google Play",
-    lines: [
-      "Real iOS and Android builds through Capacitor.",
-      "Safe areas and the keyboard are handled.",
-      "Android's Back button closes the open sheet first.",
-    ],
-  },
-]
-
 /**
- * Where an adaptv app runs: the four platform marks, then the three ways the same code
- * reaches people and what adaptv fixes in each. Every line is true on `main`; one that
- * stops being true is dropped, not reworded. Each mark carries its name as hidden text,
- * so assistive tech reads a plain list of four.
+ * Where an adaptv app runs, as one still row of marks: no motion, no captions. Each mark
+ * carries its name as hidden text, so assistive tech reads a plain list of four. One
+ * centred row at every width: a 3-column grid left Capacitor alone on a second row on a
+ * phone (TUD-836).
  */
-export function WhereItRuns() {
+export function Targets() {
   return (
-    <Section
-      title="Where it runs"
-      lede="The same code reaches people three ways. adaptv handles what each one gets wrong by default."
-    >
-      <Reveal className="flex flex-col gap-12">
-        <ul className="flex items-center gap-10">
+    <section className="sheet">
+      <div className="flex flex-col items-center gap-7 px-6 py-12 md:px-10">
+        <p className="text-[14px] text-muted">One app. Every platform.</p>
+        <ul className="flex items-center justify-center gap-8 md:gap-12">
           {PLATFORMS.map(({ name, mark: Mark, size }) => (
             <li
               key={name}
               className="flex h-7 items-center text-foreground opacity-50 transition-opacity duration-200 ease-out hover:opacity-80"
             >
-              {Mark ? (
-                <>
-                  <Mark className={`w-auto ${size}`} />
-                  <span className="sr-only">{name}</span>
-                </>
-              ) : (
-                <span
-                  className={`font-semibold leading-none tracking-[-0.03em] ${size}`}
-                >
-                  {name}
-                </span>
-              )}
+              <Mark className={`w-auto ${size}`} />
+              <span className="sr-only">{name}</span>
             </li>
           ))}
         </ul>
-        <div className="grid gap-10 md:grid-cols-3 md:gap-8">
-          {WAYS.map((way) => (
-            <View key={way.title} className="gap-4">
-              <h3 className="font-semibold text-[18px] tracking-[-0.02em]">
-                {way.title}
-              </h3>
-              <ul className="flex flex-col gap-2.5 text-[14.5px] text-muted">
-                {way.lines.map((line) => (
-                  <li key={line} className="flex items-start gap-2">
-                    <Check
-                      className="mt-[3px] size-4 shrink-0 text-success"
-                      strokeWidth={2.5}
-                    />
-                    {line}
-                  </li>
-                ))}
-              </ul>
-            </View>
-          ))}
-        </div>
-      </Reveal>
-    </Section>
+      </div>
+    </section>
   )
 }

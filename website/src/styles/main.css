@@ -3,6 +3,40 @@
 @import "adaptv/tailwind.css";
 
 /*
+ * Geist arrives after the first paint on a slow connection. Until then the text is set in
+ * a local font with Geist's vertical metrics (ascent 1.005 em, descent 0.295 em, no line
+ * gap) and about its width, so a line sits at the same height in both and the swap moves
+ * nothing (a layout shift otherwise). The overrides are divided by size-adjust. Two faces
+ * per family, as the fallbacks only have a regular and a bold.
+ */
+@font-face {
+  font-family: "Fallback Sans";
+  src: local("Arial"), local("ArialMT"), local("Liberation Sans"), local("LiberationSans"), local("Helvetica"), local("Roboto"), local("Roboto-Regular");
+  font-weight: 100 500;
+  size-adjust: 101%;
+  ascent-override: 99.5%;
+  descent-override: 29.2%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: "Fallback Sans";
+  src: local("Arial Bold"), local("Arial-BoldMT"), local("Liberation Sans Bold"), local("LiberationSans-Bold"), local("Helvetica Bold"), local("Helvetica-Bold"), local("Roboto Bold"), local("Roboto-Bold");
+  font-weight: 600 900;
+  size-adjust: 101%;
+  ascent-override: 99.5%;
+  descent-override: 29.2%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: "Fallback Mono";
+  src: local("Menlo"), local("Menlo-Regular"), local("Courier New"), local("CourierNewPSMT"), local("Liberation Mono"), local("LiberationMono"), local("Roboto Mono"), local("RobotoMono-Regular");
+  font-weight: 100 900;
+  ascent-override: 100.5%;
+  descent-override: 29.5%;
+  line-gap-override: 0%;
+}
+
+/*
  * Tokens. A neutral canvas — true near-black, true white — so the one brand colour (the
  * indigo of the mark) and the hero's light are the only colour on the page. A dark theme
  * is a second set of values and never a second set of class names.
@@ -37,18 +71,8 @@
   --code-fn: #f2c78a;
   --code-tag: #7fc4f5;
 
-  /* terminal: the 8 ANSI colours the captured CLI output uses; bright ones reuse them */
-  --term-black: #6d6d7a;
-  --term-red: #ff7a8e;
-  --term-green: #4fdca0;
-  --term-yellow: #f2c78a;
-  --term-blue: #8b95ff;
-  --term-magenta: #c08bff;
-  --term-cyan: #7fc4f5;
-  --term-white: #e4e4ea;
-
-  --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --font-sans: "Geist", "Fallback Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "Geist Mono", "Fallback Mono", ui-monospace, "SF Mono", Menlo, monospace;
 }
 
 .dark {
@@ -195,10 +219,7 @@
 .stage-in { animation: stage-in 0.3s ease-out 0.24s both; }
 @keyframes caret { 50% { opacity: 0; } }
 .caret { animation: caret 1s steps(1) infinite; }
-/* a tab switch in "From idea to installed app": a 200 ms crossfade, no movement */
-@keyframes step-in { from { opacity: 0; } }
-.step-in { animation: step-in 0.2s ease-out; }
 @media (prefers-reduced-motion: reduce) {
-  .rise, .stage-in, .step-in { animation: none; }
+  .rise, .stage-in, .caret { animation: none; }
   [data-reveal] { opacity: 1 !important; transform: none !important; }
 }
