@@ -660,12 +660,36 @@ test.describe("2b · a drag started during the open slide, from the handle", () 
       await labButton(page, OPEN_BASIC).click()
       const at = await awaitSlideWindow(page, 60, 140)
 
-      //the handle region, wherever the slide has it right now
-      const box = await page.locator(HANDLE).boundingBox()
-      if (!box) throw new Error("the drawer handle is not on screen")
-      const x = box.x + box.width / 2
-      const y = box.y + box.height / 2
-      await page.mouse.move(x, y)
+      //The handle moves while the sheet slides, so a point read from its box is stale by the
+      //time the press lands (each CDP call is a round trip, and a loaded runner stretches
+      //them): the press then hit the sheet body and the handle never claimed the drag. Aim at
+      //the upper part of the handle, which the upward slide carries toward the pointer, and
+      //only press once the page itself says the handle is under the pointer. The drift
+      //between that check and the press is one round trip, a few px of a handle tall enough
+      //to take it.
+      let x = 0
+      let y = 0
+      for (let attempt = 0; ; attempt += 1) {
+        const box = await page.locator(HANDLE).boundingBox()
+        if (!box) throw new Error("the drawer handle is not on screen")
+        x = box.x + box.width / 2
+        y = box.y + box.height / 4
+        await page.mouse.move(x, y)
+        const underPointer = await page.evaluate(
+          ([px, py, selector]) =>
+            document
+              .elementFromPoint(px as number, py as number)
+              ?.closest(selector as string) !== null &&
+            document.querySelector(selector as string) !== null,
+          [x, y, HANDLE],
+        )
+        if (underPointer) break
+        if (attempt >= 5) {
+          throw new Error(
+            `the handle was never under the pointer at (${x.toFixed(0)}, ${y.toFixed(0)})`,
+          )
+        }
+      }
       await page.mouse.down()
       const dragging = (await readOverlay(page))?.dragging ?? ""
       const samples: number[] = []
