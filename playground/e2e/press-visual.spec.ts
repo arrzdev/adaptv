@@ -249,20 +249,53 @@ test.describe("press visual vs. a scroll that starts on a control", () => {
     const { cdp, button, aim } = await setup(page)
     const centre = await aim()
 
+    //The floor is a duration on the PAGE's clock. Reading `data-pressed` from the
+    //test right after `touchEnd` measures the floor plus two CDP round trips, so on a
+    //loaded runner the 150ms ran out before the read and an engine that held it
+    //correctly looked like one that dropped it. Stamp the attribute's own set and
+    //clear instead, and assert on those.
+    await button.evaluate((el) => {
+      const w = window as unknown as {
+        __press?: { shown?: number; cleared?: number }
+      }
+      w.__press = {}
+      new MutationObserver(() => {
+        const on = el.hasAttribute("data-pressed")
+        if (on && w.__press?.shown === undefined)
+          w.__press.shown = performance.now()
+        if (
+          !on &&
+          w.__press?.shown !== undefined &&
+          w.__press.cleared === undefined
+        )
+          w.__press.cleared = performance.now()
+      }).observe(el, {
+        attributes: true,
+        attributeFilter: ["data-pressed"],
+      })
+    })
+
     await touch(cdp, "touchStart", centre)
-    await page.waitForTimeout(140)
     await expect(button).toHaveAttribute("data-pressed", "")
-
     await touch(cdp, "touchEnd")
-    expect(
-      await button.evaluate((el) => el.hasAttribute("data-pressed")),
-      "released right after showing — the minimum-duration floor must hold it",
-    ).toBe(true)
 
-    await page.waitForTimeout(400)
+    await page.waitForFunction(
+      () =>
+        (window as unknown as { __press?: { cleared?: number } }).__press
+          ?.cleared !== undefined,
+    )
+    const { shown, cleared } = await page.evaluate(
+      () =>
+        (
+          window as unknown as {
+            __press: { shown: number; cleared: number }
+          }
+        ).__press,
+    )
     expect(
-      await button.evaluate((el) => el.hasAttribute("data-pressed")),
-    ).toBe(false)
+      cleared - (shown as number),
+      "the press was cleared before the 150ms minimum-duration floor ran out",
+    ).toBeGreaterThanOrEqual(150)
   })
 
   test("a drag the browser claims as a scroll never activates the button", async ({
