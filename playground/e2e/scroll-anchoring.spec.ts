@@ -92,6 +92,7 @@ const AVOID: Surface = {
 type Run = {
   moved: boolean
   scrollAtInsert: number
+  scrolls: number[]
   landing: { scrollTop: number; fieldTop: number; clearance: number }
   steps: number[]
   rest: { fieldBefore: number; fieldAfter: number; scrollDelta: number }
@@ -225,6 +226,7 @@ function measure(page: Page, surface: Surface) {
       await frame()
       let previous = top()
       let scrollAtInsert = -1
+      const scrolls: number[] = []
       const began = performance.now()
       //the drawer re-aims 420ms after the raise; 1.5s covers it and the smooth scroll after
       while (performance.now() - began < 1500) {
@@ -236,6 +238,7 @@ function measure(page: Page, surface: Surface) {
         const now = top()
         steps.push(Math.round((now - previous) * 10) / 10)
         previous = now
+        scrolls.push(Math.round(scroller.scrollTop - start))
         //on the first frame adaptv's scroll has moved: WebKit on a loaded runner draws so
         //few frames that its smooth scroll had arrived by the third (drawer at 871 of 871)
         if (
@@ -263,6 +266,7 @@ function measure(page: Page, surface: Surface) {
       return {
         moved: scrollAtInsert >= 0,
         scrollAtInsert: Math.round(scrollAtInsert),
+        scrolls,
         landing,
         steps,
         rest: {
@@ -334,7 +338,7 @@ for (const [name, surface] of [
       expect(run.moved, "adaptv's scroll never started").toBe(true)
       expect(
         run.landing.scrollTop - run.scrollAtInsert,
-        "the insertion landed after the scroll had finished",
+        `the insertion landed after the scroll had finished (scrollTop per frame from ${run.scrollAtInsert - 0}: ${run.scrolls.slice(0, 12).join(",")})`,
       ).toBeGreaterThan(INSERT_PX)
     }
 
