@@ -1,4 +1,5 @@
-import { expect, test } from "@playwright/test"
+import { readdirSync, readFileSync } from "node:fs"
+import { expect, type Page, test } from "@playwright/test"
 
 //The pages a stranger reaches on publish day. `/docs/button` is a docs page with a live
 //demo; the post is one of the entries in `src/content/blog.ts`.
@@ -15,30 +16,55 @@ const VIEWPORTS = [
   { name: "desktop", width: 1280, height: 800 },
 ]
 
+//Every docs page and blog post, read from the sources and not imported: the docs index
+//pulls in the live demos, which Playwright's loader cannot compile. The sitemap test below
+//proves this list matches the one the build ships (TUD-953).
+const CONTENT = new URL("../src/content/", import.meta.url)
+const DOC_SLUGS = readdirSync(new URL("docs/pages/", CONTENT))
+  .filter((file) => file.endsWith(".ts"))
+  .map((file) => {
+    const source = readFileSync(new URL(`docs/pages/${file}`, CONTENT), "utf8")
+    const slug = source.match(/^ {2}slug: "([^"]+)"/m)?.[1]
+    if (!slug) throw new Error(`no slug in docs/pages/${file}`)
+    return slug
+  })
+const POST_SLUGS = [
+  ...readFileSync(new URL("blog.ts", CONTENT), "utf8").matchAll(/^ {4}slug: "([^"]+)"/gm),
+].map((match) => match[1])
+const EVERY_PAGE = [
+  ...DOC_SLUGS.map((slug) => `/docs/${slug}`),
+  ...POST_SLUGS.map((slug) => `/blog/${slug}`),
+].sort()
+
+/** Loads `path` and asserts its status, an `h1`, no horizontal scroll and no errors. */
+async function loadsClean(tab: Page, path: string) {
+  const problems: string[] = []
+  tab.on("console", (message) => {
+    if (message.type() === "error") problems.push(`console: ${message.text()}`)
+  })
+  tab.on("pageerror", (error) => problems.push(`pageerror: ${error.message}`))
+
+  const response = await tab.goto(path)
+  expect(response?.status()).toBe(200)
+  await expect(tab.locator("h1").first()).toBeVisible()
+  //hydration and lazy chunks settle before the verdict on errors and overflow
+  await tab.waitForLoadState("networkidle")
+
+  const { scrollWidth, innerWidth } = await tab.evaluate(() => ({
+    scrollWidth: document.documentElement.scrollWidth,
+    innerWidth: window.innerWidth,
+  }))
+  expect(scrollWidth, "horizontal scroll").toBeLessThanOrEqual(innerWidth)
+  expect(problems).toEqual([])
+}
+
 for (const viewport of VIEWPORTS) {
   test.describe(`${viewport.name} ${viewport.width}x${viewport.height}`, () => {
     test.use({ viewport: { width: viewport.width, height: viewport.height } })
 
     for (const page of PAGES) {
       test(`${page.name} (${page.path}) loads clean`, async ({ page: tab }) => {
-        const problems: string[] = []
-        tab.on("console", (message) => {
-          if (message.type() === "error") problems.push(`console: ${message.text()}`)
-        })
-        tab.on("pageerror", (error) => problems.push(`pageerror: ${error.message}`))
-
-        const response = await tab.goto(page.path)
-        expect(response?.status()).toBe(200)
-        await expect(tab.locator("h1").first()).toBeVisible()
-        //hydration and lazy chunks settle before the verdict on errors and overflow
-        await tab.waitForLoadState("networkidle")
-
-        const { scrollWidth, innerWidth } = await tab.evaluate(() => ({
-          scrollWidth: document.documentElement.scrollWidth,
-          innerWidth: window.innerWidth,
-        }))
-        expect(scrollWidth, "horizontal scroll").toBeLessThanOrEqual(innerWidth)
-        expect(problems).toEqual([])
+        await loadsClean(tab, page.path)
       })
     }
 
@@ -72,3 +98,23 @@ for (const viewport of VIEWPORTS) {
     }
   })
 }
+
+//A docs table, a code block or a long word overflows on a phone first; the desktop
+//layout has room. Every page at the phone width, so one that scrolls sideways fails the PR.
+test.describe("every docs page and blog post, phone 390x844", () => {
+  test.use({ viewport: { width: 390, height: 844 } })
+
+  test("the list is the sitemap's", async ({ request }) => {
+    const sitemap = await (await request.get("/sitemap.xml")).text()
+    const shipped = [...sitemap.matchAll(/<loc>[^<]*?(\/(?:docs|blog)\/[^<]+)<\/loc>/g)]
+      .map((match) => match[1])
+      .sort()
+    expect(EVERY_PAGE).toEqual(shipped)
+  })
+
+  for (const path of EVERY_PAGE) {
+    test(`${path} loads clean`, async ({ page: tab }) => {
+      await loadsClean(tab, path)
+    })
+  }
+})
