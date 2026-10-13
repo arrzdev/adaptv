@@ -18,7 +18,8 @@ export type Post = {
 export const POSTS: Post[] = [
   {
     slug: "ios-pwa-limits-and-adaptv",
-    title: "What an installed iOS PWA still cannot do, and what adaptv does about it",
+    title:
+      "What an installed iOS PWA still cannot do, and what adaptv does about it",
     date: "2026-10-13",
     kind: "Field note",
     author: "arrz.dev",
@@ -26,7 +27,7 @@ export const POSTS: Post[] = [
       "An installed iOS PWA has no background sync, no Bluetooth or NFC, no App Store listing and storage that WebKit governs. Which of these adaptv handles on the web, which only in a native build, and which not at all.",
     seoTitle: "iOS PWA limits vs a native app: what adaptv covers",
     seoDescription:
-      "What an installed iOS PWA cannot do: push, background work, Bluetooth, the App Store. Which limits adaptv covers on web, in a native build, or not.",
+      "What an installed iOS PWA cannot do: background work, Bluetooth, NFC, the App Store. Which limits adaptv covers on web, in a native build, or not.",
     blocks: [
       {
         type: "p",
@@ -58,14 +59,14 @@ export const POSTS: Post[] = [
             "[The frame](/docs/the-frame)",
           ],
           [
-            "System bars: the page cannot set the style of the status bar and the home indicator area",
-            "Native build only: it sets the bar icon style and draws edge to edge. On the web, see the tint note below",
+            "System bars: the status bar style is one meta tag read at launch, and the page cannot change it while it runs",
+            "Native build only: it sets the bar icon style at run time and draws edge to edge. On the web the shell sets `black-translucent`, so the page draws under the bar. See the note on the bars below",
             "[Device hooks](/docs/hooks-device)",
           ],
           [
             "Push only after Home Screen install, and the permission only from a direct tap",
-            "Partly. Local notifications work on native. adaptv does not give you push on the web. Native push is on the roadmap, not shipped",
-            "[Interaction hooks](/docs/hooks-interaction)",
+            "Partly. Local notifications work on every target, and scheduling one needs a native build. Your own worker module can handle `push` events, but adaptv does not subscribe the device to push. Push, web and native, is on the roadmap, not shipped",
+            "[Interaction hooks](/docs/hooks-interaction), [Offline](/docs/offline)",
           ],
           [
             "No Background Sync, Periodic Sync or Background Fetch",
@@ -84,12 +85,12 @@ export const POSTS: Post[] = [
           ],
           [
             "No `navigator.vibrate`, so no haptics",
-            "Web: handled with a haptic tick on iOS web. Native build: real haptics",
-            "[Capabilities](/docs/capabilities)",
+            "Partly. On iOS web a tap on a `Button` with `haptic` gives one system tick, with no weights, and `haptics` called from code does nothing there from iOS 26.5. Native build: real haptics",
+            "[Button](/docs/button), [Capabilities](/docs/capabilities)",
           ],
           [
             "Limited file access: no full File System Access API",
-            "Partly. One path-based API for files the app owns on every target. Access to files outside the app is not covered here",
+            "Partly. One path-based API for files the app owns on every target. adaptv has no picker for files outside the app",
             "[Filesystem](/docs/filesystem)",
           ],
           [
@@ -99,7 +100,7 @@ export const POSTS: Post[] = [
           ],
           [
             "Not in the App Store: no listing, search or ratings, and install is manual",
-            "Native build: `adaptv build ios` makes the project. You sign it and submit it, and App Store review still applies",
+            "Native build: `adaptv build ios` builds an unsigned `.ipa` and keeps the Xcode project current. You sign and archive it in Xcode, and App Store review still applies",
             "[Native builds](/docs/native-builds)",
           ],
           [
