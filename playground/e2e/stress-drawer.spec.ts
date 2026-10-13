@@ -655,8 +655,18 @@ test.describe("2b · a drag started during the open slide, from the handle", () 
 
     test("handle mouse drag: the sheet must track the pointer, not the curve", async ({
       page,
+      context,
+      browserName,
     }) => {
       await gotoLab(page)
+      //The window is read across CDP round trips, and on a loaded runner one round trip
+      //outlasts an 80ms slide. Run the page's animations at a tenth of the speed so the window
+      //is wide enough to hit; the slide is still the real, running animation.
+      if (browserName === "chromium") {
+        const cdp = await context.newCDPSession(page)
+        await cdp.send("Animation.enable")
+        await cdp.send("Animation.setPlaybackRate", { playbackRate: 0.1 })
+      }
       await labButton(page, OPEN_BASIC).click()
       const at = await awaitSlideWindow(page, 60, 140)
 
