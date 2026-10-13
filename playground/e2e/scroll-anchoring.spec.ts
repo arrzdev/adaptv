@@ -364,7 +364,7 @@ for (const [name, surface] of [
       }
       expect(
         midScroll,
-        `the insertion landed after the scroll had finished (scrollTop per frame from ${run.scrollAtInsert - 0}: ${run.scrolls.slice(0, 12).join(",")})`,
+        `the insertion landed after the scroll had finished (scrollTop per frame from ${run.scrollAtInsert}: ${run.scrolls.slice(0, 12).join(",")})`,
       ).toBe(true)
     }
 
