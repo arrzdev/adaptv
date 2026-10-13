@@ -17,6 +17,134 @@ export type Post = {
 
 export const POSTS: Post[] = [
   {
+    slug: "ios-pwa-limits-and-adaptv",
+    title: "What an installed iOS PWA still cannot do, and what adaptv does about it",
+    date: "2026-10-13",
+    kind: "Field note",
+    author: "arrz.dev",
+    summary:
+      "An installed iOS PWA has no background sync, no Bluetooth or NFC, no App Store listing and storage that WebKit governs. Which of these adaptv handles on the web, which only in a native build, and which not at all.",
+    seoTitle: "iOS PWA limits vs a native app: what adaptv covers",
+    seoDescription:
+      "What an installed iOS PWA cannot do: push, background work, Bluetooth, the App Store. Which limits adaptv covers on web, in a native build, or not.",
+    blocks: [
+      {
+        type: "p",
+        text: "Before you pick between a PWA and a React Native app, it helps to know what the PWA cannot do on iOS. This note lists the limits of an installed iOS PWA, each with a source, and says for each one what adaptv does: handles it on the web, handles it only in a [native build](/docs/native-builds), or does not handle it. Some rows are a plain no.",
+      },
+      {
+        type: "note",
+        tone: "warn",
+        text: "adaptv is in alpha and is not on npm yet. This is a map of limits, not a claim that adaptv replaces React Native. The limits come from WebKit posts and dated articles, not from a device test of ours, and several rest on 2023 sources. Check a row against the current Safari release notes before you rely on it.",
+      },
+      { type: "h2", text: "The limits, and where adaptv stands" },
+      {
+        type: "table",
+        head: ["Limit on an installed iOS PWA", "adaptv", "Where to read more"],
+        rows: [
+          [
+            "The keyboard opens over the page and resizes the viewport in ways CSS cannot follow",
+            "Web: handled. One keyboard signal on every target, and the layout is locked against the keyboard",
+            "[Keyboard](/docs/keyboard)",
+          ],
+          [
+            "The page is not fitted to the screen: no `viewport-fit=cover`, insets read 0 in a tab, and the first layout can come before the insets",
+            "Web: handled. The app shell writes the viewport tag and the insets are CSS utilities",
+            "[Safe areas](/docs/safe-areas)",
+          ],
+          [
+            "The document scrolls and the address bar moves it",
+            "Web: handled. Every page lives in a fixed frame and scrolls inside it",
+            "[The frame](/docs/the-frame)",
+          ],
+          [
+            "System bars: the page cannot set the style of the status bar and the home indicator area",
+            "Native build only: it sets the bar icon style and draws edge to edge. On the web, see the tint note below",
+            "[Device hooks](/docs/hooks-device)",
+          ],
+          [
+            "Push only after Home Screen install, and the permission only from a direct tap",
+            "Partly. Local notifications work on native. adaptv does not give you push on the web. Native push is on the roadmap, not shipped",
+            "[Interaction hooks](/docs/hooks-interaction)",
+          ],
+          [
+            "No Background Sync, Periodic Sync or Background Fetch",
+            "Not handled. adaptv has no background-task capability",
+            "[Capabilities](/docs/capabilities)",
+          ],
+          [
+            "No Web Bluetooth, Web NFC, Web USB, Web Serial or Web HID",
+            "Not handled. None of them is a first-party capability",
+            "[Capabilities](/docs/capabilities)",
+          ],
+          [
+            "Storage is WebKit's: a browser can evict site storage, and nothing in web storage is secure",
+            "Partly. Three tiers. `secure` uses the platform keychain in a native build, and on the web it is not secure",
+            "[Storage](/docs/storage)",
+          ],
+          [
+            "No `navigator.vibrate`, so no haptics",
+            "Web: handled with a haptic tick on iOS web. Native build: real haptics",
+            "[Capabilities](/docs/capabilities)",
+          ],
+          [
+            "Limited file access: no full File System Access API",
+            "Partly. One path-based API for files the app owns on every target. Access to files outside the app is not covered here",
+            "[Filesystem](/docs/filesystem)",
+          ],
+          [
+            "A link to your domain opens Safari, not the installed app",
+            "Native build only: a URL scheme opens the app. Universal links are not built",
+            "[Config](/docs/config)",
+          ],
+          [
+            "Not in the App Store: no listing, search or ratings, and install is manual",
+            "Native build: `adaptv build ios` makes the project. You sign it and submit it, and App Store review still applies",
+            "[Native builds](/docs/native-builds)",
+          ],
+          [
+            "Face ID as an app lock: only WebAuthn passkeys",
+            "Not handled. Biometrics is a known gap",
+            "[Capabilities](/docs/capabilities)",
+          ],
+        ],
+      },
+      {
+        type: "p",
+        text: "How to read the second column: **Web** means the web build and the installed PWA get it without a native shell. **Native build only** means it needs the iOS app. **Not handled** means adaptv does nothing about the limit, and you would need a plugin of your own or a different tool.",
+      },
+      { type: "h2", text: "What the web build does about the layout limits" },
+      {
+        type: "p",
+        text: "The first four rows are layout and viewport problems, and they are where adaptv does most of its work on the web. They are also the ones we have written field notes on, with the device behaviour and the commits: [Freezing the iOS viewport when the keyboard opens](/blog/ios-keyboard-viewport-freeze), [Safe-area insets that read 0 in an iOS PWA](/blog/ios-pwa-safe-area-insets-zero) and [The installed iOS app that launches at the wrong height](/blog/ios-cold-start-launch-height). For the bars, read [iOS 26 Safari ignores theme-color](/blog/ios-26-browser-bar-tint).",
+      },
+      { type: "h2", text: "Where a PWA is the better pick" },
+      {
+        type: "ul",
+        items: [
+          "**Distribution.** A URL needs no review, no signing and no store fee, and an update ships on deploy. A native build adds review and signing.",
+          "**Reach.** A link works on any device and there is nothing to download.",
+          "**Cost.** If your app needs none of the rows above that say Native build only or Not handled, a PWA is less to maintain. adaptv's web output is itself a PWA, so this is a choice of target, not a rivalry.",
+        ],
+      },
+      { type: "h2", text: "Where to go native" },
+      {
+        type: "p",
+        text: "Go native when you need a row that says Native build only: real haptics, keychain storage, a URL scheme, a place in the App Store. adaptv wraps the same React code in a native shell it owns, so you create no Xcode project, and [Native builds](/docs/native-builds) lists the tools, the signing step and the plugins. If you need background work, Bluetooth, NFC or a Face ID lock, the table says adaptv does not cover them today.",
+      },
+      { type: "h2", text: "What we did not check" },
+      {
+        type: "ul",
+        items: [
+          "The EU. Apple's rules for Home Screen web apps in the EU changed during iOS 17.4, and we could not confirm the current state from an Apple source, so no row depends on it.",
+          "Rows on background work, NFC and USB, file access and Face ID rest partly on 2023 sources.",
+          "iOS 26 now opens every site added to the Home Screen as a web app by default, which narrows the install gap ([WebKit](https://webkit.org/blog/17333/webkit-features-in-safari-26-0/)).",
+          "Sources: [WebKit on Web Push](https://webkit.org/blog/13878/web-push-for-web-apps-on-ios-and-ipados/), [WebKit storage policy](https://webkit.org/blog/14403/updates-to-storage-policy/), [Firtman's iOS PWA notes](https://firt.dev/notes/pwa-ios/) and [MagicBell's guide](https://www.magicbell.com/blog/pwa-ios-limitations-safari-support-complete-guide).",
+        ],
+      },
+    ],
+  },
+  {
     slug: "ios-pwa-safe-area-insets-zero",
     title: "Safe-area insets that read 0 in an iOS PWA, and what to check",
     date: "2026-10-12",
