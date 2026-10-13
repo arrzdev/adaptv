@@ -4,7 +4,8 @@ name: Website
 # https://adaptv.tudu.dev. Production only and public: no staging and no Zero Trust
 # Access (board decision, TUD-86).
 #
-#   · PR touching the site or the framework it links → verify (build, typecheck, lint, test).
+#   · PR touching the site or the framework it links → verify (build, typecheck, lint, test,
+#     the Playwright smoke on chromium).
 #   · Push to main, same paths → verify (debounce first) → deploy to `production`.
 #   · Manual dispatch from main → verify → deploy, no debounce. Any other ref fails.
 #
@@ -135,6 +136,26 @@ jobs:
       - name: Test
         if: steps.tip.outputs.go == 'true'
         run: pnpm --dir website test
+
+      # The Playwright smoke: every docs page and post at phone width, no sideways scroll,
+      # no console error (TUD-953). PRs only: main deploys what a PR already passed. The
+      # config builds its own production output and serves it with `vite preview`.
+      - name: Browser (chromium)
+        if: github.event_name == 'pull_request'
+        run: pnpm --dir website exec playwright install --with-deps chromium
+
+      - name: Test (playwright, chromium)
+        id: e2e
+        if: github.event_name == 'pull_request'
+        run: pnpm --dir website test:e2e --project=chromium
+
+      - name: Playwright traces
+        if: failure() && steps.e2e.outcome == 'failure'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: website-e2e-traces
+          path: website/test-results/
+          retention-days: 7
 
       - name: Keep the build
         if: steps.tip.outputs.go == 'true' && github.event_name != 'pull_request'
