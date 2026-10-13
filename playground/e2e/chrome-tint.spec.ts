@@ -83,13 +83,50 @@ test.describe("the generic hook", () => {
     await control(page, "slow linear · 2s").click()
     await control(page, "→ #0a0a0c").click()
     await page.waitForTimeout(600)
-    const interrupted = await tint(page)
 
+    //Both colours are read on the PAGE's clock, in the frame of the click and the frame
+    //after it. Reading one from the test, waiting, then clicking and reading the other
+    //puts several CDP round trips between the two, and the 2s tween keeps running through
+    //them: on a loaded runner the gap measured the stall (27 against < 24), not the seam.
+    //The capture listener runs before the engine's own click handler, so it sees the colour
+    //the interrupted tween had; the rAF one frame later sees the colour the new one starts at.
+    await control(page, "→ #e60000").evaluate((el, selector) => {
+      const w = window as unknown as {
+        __seam?: { interrupted: string | null; seam?: string | null }
+      }
+      const read = () =>
+        document.querySelector(selector)?.getAttribute("content") ?? null
+      el.addEventListener(
+        "click",
+        () => {
+          const stamp: {
+            interrupted: string | null
+            seam?: string | null
+          } = { interrupted: read() }
+          w.__seam = stamp
+          requestAnimationFrame(() => {
+            stamp.seam = read()
+          })
+        },
+        { capture: true, once: true },
+      )
+    }, META)
     await control(page, "→ #e60000").click()
+    await page.waitForFunction(
+      () =>
+        (window as unknown as { __seam?: { seam?: string | null } }).__seam
+          ?.seam !== undefined,
+    )
+    const { interrupted, seam } = await page.evaluate(
+      () =>
+        (
+          window as unknown as {
+            __seam: { interrupted: string | null; seam: string | null }
+          }
+        ).__seam,
+    )
     //one frame later it must still be next to where it was, not back at a start
     //it never had — the seam is a frame wide
-    await page.waitForTimeout(50)
-    const seam = await tint(page)
     const channel = (hex: string) => Number.parseInt(hex.slice(1, 3), 16)
     expect(
       Math.abs(
