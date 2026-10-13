@@ -41,5 +41,34 @@ for (const viewport of VIEWPORTS) {
         expect(problems).toEqual([])
       })
     }
+
+    //A stale or mistyped link: under a section and at the top level. Every page is
+    //prerendered, so the Worker has no page for these and once answered a raw JSON 500
+    //(TUD-945). The answer is a 404 status with a page a reader can navigate away from.
+    for (const path of ["/docs/nope", "/nope"]) {
+      test(`unknown url (${path}) is a 404 page with the site header`, async ({ page: tab }) => {
+        const problems: string[] = []
+        tab.on("console", (message) => {
+          if (message.type() !== "error") return
+          //the browser logs the document's own 404 status; that one is the point
+          if (message.location().url === tab.url() && message.text().includes("404")) return
+          problems.push(`console: ${message.text()}`)
+        })
+        tab.on("pageerror", (error) => problems.push(`pageerror: ${error.message}`))
+
+        const response = await tab.goto(path)
+        expect(response?.status()).toBe(404)
+        await expect(tab.locator("h1").first()).toBeVisible()
+        await expect(tab.locator("header").getByRole("link", { name: "adaptv on GitHub" })).toBeVisible()
+        await tab.waitForLoadState("networkidle")
+
+        const { scrollWidth, innerWidth } = await tab.evaluate(() => ({
+          scrollWidth: document.documentElement.scrollWidth,
+          innerWidth: window.innerWidth,
+        }))
+        expect(scrollWidth, "horizontal scroll").toBeLessThanOrEqual(innerWidth)
+        expect(problems).toEqual([])
+      })
+    }
   })
 }

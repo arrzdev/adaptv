@@ -1,4 +1,5 @@
 import type { Plugin, PluginOption } from "vite"
+import { esmExternalRequirePlugin } from "vite"
 
 /**
  * The Vite environment the deploy plugin bundles the server into.
@@ -136,7 +137,37 @@ export async function adaptvDeployServerPlugins(
     nitro(
       prerender ? { prerender: PRERENDER } : undefined,
     ) as PluginOption,
+    ssrReactRequireAsImport(),
   ]
+}
+
+/**
+ * The SSR environment's `require("react")` becomes an `import`, so the deploy
+ * server bundles the one React the rest of the server imports.
+ *
+ * A build inlines every `@tanstack/*` package (`tanstack-resolve.ts`), and with
+ * them the CommonJS `use-sync-external-store` shim, whose `require("react")`
+ * names an external. Rolldown writes that as `createRequire(import.meta.url)`,
+ * a call Nitro cannot follow, so the deploy server bundled the module and left
+ * the call. Node then found React in `node_modules` and nobody saw it.
+ *
+ * MEASURED on the `cloudflare_module` preset: workerd has no `node_modules`,
+ * and every page the Worker rendered answered a raw JSON 500 (`No such module
+ * "react"`). A prerendered site only reaches the Worker for a URL with no file,
+ * so the visible symptom was an unknown URL answering 500, not 404 (TUD-945).
+ *
+ * Not the deploy server's own environment: it bundles everything, and an
+ * external React there would be the same missing module.
+ */
+function ssrReactRequireAsImport(): Plugin {
+  return {
+    name: "adaptv:ssr-react-require-as-import",
+    apply: "build",
+    applyToEnvironment: (environment) =>
+      environment.config.consumer === "server" &&
+      environment.name !== DEPLOY_SERVER_ENVIRONMENT &&
+      esmExternalRequirePlugin({ external: [/^react(-dom)?(\/|$)/] }),
+  }
 }
 
 /**
