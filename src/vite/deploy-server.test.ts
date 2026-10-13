@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { nitro } from "nitro/vite"
+import type { Plugin } from "vite"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import {
   adaptvDeployServerPlugins,
@@ -72,8 +73,41 @@ describe("adaptvDeployServerPlugins", () => {
       .map((plugin) => plugin.name)
       .filter(Boolean)
     expect(names.length).toBeGreaterThan(0)
-    //no adaptv-authored wrapper in the chain — the plugins are upstream's own
-    expect(names.some((name) => name?.startsWith("adaptv:"))).toBe(false)
+    //no adaptv-authored wrapper in the chain — the plugins are upstream's own, plus
+    //the one below, which only rewrites React requires in the SSR environment
+    expect(
+      names.filter(
+        (name) =>
+          name?.startsWith("adaptv:") &&
+          name !== "adaptv:ssr-react-require-as-import",
+      ),
+    ).toEqual([])
+  })
+
+  it("turns the ssr environment's require of react into an import", async () => {
+    //TUD-945: the inlined `use-sync-external-store` shim kept `require("react")` as
+    //a `createRequire` call the deploy server cannot bundle. Node found React in
+    //`node_modules`; workerd did not, and every page the Worker rendered was a 500.
+    const plugins = (
+      await adaptvDeployServerPlugins("ssr")
+    ).flat() as Plugin[]
+    const plugin = plugins.find(
+      (p) => p?.name === "adaptv:ssr-react-require-as-import",
+    )
+    expect(plugin?.apply).toBe("build")
+    const applyTo = (name: string, consumer: "server" | "client") =>
+      plugin?.applyToEnvironment?.({
+        name,
+        config: { consumer },
+      } as unknown as Parameters<
+        NonNullable<Plugin["applyToEnvironment"]>
+      >[0])
+    expect(applyTo("ssr", "server")).toMatchObject({
+      name: "builtin:esm-external-require",
+    })
+    //the deploy server bundles React: marking it external there is the bug itself
+    expect(applyTo(DEPLOY_SERVER_ENVIRONMENT, "server")).toBe(false)
+    expect(applyTo("client", "client")).toBe(false)
   })
 })
 

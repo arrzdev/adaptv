@@ -23,6 +23,8 @@ export default defineApp({
   //a document people read: let them zoom it, select it, and see how far down they are
   allowZoom: true,
   ui: { hideScrollbars: "app" },
+  //an unknown URL keeps the site header, so a stale link is not a dead end
+  notFoundScreen: () => import("@/components/not-found-screen"),
   router: {
     routesDirectory: "./routing",
     routerConfig: "./src/routing/config.ts",
