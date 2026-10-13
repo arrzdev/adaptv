@@ -359,8 +359,13 @@ async function expectUnmounted(page: Page, timeout = 4000) {
  * Wait until the open slide's `currentTime` is inside [min, max] ms. The window is the premise:
  * a drag started after the slide ended is drawer-motion's ordinary drag, not this case.
  */
-async function awaitSlideWindow(page: Page, min: number, max: number) {
-  const deadline = Date.now() + 2000
+async function awaitSlideWindow(
+  page: Page,
+  min: number,
+  max: number,
+  timeoutMs = 2000,
+) {
+  const deadline = Date.now() + timeoutMs
   let last: number | null = null
   while (Date.now() < deadline) {
     const state = await readPanel(page)
@@ -370,7 +375,7 @@ async function awaitSlideWindow(page: Page, min: number, max: number) {
       if (at >= min && at <= max) return at
       if (at > max) {
         throw new Error(
-          `missed the slide window [${min}, ${max}]ms — first read inside it was ${at}ms`,
+          `missed the slide window [${min}, ${max}]ms — first read inside it was ${at}ms (slowed ${await page.evaluate(() => (window as unknown as Record<string, unknown>).__slideWrapped)}x)`,
         )
       }
     }
@@ -655,20 +660,62 @@ test.describe("2b · a drag started during the open slide, from the handle", () 
 
     test("handle mouse drag: the sheet must track the pointer, not the curve", async ({
       page,
-      context,
-      browserName,
     }) => {
+      //The window is read across round trips, and on a loaded runner one round trip outlasts an
+      //80ms slide. Run the open slide at a tenth of the speed so the window is wide enough
+      //to hit, on every engine. The slide is a CSS `@keyframes` animation, so there is no
+      //`element.animate()` call to wrap: its `playbackRate` is lowered as the sheet mounts
+      //(`currentTime` stays animation time, so the window is unchanged). The slide is still the
+      //real running animation, and the drawer's takeover still cancels it at pointerdown.
+      //The same script records, in the capture phase, whether the press landed on the handle.
+      await page.addInitScript(
+        ([selector]) => {
+          const w = window as unknown as Record<string, unknown>
+          w.__slideRate = 0.1
+          w.__slideWrapped = 0
+          const slowed = new WeakSet<Animation>()
+          const slow = () => {
+            for (const animation of document.getAnimations()) {
+              if (
+                animation instanceof CSSAnimation &&
+                animation.animationName === "pwa-drawer-slide" &&
+                !slowed.has(animation)
+              ) {
+                slowed.add(animation)
+                animation.playbackRate = w.__slideRate as number
+                w.__slideWrapped = (w.__slideWrapped as number) + 1
+              }
+            }
+          }
+          //A mutation observer runs as a microtask after the sheet mounts, before the first
+          //frame has advanced the slide; `animationstart` is the backstop for a slide that
+          //starts later, and arrives a few frames in.
+          new MutationObserver(slow).observe(document, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+          })
+          document.addEventListener("animationstart", slow, true)
+          document.addEventListener(
+            "pointerdown",
+            (event) => {
+              const target = event.target as Element | null
+              w.__press = {
+                onHandle: !!target?.closest?.(selector as string),
+                at: event.timeStamp,
+                x: event.clientX,
+                y: event.clientY,
+              }
+            },
+            true,
+          )
+        },
+        [HANDLE],
+      )
       await gotoLab(page)
-      //The window is read across CDP round trips, and on a loaded runner one round trip
-      //outlasts an 80ms slide. Run the page's animations at a tenth of the speed so the window
-      //is wide enough to hit; the slide is still the real, running animation.
-      if (browserName === "chromium") {
-        const cdp = await context.newCDPSession(page)
-        await cdp.send("Animation.enable")
-        await cdp.send("Animation.setPlaybackRate", { playbackRate: 0.1 })
-      }
       await labButton(page, OPEN_BASIC).click()
-      const at = await awaitSlideWindow(page, 60, 140)
+      //slowed to a tenth, the window is 800ms of wall clock and a loaded webkit reads slowly
+      const at = await awaitSlideWindow(page, 60, 140, 5000)
 
       //The handle moves while the sheet slides, so a point read from its box is stale by the
       //time the press lands (each CDP call is a round trip, and a loaded runner stretches
@@ -702,6 +749,18 @@ test.describe("2b · a drag started during the open slide, from the handle", () 
       }
       await page.mouse.down()
       const dragging = (await readOverlay(page))?.dragging ?? ""
+      const press = await page.evaluate(
+        () =>
+          (window as unknown as Record<string, unknown>).__press as
+            | { onHandle: boolean; at: number; x: number; y: number }
+            | undefined,
+      )
+      const wrapped = await page.evaluate(
+        () =>
+          (window as unknown as Record<string, unknown>)
+            .__slideWrapped as number,
+      )
+      const handleBox = await page.locator(HANDLE).boundingBox()
       const samples: number[] = []
       const slides: string[] = []
       for (let step = 1; step <= STEPS; step += 1) {
@@ -717,9 +776,20 @@ test.describe("2b · a drag started during the open slide, from the handle", () 
       await page.waitForTimeout(50)
       const laterAfterUp = (await readTranslateY(page)) ?? Number.NaN
 
+      //Two different premises: a press that missed the handle is the test's miss; a press that
+      //hit the handle and was not claimed is the drawer's.
+      const where = `press at (${press?.x.toFixed(0)}, ${press?.y.toFixed(0)}), handle box now ${
+        handleBox
+          ? `${handleBox.x.toFixed(0)},${handleBox.y.toFixed(0)} ${handleBox.width.toFixed(0)}x${handleBox.height.toFixed(0)}`
+          : "gone"
+      }, slide slowed ${wrapped}x`
+      expect(
+        press?.onHandle,
+        `premise: the press landed on the handle — ${where}`,
+      ).toBe(true)
       expect(
         dragging,
-        "premise: the handle claimed the drag at pointerdown",
+        `the handle got the press but did not claim the drag — ${where}`,
       ).toBe("true")
       //the handle path commits at pointerdown, so every move is finger travel
       const verdict = judgeFollowing(
