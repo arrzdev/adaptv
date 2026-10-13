@@ -292,10 +292,13 @@ test.describe("press visual vs. a scroll that starts on a control", () => {
           }
         ).__press,
     )
+    //the engine times the floor with `Date.now()`, whole milliseconds, so on this
+    //sub-millisecond clock a held floor can measure 149.x. That is clock resolution,
+    //not a shorter floor: a dropped floor measures tens of ms.
     expect(
-      cleared - (shown as number),
+      cleared - shown,
       "the press was cleared before the 150ms minimum-duration floor ran out",
-    ).toBeGreaterThanOrEqual(150)
+    ).toBeGreaterThan(149)
   })
 
   test("a drag the browser claims as a scroll never activates the button", async ({
