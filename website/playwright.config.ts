@@ -21,8 +21,12 @@ export default defineConfig({
   workers: 1,
   reporter: [["list"]],
   use: { baseURL, trace: "retain-on-failure" },
-  //chromium only: WebKit and Firefox are out of scope for this smoke
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  //chromium runs everything; WebKit runs only the tests tagged @webkit (layout that Safari
+  //may draw differently, TUD-866). Firefox is out of scope for this smoke.
+  projects: [
+    { name: "chromium", use: { ...devices["Desktop Chrome"] } },
+    { name: "webkit", grep: /@webkit/, use: { ...devices["Desktop Safari"] } },
+  ],
   webServer: process.env.E2E_BASE_URL
     ? undefined
     : {
