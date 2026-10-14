@@ -2,6 +2,7 @@ import { createFileRoute } from "adaptv/router"
 import { FinalCta } from "@/components/sections/closing"
 import { ComponentsBento } from "@/components/sections/components-bento"
 import { Hero } from "@/components/sections/hero"
+import { HowItCompares } from "@/components/sections/how-it-compares"
 import { Targets } from "@/components/sections/targets"
 import { WhyAdaptv } from "@/components/sections/why-adaptv"
 import { SitePage } from "@/components/site-page"
@@ -30,6 +31,7 @@ function HomePage() {
       <Targets />
       <ComponentsBento />
       <WhyAdaptv />
+      <HowItCompares />
       <FinalCta />
     </SitePage>
   )
