@@ -6,9 +6,11 @@ import { Wordmark } from "@/components/logo"
 import { GITHUB_URL } from "@/content/site"
 import { cn } from "@/utils/cn"
 
+//each link is as wide as it is in Geist, in any font: the group is right-aligned, so a link
+//that changed width when Geist swapped in moved the whole group (a layout shift)
 const NAV = [
-  { to: "/docs", label: "Docs" },
-  { to: "/blog", label: "Blog" },
+  { to: "/docs", label: "Docs", width: "w-[58px]" },
+  { to: "/blog", label: "Blog", width: "w-[55px]" },
 ] as const
 
 /**
@@ -24,7 +26,12 @@ export function SitePage({
   className?: string
 }) {
   return (
-    <ScrollView showsVerticalScrollIndicator className="bg-background">
+    // the gutter is held from the first paint: the HTML paints in chunks, and a scrollbar
+    // that appeared once the content outgrew the screen narrowed the page (a layout shift)
+    <ScrollView
+      showsVerticalScrollIndicator
+      className="bg-background [scrollbar-gutter:stable]"
+    >
       <SiteHeader />
       <View className={cn("w-full", className)}>{children}</View>
       <SiteFooter />
@@ -45,12 +52,18 @@ function SiteHeader() {
         <Link to="/" className="flex h-11 items-center text-foreground">
           <Wordmark />
         </Link>
+        {/* every item has a fixed width (the links below, the 44 px icon buttons), so
+            the right-aligned group is as wide from the first paint as after the fonts
+            and icons arrive, and does not move */}
         <View row className="items-center sm:gap-1">
           {NAV.map((item) => (
             <Link
               key={item.to}
               to={item.to}
-              className="flex h-11 items-center rounded-full px-2 font-medium text-[14px] text-subtle sm:px-3 hover:bg-sunken hover:text-foreground"
+              className={cn(
+                "flex h-11 items-center justify-center rounded-full font-medium text-[14px] text-subtle hover:bg-sunken hover:text-foreground",
+                item.width,
+              )}
             >
               {item.label}
             </Link>

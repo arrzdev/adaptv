@@ -68,9 +68,13 @@ function Card({
 }) {
   return (
     <View className="gap-0.5 rounded-xl border border-border bg-surface px-4 py-3">
+      {/* the note sits left-aligned after a fixed edge, in a box as wide as it is in Geist:
+          right-aligned, it moved when the web font swapped in */}
       <View row className="justify-between text-[12px] text-muted">
         <span>{label}</span>
-        {note ? <span>{note}</span> : null}
+        {note ? (
+          <span className="w-[56px] shrink-0 whitespace-nowrap">{note}</span>
+        ) : null}
       </View>
       <span className="font-semibold text-[20px] tracking-[-0.02em]">
         {value}
@@ -142,7 +146,7 @@ export function TallyDesktop({ className }: { className?: string }) {
               <Card label="Left" value={usd(LEFT)} />
             </div>
 
-            <div className="grid grid-cols-[1.15fr_1fr] gap-3">
+            <div className="grid grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] gap-3">
               <View className="gap-2 rounded-xl border border-border bg-surface px-4 py-3">
                 <span className="font-medium text-[13px]">Daily spending</span>
                 <View
@@ -172,9 +176,9 @@ export function TallyDesktop({ className }: { className?: string }) {
                     )
                   })}
                 </View>
-                <View row className="justify-between text-[11px] text-muted">
-                  <span>Oct 1</span>
-                  <span>Oct 14</span>
+                <View row className="text-[11px] text-muted">
+                  <span className="flex-1">Oct 1</span>
+                  <span className="flex-1 text-right">Oct 14</span>
                 </View>
               </View>
 
@@ -182,9 +186,9 @@ export function TallyDesktop({ className }: { className?: string }) {
                 <span className="font-medium text-[13px]">Budgets</span>
                 {BUDGETS.map((budget) => (
                   <View key={budget.name} className="gap-0.5">
-                    <View row className="justify-between text-[12px]">
-                      <span>{budget.name}</span>
-                      <span className="text-muted">
+                    <View row className="text-[12px]">
+                      <span className="flex-1">{budget.name}</span>
+                      <span className="flex-1 text-right text-muted">
                         {`${usd(budget.spent)} of ${usd(budget.limit)}`}
                       </span>
                     </View>
@@ -196,7 +200,15 @@ export function TallyDesktop({ className }: { className?: string }) {
 
             <View className="rounded-xl border border-border bg-surface px-4 py-2.5">
               <span className="pb-0.5 font-medium text-[13px]">Recent</span>
-              <table className="w-full text-[12px]">
+              {/* fixed columns, as wide as Geist lays them out: auto widths follow the
+                  font, and the swap moved every cell */}
+              <table className="w-full table-fixed text-[12px]">
+                <colgroup>
+                  <col className="w-[207.56px]" />
+                  <col className="w-[221.78px]" />
+                  <col className="w-[105.2px]" />
+                  <col className="w-[173.45px]" />
+                </colgroup>
                 <thead className="text-left text-muted">
                   <tr>
                     <th className="py-[2px] font-normal">Merchant</th>

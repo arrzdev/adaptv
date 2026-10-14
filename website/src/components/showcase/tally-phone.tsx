@@ -60,7 +60,9 @@ export function TallyPhone({ className }: { className?: string }) {
               className="h-[54px] items-center justify-between px-[38px] pt-[6px] font-semibold text-[17px]"
             >
               <span>9:41</span>
-              <View row className="items-center gap-1.5">
+              {/* as wide as its three icons from the start: the HTML can paint before the
+                  last ones are parsed, and a right-aligned group that grew moved left */}
+              <View row className="w-[72px] items-center gap-1.5">
                 <Signal className="size-[18px]" strokeWidth={2.5} />
                 <Wifi className="size-[18px]" strokeWidth={2.5} />
                 <BatteryFull className="size-[24px]" strokeWidth={2} />
