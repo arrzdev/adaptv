@@ -271,10 +271,12 @@ export function useCaretRepaint({
     //scroll and viewport events are the reactive half of the patch: they say something is moving
     //without saying whether the FIELD has moved yet. Arm the poll's tail so the frames right
     //after the event are watched, then let it fall quiet again if nothing came of it.
+    //No rect read HERE: a forced layout inside a scroll event, flushing a pending mask on the
+    //scroller (the drawer's edge fade), turns WebKit's scroll anchoring off for that scroller for
+    //good. The frame asked for here runs in the same rendering update, before paint.
     function handleViewportMovement() {
       if (!fieldIsLive()) return
       watchFrames = CARET_WATCH_TAIL_FRAMES
-      pump()
       startWatching()
     }
 

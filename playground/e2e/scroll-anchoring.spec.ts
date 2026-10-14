@@ -33,11 +33,13 @@ import { awaitClientHandover } from "./support/hydrated"
  * `webkit-one-frame-scroll` annotation and skips only the premise check. What webkit
  * always checks is the at-rest half, the control, the landing comparison and the
  * clearance. Chromium asserts the premise on every run. The drawer on webkit is fixme:
- * there its scroller stops anchoring after a smooth scroll from the top, in most runs
- * and for good, and the cause is not pinned yet. It needs no adaptv scroll call (one
- * page-driven smooth `scrollBy` with no keyboard does it) but does need the drawer's
- * scroll-edge fade writing a style during that scroll; a plain page does not reproduce
- * it. See docs/design/behaviors.md for the numbers.
+ * its smooth scroll arrives in one frame, so the insertion lands after the drawer's last
+ * aim, and the control, with no anchoring to absorb it, lands at clearance -88. Its
+ * scroller used to stop anchoring for good as well: WebKit drops anchoring on a scroller
+ * when a forced layout inside a scroll event flushes a pending mask (or opacity, or
+ * filter) change on it, and the caret patch's rect read in its scroll listener flushed
+ * the drawer's edge-fade mask. That read now waits for the patch's frame. See
+ * docs/design/behaviors.md for the numbers.
  *
  * Each test pins both halves, and asserts that the control really did turn anchoring
  * off (its at-rest scrollTop must not move), so a control that silently fails to apply
@@ -313,7 +315,7 @@ for (const [name, surface] of [
   }, testInfo) => {
     test.fixme(
       name === "drawer" && testInfo.project.name.includes("webkit"),
-      "drawer on webkit: the scroller stops anchoring after a smooth scroll from the top, cause not pinned (docs/design/behaviors.md)",
+      "drawer on webkit: its smooth scroll arrives in one frame, the insertion lands after its last aim, and the control without anchoring lands at clearance -88 (docs/design/behaviors.md)",
     )
     const runs: Record<Anchor, Run> = {} as Record<Anchor, Run>
     for (const anchor of ["none", "shipped"] as const) {
