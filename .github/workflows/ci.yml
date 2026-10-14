@@ -38,6 +38,16 @@ jobs:
         with:
           fetch-depth: 0 # migration safety and affected tests diff against the base
 
+      # Every commit of the PR is the founder's account, with no co-author,
+      # sign-off or generated-by line (the PR body becomes the squash message).
+      # Runs in every mode: a docs-only PR merges commits too.
+      - name: Commit identity
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: bash .github/scripts/checks/commit-identity.sh "$BASE" "$HEAD_SHA"
+
       - name: Choose gate mode
         id: mode
         env:
