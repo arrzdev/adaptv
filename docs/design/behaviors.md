@@ -182,14 +182,31 @@ Rule of thumb: `app:` styles apply to **installed** (standalone **or** native); 
     The drawer re-aims 420ms after the raise and AvoidKeyboard when the keyboard raise lands, which
     is why the spec's mid-scroll insertion lands clear. AvoidKeyboard now also takes one more look
     when each of its smooth scrolls ends (see *`AvoidKeyboard` looks twice* above), so a change during
-    its last scroll is corrected too. The drawer still has the gap after its 420ms re-aim: a change
-    after that is not corrected. Inserted at 450ms, it leaves the field `clearance
-    -88` (`scrollTop` 871) on chromium with anchoring on or off, because its slower smooth scroll is
-    still travelling and overwrites the adjustment; on webkit the scroll has already stopped, so
-    anchoring keeps the field 12px clear (971), and only the control lands at -88. AvoidKeyboard
-    with the keyboard already up (a field switch, which fires no keyboard event) used to land
-    `clearance -76` on both engines, anchoring on or off; its look at the end of the scroll now
-    lands it at its 24px buffer.
+    its last scroll is corrected too. The drawer had the gap after its 420ms re-aim: inserted at
+    450ms, a change left the field `clearance -88` (`scrollTop` 871) on chromium with anchoring on
+    or off, because its slower smooth scroll was still travelling and overwrote the adjustment. On a
+    loaded WebKit both of its aims ran before the smooth scroll had moved at all (aims at 0 and
+    330ms, first `scroll` event at 840ms), so the 420ms re-aim corrected nothing there either. The
+    drawer now takes the same one look when each of its smooth scrolls ends
+    (`onProgrammaticScrollSettled`), and waits up to 1s for that scroll to start rather than the
+    caret's 120ms, which settled before the late WebKit scroll had begun. AvoidKeyboard with the
+    keyboard already up (a field switch, which fires no keyboard event) used to land `clearance -76`
+    on both engines, anchoring on or off; its look at the end of the scroll now lands it at its 24px
+    buffer.
+  - **Open (2026-10-14): the drawer's scroller stops anchoring on Playwright WebKit after a smooth
+    scroll from the top.** Measured on Playwright 1.61.1's WebKit (26.5) on the agent VM: after one
+    smooth scroll of the drawer's scroller from `scrollTop` 0, a 100px insertion above the field is
+    not anchored, then or at any later rest, in most runs (dead in 7 of 8 and 4 of 6 runs that
+    landed at 871). Once dead, nothing tried revives it: a blur, an instant scroll, dropping the
+    mask or the transition. adaptv's own scroll calls are not needed: with `scrollTo` stubbed out
+    and no keyboard raised, one `scrollBy({behavior: "smooth"})` from the page does it. What it
+    does need is a style write on the scroller (or its parent) during that scroll: with the
+    drawer's scroll-edge fade handler blocked, so the mask never gains its top fade, anchoring held
+    in every run (28 of 28). Moving the fade's mask write out of React state, onto the node, did
+    not help (dead 7 of 7). The same sequence on plain pages did not reproduce in any of about 150
+    runs (a smooth scroll that lands in one frame, an edge-fade mask flipped in the scroll event or
+    a task later, the drawer's flex, `contain: content` and fixed, transformed panel). So the cause
+    is not pinned to WebKit with a repro yet, and the spec keeps the drawer on webkit as `fixme`.
 - **Test (iOS, target 2):** `xcrun simctl openurl booted "http://localhost:<port>/lab/drawer-keyboard"`,
   tap *Open drawer*, screenshot. **(Android, target 3):** `adb reverse tcp:<port> tcp:<port>` then
   `adb shell am start -a android.intent.action.VIEW -d "http://localhost:<port>/lab/drawer-keyboard"`.

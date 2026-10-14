@@ -1,5 +1,6 @@
 import type { RefObject } from "react"
 import { useEffect, useRef } from "react"
+import { onProgrammaticScrollSettled } from "#adaptv/components/avoid-keyboard/use-keyboard-avoidance"
 import { DRAWER_TRANSITIONS } from "#adaptv/components/drawer/drawer-constants"
 import { preMuteCaret } from "#adaptv/hooks/use-caret-repaint"
 import {
@@ -253,12 +254,12 @@ export function clearDrawerKeyboardRoom(contentEl: HTMLElement) {
  * avoiding an obstacle, just obeying an instruction to put the field at the top.
  *
  * Scroll only when the field is actually outside the comfortable window, and then by the smallest
- * amount that fixes it.
+ * amount that fixes it. Returns whether it started a scroll.
  */
 export function scrollDrawerInputIntoView(
   scroller: HTMLElement,
   focusedElement: HTMLElement,
-) {
+): boolean {
   const MARGIN = 12
   const inputRect = focusedElement.getBoundingClientRect()
   const scrollerRect = scroller.getBoundingClientRect()
@@ -271,7 +272,7 @@ export function scrollDrawerInputIntoView(
 
   const above = inputTop < viewTop + MARGIN
   const below = inputBottom > viewBottom - MARGIN
-  if (!above && !below) return
+  if (!above && !below) return false
 
   //nudge to whichever edge it fell off, never further
   const target = above
@@ -281,14 +282,18 @@ export function scrollDrawerInputIntoView(
     0,
     Math.min(target, scroller.scrollHeight - scroller.clientHeight),
   )
-  if (Math.abs(clamped - scroller.scrollTop) < 1) return
+  if (Math.abs(clamped - scroller.scrollTop) < 1) return false
 
   //mute the caret before the smooth scroll's first frame. A pre-mute rather than a bracket:
   //a smooth scroll never says when it stopped, so the quiet window has to decide — its own
   //scroll events keep the caret muted until the movement settles.
   preMuteCaret()
   scroller.scrollTo({ top: clamped, behavior: "smooth" })
+  return true
 }
+
+/** How long the look at the end of the drawer's smooth scroll waits for that scroll to start. */
+const SCROLL_START_WAIT_MS = 1000
 
 type UseDrawerKeyboardAvoidanceOptions = {
   containerRef: RefObject<HTMLElement | null>
@@ -367,19 +372,44 @@ export function useDrawerKeyboardAvoidance({
     // finished resizing. The first pass aims at geometry that is still moving — the box grows for
     // the length of the transition — so on its own it lands the field a little too high and the
     // sheet's edge clips it.
-    const frame = requestAnimationFrame(() => {
-      scrollDrawerInputIntoView(scroller, focused)
-    })
+    //
+    // And once more when a smooth scroll either of them started ends. Both pick an absolute
+    // scrollTop from the frame they ran in, and both can run before the scroll has moved at all:
+    // WebKit on a loaded machine starts it after the 420ms timer (measured: aims at 0ms and 330ms,
+    // first scroll event at 840ms). Content that lands above the field after that moves the field
+    // and not the destination, so the scroll arrives where the field used to be and leaves it under
+    // the keyboard (clearance -88 for a 100px insertion). The look at the end aims from what is on
+    // screen then. Once: it arms nothing itself, or a list that keeps growing would chain aims. The
+    // aim only scrolls when the target moved by a pixel or more, so a scroll is coming, and the look
+    // waits up to SCROLL_START_WAIT_MS for it to start rather than the caret's 120ms.
+    let cancelLook = () => {}
+    function aim() {
+      if (!scroller || !(focused instanceof HTMLElement)) return
+      const field = focused
+      if (!scrollDrawerInputIntoView(scroller, field)) return
+      cancelLook()
+      cancelLook = onProgrammaticScrollSettled(
+        scroller,
+        () => {
+          cancelLook = () => {}
+          if (document.activeElement === field) {
+            scrollDrawerInputIntoView(scroller, field)
+          }
+        },
+        { startWithinMs: SCROLL_START_WAIT_MS },
+      )
+    }
+
+    const frame = requestAnimationFrame(aim)
     const settled = setTimeout(
-      () => {
-        scrollDrawerInputIntoView(scroller, focused)
-      },
+      aim,
       DRAWER_TRANSITIONS.DURATION * 1000 + 40,
     )
 
     return () => {
       cancelAnimationFrame(frame)
       clearTimeout(settled)
+      cancelLook()
     }
   }, [containerRef, isEnabled, keyboard.isOpen, scrollerRef])
 
