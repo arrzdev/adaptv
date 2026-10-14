@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from "vitest"
+import { act, renderHook } from "@testing-library/react"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { DRAWER_CONTENT_MAX_HEIGHT_VAR } from "#adaptv/components/drawer/drawer-engine"
 import {
   readDrawerStylesheetCap,
@@ -7,6 +8,7 @@ import {
   scrollDrawerInputIntoView,
   shouldPrimeKeyboardFloor,
   unpaidKeyboardHeight,
+  useDrawerKeyboardAvoidance,
   viewportShrinksUnderKeyboard,
 } from "#adaptv/components/drawer/drawer-keyboard"
 import { compileAdaptvStyles } from "#adaptv/styles/compile.test-helper"
@@ -530,5 +532,169 @@ describe("scrollDrawerInputIntoView", () => {
     scrollDrawerInputIntoView(scroller, field)
 
     expect(scroller.scrollTo).not.toHaveBeenCalled()
+  })
+})
+
+/*
+ * One more look when the drawer's own smooth scroll ends.
+ *
+ * The drawer aims twice, on the next frame and 420ms later, from the geometry of the frame each
+ * runs in. On a loaded WebKit both ran before the smooth scroll had moved at all (first scroll
+ * event 840ms after the first aim), so a row that landed above the field after that moved the field
+ * and not the destination: the scroll arrived where the field used to be and left it under the
+ * keyboard. Same rig shape as above: a 300px window over 2000px, the field 40px tall at
+ * `fieldOffset` px down the content. `scrollTo` only records; a test moves `scrollTop` and fires
+ * `scroll`/`scrollend` where a real smooth scroll would. A field at 500 is aimed at 252
+ * (540 - 300 + 12); 100px inserted above it needs 352.
+ */
+function rigDrawerAvoidance() {
+  const container = document.createElement("div")
+  const scroller = document.createElement("div")
+  const field = document.createElement("input")
+  field.type = "text"
+  scroller.append(field)
+  container.append(scroller)
+  document.body.append(container)
+
+  const state = { scrollTop: 0, fieldOffset: 500 }
+  const aims: number[] = []
+  Object.defineProperty(scroller, "scrollTop", {
+    configurable: true,
+    get: () => state.scrollTop,
+    set: (value: number) => {
+      state.scrollTop = value
+    },
+  })
+  Object.defineProperty(scroller, "clientHeight", { value: CLIENT_H })
+  Object.defineProperty(scroller, "scrollHeight", { value: 2000 })
+  scroller.getBoundingClientRect = () =>
+    ({ top: VIEW_TOP, height: CLIENT_H }) as DOMRect
+  field.getBoundingClientRect = () =>
+    ({
+      top: VIEW_TOP + state.fieldOffset - state.scrollTop,
+      height: 40,
+    }) as DOMRect
+  scroller.scrollTo = ((options: ScrollToOptions) => {
+    aims.push(options.top ?? 0)
+  }) as typeof scroller.scrollTo
+
+  field.focus()
+  const hook = renderHook(() =>
+    useDrawerKeyboardAvoidance({
+      containerRef: { current: container },
+      scrollerRef: { current: scroller },
+      isEnabled: true,
+      onWillOpenKeyboard: () => {},
+    }),
+  )
+
+  return {
+    field,
+    state,
+    aims,
+    unmount: () => hook.unmount(),
+    advance(ms: number) {
+      act(() => {
+        vi.advanceTimersByTime(ms)
+      })
+    },
+    /** the smooth scroll moving: scrollTop changes and a `scroll` event fires */
+    scrollTo(top: number) {
+      state.scrollTop = top
+      act(() => {
+        scroller.dispatchEvent(new Event("scroll"))
+      })
+    },
+    insertAbove(px: number) {
+      state.fieldOffset += px
+    },
+    scrollEnd() {
+      act(() => {
+        scroller.dispatchEvent(new Event("scrollend"))
+      })
+    },
+  }
+}
+
+describe("useDrawerKeyboardAvoidance — a look when its smooth scroll ends", () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) =>
+      setTimeout(() => cb(performance.now()), 16),
+    )
+    vi.stubGlobal("cancelAnimationFrame", (id: number) => clearTimeout(id))
+    //the keyboard seam, already up when the hook mounts, as it is for an autofocused field
+    ;(
+      window as unknown as { __adaptvKeyboardMock?: unknown }
+    ).__adaptvKeyboardMock = { isOpen: true, height: 338 }
+    ;(window as unknown as { onscrollend: unknown }).onscrollend = null
+  })
+
+  afterEach(() => {
+    delete (window as unknown as { onscrollend?: unknown }).onscrollend
+    delete (window as unknown as { __adaptvKeyboardMock?: unknown })
+      .__adaptvKeyboardMock
+    vi.unstubAllGlobals()
+    vi.useRealTimers()
+    document.body.replaceChildren()
+  })
+
+  it("aims again from fresh geometry when a row lands above the field before the scroll moved", () => {
+    const rig = rigDrawerAvoidance()
+    rig.advance(16)
+    rig.advance(420)
+    expect(rig.aims, "both aims ran before the scroll moved").toEqual([
+      252, 252,
+    ])
+
+    rig.scrollTo(252)
+    rig.insertAbove(100)
+    rig.scrollEnd()
+
+    expect(rig.aims).toEqual([252, 252, 352])
+  })
+
+  it("waits for a scroll that starts late instead of spending the look on the caret's 120ms", () => {
+    const rig = rigDrawerAvoidance()
+    rig.advance(16 + 420)
+    //the smooth scroll has not started 400ms after the second aim
+    rig.advance(400)
+    expect(rig.aims).toEqual([252, 252])
+
+    rig.scrollTo(252)
+    rig.insertAbove(100)
+    rig.scrollEnd()
+
+    expect(rig.aims).toEqual([252, 252, 352])
+  })
+
+  it("does not aim again when the scroll landed the field clear", () => {
+    const rig = rigDrawerAvoidance()
+    rig.advance(16 + 420)
+    rig.scrollTo(252)
+    rig.scrollEnd()
+    expect(rig.aims).toEqual([252, 252])
+  })
+
+  it("looks once: a later scroll end aims nothing", () => {
+    const rig = rigDrawerAvoidance()
+    rig.advance(16 + 420)
+    rig.scrollTo(252)
+    rig.insertAbove(100)
+    rig.scrollEnd()
+    rig.scrollTo(352)
+    rig.insertAbove(100)
+    rig.scrollEnd()
+    expect(rig.aims).toEqual([252, 252, 352])
+  })
+
+  it("aims nothing at the end once the field has lost focus", () => {
+    const rig = rigDrawerAvoidance()
+    rig.advance(16 + 420)
+    rig.scrollTo(252)
+    rig.insertAbove(100)
+    rig.field.blur()
+    rig.scrollEnd()
+    expect(rig.aims).toEqual([252, 252])
   })
 })

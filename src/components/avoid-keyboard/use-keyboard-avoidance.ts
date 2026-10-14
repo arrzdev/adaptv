@@ -230,12 +230,18 @@ const USER_SCROLL_INTENT_EVENTS = [
  * out by every `scroll`. That fallback can mistake a stall for the end; a caller that re-aims
  * from fresh geometry then aims at the destination the scroll was already heading for.
  *
+ * `startWithinMs` widens the first of those windows for a caller that knows its scroll will move
+ * (it only aims when the target differs from where the scroller is): WebKit on a loaded machine
+ * has fired the first `scroll` 840ms after the aim, and a {@link CARET_SETTLE_MS} window settles
+ * long before that, spending the second look on a scroll that has not moved yet.
+ *
  * Nothing here is keyboard-specific: any surface that aims a smooth scroll and wants a second
  * look at where it landed can take it.
  */
 export function onProgrammaticScrollSettled(
   scroller: HTMLElement,
   onSettle: () => void,
+  { startWithinMs = CARET_SETTLE_MS }: { startWithinMs?: number } = {},
 ): () => void {
   const intent = { capture: true, passive: true } as const
   const hasScrollEnd = "onscrollend" in window
@@ -259,9 +265,9 @@ export function onProgrammaticScrollSettled(
     onSettle()
   }
 
-  function restartQuietWindow() {
+  function restartQuietWindow(ms = CARET_SETTLE_MS) {
     if (timer !== null) clearTimeout(timer)
-    timer = setTimeout(settle, CARET_SETTLE_MS)
+    timer = setTimeout(settle, ms)
   }
 
   function handleScroll() {
@@ -280,7 +286,7 @@ export function onProgrammaticScrollSettled(
   }
   if (hasScrollEnd) scroller.addEventListener("scrollend", settle)
   scroller.addEventListener("scroll", handleScroll, { passive: true })
-  restartQuietWindow()
+  restartQuietWindow(startWithinMs)
   return cancel
 }
 

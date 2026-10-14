@@ -33,8 +33,11 @@ import { awaitClientHandover } from "./support/hydrated"
  * `webkit-one-frame-scroll` annotation and skips only the premise check. What webkit
  * always checks is the at-rest half, the control, the landing comparison and the
  * clearance. Chromium asserts the premise on every run. The drawer on webkit is fixme:
- * there the field can land under the keyboard and at-rest anchoring is lost after
- * adaptv's smooth scroll.
+ * there its scroller stops anchoring after a smooth scroll from the top, in most runs
+ * and for good, and the cause is not pinned yet. It needs no adaptv scroll call (one
+ * page-driven smooth `scrollBy` with no keyboard does it) but does need the drawer's
+ * scroll-edge fade writing a style during that scroll; a plain page does not reproduce
+ * it. See docs/design/behaviors.md for the numbers.
  *
  * Each test pins both halves, and asserts that the control really did turn anchoring
  * off (its at-rest scrollTop must not move), so a control that silently fails to apply
@@ -49,10 +52,9 @@ import { awaitClientHandover } from "./support/hydrated"
  *
  * Both surfaces aim again after the change, which is why they land clear: the drawer
  * re-aims 420ms after the raise, and AvoidKeyboard re-aims when the keyboard raise
- * lands 250ms after the focus. AvoidKeyboard also takes one more look when each of
- * its smooth scrolls ends; the drawer does not re-aim after its 420ms, so a change
- * above its field later on is not corrected — see docs/design/behaviors.md for the
- * numbers; that is the drawer aiming once, not anchoring, and not asserted here.
+ * lands 250ms after the focus. Both also take one more look when each of their smooth
+ * scrolls ends. On a loaded WebKit the drawer's two aims both ran before its smooth
+ * scroll had moved, so without that look the control landed at clearance -88.
  *
  * Rows are added below the field too, so the aimed landing is not the end of the
  * scroller: there the browser's clamp absorbed a doubled scroll and the check passed.
@@ -311,7 +313,7 @@ for (const [name, surface] of [
   }, testInfo) => {
     test.fixme(
       name === "drawer" && testInfo.project.name.includes("webkit"),
-      "drawer on webkit: the field lands under the keyboard and at-rest anchoring is lost after adaptv's smooth scroll",
+      "drawer on webkit: the scroller stops anchoring after a smooth scroll from the top, cause not pinned (docs/design/behaviors.md)",
     )
     const runs: Record<Anchor, Run> = {} as Record<Anchor, Run>
     for (const anchor of ["none", "shipped"] as const) {
