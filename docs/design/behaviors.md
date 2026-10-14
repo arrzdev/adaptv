@@ -193,20 +193,31 @@ Rule of thumb: `app:` styles apply to **installed** (standalone **or** native); 
     keyboard already up (a field switch, which fires no keyboard event) used to land `clearance -76`
     on both engines, anchoring on or off; its look at the end of the scroll now lands it at its 24px
     buffer.
-  - **Open (2026-10-14): the drawer's scroller stops anchoring on Playwright WebKit after a smooth
-    scroll from the top.** Measured on Playwright 1.61.1's WebKit (26.5) on the agent VM: after one
-    smooth scroll of the drawer's scroller from `scrollTop` 0, a 100px insertion above the field is
-    not anchored, then or at any later rest, in most runs (dead in 7 of 8 and 4 of 6 runs that
-    landed at 871). Once dead, nothing tried revives it: a blur, an instant scroll, dropping the
-    mask or the transition. adaptv's own scroll calls are not needed: with `scrollTo` stubbed out
-    and no keyboard raised, one `scrollBy({behavior: "smooth"})` from the page does it. What it
-    does need is a style write on the scroller (or its parent) during that scroll: with the
-    drawer's scroll-edge fade handler blocked, so the mask never gains its top fade, anchoring held
-    in every run (28 of 28). Moving the fade's mask write out of React state, onto the node, did
-    not help (dead 7 of 7). The same sequence on plain pages did not reproduce in any of about 150
-    runs (a smooth scroll that lands in one frame, an edge-fade mask flipped in the scroll event or
-    a task later, the drawer's flex, `contain: content` and fixed, transformed panel). So the cause
-    is not pinned to WebKit with a repro yet, and the spec keeps the drawer on webkit as `fixme`.
+  - **Fixed (2026-10-14): the drawer's scroller stopped anchoring on Playwright WebKit after its
+    first scroll.** The WebKit cause, on a plain page with no adaptv code (Playwright 1.61.1's
+    WebKit 26.5, iPhone 13 context): inside a `scroll` event on an `overflow: auto` scroller, set
+    `mask-image` on the scroller and then read `scrollHeight`. A 100px insertion above the view is
+    not anchored after that, in 10 of 10 runs, and stays unanchored. The same read without the mask
+    write is anchored in 10 of 10. `opacity` and `filter` do the same (6 of 6), `color` does not
+    (0 of 6). An instant scroll does it too, and so does a microtask of the event (6 of 6); the same
+    write and read in a `requestAnimationFrame` or a `setTimeout` after the event do not (0 of 6
+    each). Chromium anchors in every run (5 of 5). In the drawer the mask write is the scroll-edge
+    fade (React commits it in a task after the `scroll`), and the forced layout was the caret
+    patch's `getBoundingClientRect` in its document `scroll` listener, run on the next `scroll`
+    with the mask still pending. Bisected from `/lab/drawer`: a copy of the page's DOM and CSS with
+    no scripts anchored in every run; adding the fade's write and a copy of the caret mute killed it
+    8 of 8, and either alone 0 of 8. On the live page, the field opted out of the caret patch
+    anchored 4 of 4 against 4 of 4 dead. The caret patch's scroll and viewport listeners now only
+    arm its poll, and the poll measures in the frame they ask for, before paint. With that, one
+    smooth scroll from the top followed by two insertions at rest is anchored in every WebKit run
+    of the live drawer (16 of 16; 13 of 13 dead before).
+  - **Open (2026-10-14): on Playwright WebKit the drawer's control lands at clearance -88.** The
+    drawer's smooth scroll there often arrives in one frame, so the spec's insertion lands on the
+    frame after the scroll ended, after the drawer's look at the end of the scroll. Nothing aims
+    again, so the control with `overflow-anchor: none` keeps the field 100px low (`scrollTop` 871,
+    clearance -88) while the shipped run, anchored, lands at 971 with 12px clear: 22 of 30 runs
+    fail the landing comparison on that. It also showed before the fix (2 of 4 runs), where the dead
+    anchoring hid it behind the at-rest failure. The spec keeps the drawer on webkit as `fixme`.
 - **Test (iOS, target 2):** `xcrun simctl openurl booted "http://localhost:<port>/lab/drawer-keyboard"`,
   tap *Open drawer*, screenshot. **(Android, target 3):** `adb reverse tcp:<port> tcp:<port>` then
   `adb shell am start -a android.intent.action.VIEW -d "http://localhost:<port>/lab/drawer-keyboard"`.

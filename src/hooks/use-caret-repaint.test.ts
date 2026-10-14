@@ -238,6 +238,25 @@ describe("useCaretRepaint polling", () => {
     expect(frames.pending()).toBe(0)
   })
 
+  it("reads no layout inside the scroll event, only in the frame it asks for", () => {
+    const frames = frameRunner()
+    renderHook(() => useCaretRepaint())
+    const field = focusedField()
+    settle(frames)
+    keepMoving(field)
+    const read = vi.spyOn(field, "getBoundingClientRect")
+
+    //a forced layout inside a scroll event, flushing the drawer's pending edge-fade mask on the
+    //scroller, turns WebKit's scroll anchoring off for that scroller for good
+    document.dispatchEvent(new Event("scroll"))
+    expect(read).not.toHaveBeenCalled()
+    expect(isMuted(field)).toBe(false)
+
+    frames.flush(1)
+    expect(read).toHaveBeenCalled()
+    expect(isMuted(field)).toBe(true)
+  })
+
   it("stays one loop when a frame finds movement", () => {
     const frames = frameRunner()
     renderHook(() => useCaretRepaint())
