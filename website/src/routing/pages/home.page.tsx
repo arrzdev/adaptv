@@ -3,6 +3,7 @@ import { FinalCta } from "@/components/sections/closing"
 import { ComponentsBento } from "@/components/sections/components-bento"
 import { Hero } from "@/components/sections/hero"
 import { Targets } from "@/components/sections/targets"
+import { WhyAdaptv } from "@/components/sections/why-adaptv"
 import { SitePage } from "@/components/site-page"
 import {
   SITE_DESCRIPTION,
@@ -28,6 +29,7 @@ function HomePage() {
       <Hero />
       <Targets />
       <ComponentsBento />
+      <WhyAdaptv />
       <FinalCta />
     </SitePage>
   )
