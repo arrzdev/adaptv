@@ -1,10 +1,10 @@
-import { readFileSync } from "node:fs"
 import { expect, type Locator, type Page, test } from "@playwright/test"
 
-//The landing after landing-v2 (TUD-733 doc `landing-v2`, task TUD-735): the hero shows "Tally",
-//one budget app drawn in HTML/CSS as a desktop browser window and as a phone, then come
-//Where it runs, the components grid, From idea to installed and the closing quick start.
-//"Built with adaptv" is gone. Layout is read from the rendered boxes, not from class names.
+//The landing after landing-v3 (TUD-889 doc `landing-v3`, task TUD-890): the hero shows "Tally",
+//one budget app drawn in HTML/CSS as a desktop browser window and as a phone, then come the
+//platform marks strip, the components grid, Why adaptv, How it compares and the closing quick
+//start. "Where it runs", "From idea to installed app" and "Built with adaptv" are gone.
+//Layout is read from the rendered boxes, not from class names.
 
 const SHOWCASE_LABEL =
   "Tally, a budget app, in a desktop browser window and on a phone: the same app with a sidebar on desktop and a tab bar on the phone."
@@ -251,8 +251,12 @@ test.describe("Tally showcase", () => {
   }
 })
 
+const HERO_TITLE = "Write React once Feel native everywhere."
+const WHY_TITLE = "One React app. At home on every screen."
+const COMPARE_TITLE = "Good tools exist. adaptv picks a different trade."
+
 test.describe("section order", () => {
-  test("hero, where it runs, components, idea to installed, quick start", async ({
+  test("hero, strip, components, why adaptv, how it compares, quick start", async ({
     page,
   }) => {
     await open(page, 1440)
@@ -261,20 +265,22 @@ test.describe("section order", () => {
       .evaluateAll((els) =>
         els.map((el) => (el as HTMLElement).innerText.replace(/\s+/g, " ").trim()),
       )
+    //the strip has no heading: it sits between the hero and the components grid
     expect(headings).toEqual([
-      "Write React once Feel native everywhere.",
-      "Where it runs",
+      HERO_TITLE,
       "Try the components here",
-      "From idea to installed app",
+      WHY_TITLE,
+      COMPARE_TITLE,
       "Start with the quick start",
     ])
-    await expect(page.getByText("Built with adaptv")).toHaveCount(0)
+    for (const gone of ["Where it runs", "From idea to installed app", "Built with adaptv"])
+      await expect.soft(page.getByText(gone), `"${gone}" is gone`).toHaveCount(0)
   })
 
   for (const width of [320, 390, 768, 1440]) {
     test(`no horizontal scroll at ${width} px`, async ({ page }) => {
       await open(page, width)
-      await expect(page.getByRole("heading", { name: "Where it runs" })).toBeAttached()
+      await expect(page.getByRole("heading", { name: COMPARE_TITLE })).toBeAttached()
       const scroll = await page.evaluate(() => ({
         scrollWidth: document.documentElement.scrollWidth,
         innerWidth: window.innerWidth,
@@ -297,86 +303,268 @@ function rows(locator: Locator) {
   ])
 }
 
-//Each line was checked against docs/design/behaviors.md and the docs on main (TUD-735).
-//A line that is not true on main is dropped here and named in the PR body: "No grey flash
-//when you tap." is gone, because adaptv clears the tap highlight on links only (patches.css),
-//not on buttons or Pressable.
-const WHERE: { title: string; lines: string[] }[] = [
+/** The section right after the hero: the platform marks strip (landing-v3 §2). */
+function strip(page: Page) {
+  return page.locator("section:has(h1) + section")
+}
+
+//The strip is `targets.tsx` from before #444 (64bbb23^), back in its place under the hero,
+//minus the Windows and macOS marks (#448: desktop native is not built).
+test.describe("platform strip", () => {
+  test("four marks under the hero, no heading, no cards", async ({ page }) => {
+    await open(page, 1440)
+    const s = strip(page)
+    await expect(s).toHaveCount(1)
+    await expect(s.getByRole("heading")).toHaveCount(0)
+    await expect(s).toContainText("One app. Every platform.")
+    const marks = s.getByRole("listitem")
+    //each mark is a drawing that carries its name as hidden text
+    await expect(marks).toHaveText(["iOS", "Android", "PWA", "Capacitor"])
+    await expect(s.locator("li svg")).toHaveCount(4)
+    await expect(s).not.toContainText("Windows")
+    await expect(s).not.toContainText("macOS")
+  })
+
+  for (const width of [320, 390, 1440]) {
+    test(`the marks sit in one centred row with one gap at ${width} px`, async ({ page }) => {
+      await open(page, width)
+      const s = strip(page)
+      const marks = s.getByRole("listitem")
+      await expect(marks).toHaveCount(4)
+      //a 3-column grid leaves Capacitor alone on a second row (TUD-836)
+      expect(await rows(marks), "one row").toHaveLength(1)
+      const [b, items] = await Promise.all([
+        box(s),
+        marks.evaluateAll((els) => els.map((el) => el.getBoundingClientRect())),
+      ])
+      const left = items[0].left - b.left
+      const right = b.right - items.at(-1)!.right
+      expect(Math.abs(left - right), "centred in the strip").toBeLessThanOrEqual(1)
+      const gaps = new Set<number>()
+      for (let i = 1; i < items.length; i++)
+        gaps.add(Math.round(items[i].left - items[i - 1].right))
+      expect([...gaps], "one gap between marks").toHaveLength(1)
+    })
+  }
+})
+
+const WHY_BODY =
+  "Most teams build their app twice: once for the web, once for phones. Or they wrap a website in an app shell, and users can tell. adaptv lets you write your app once, in ordinary React, and gives each platform what it expects: the gestures, the sheets, the back button, the safe areas, the offline mode, the home-screen icon."
+
+const WHY_POINTS = [
+  [
+    "One codebase.",
+    "Desktop web, mobile web, an installable home-screen app, and iOS and Android apps.",
+  ],
+  [
+    "Feels native, not wrapped.",
+    "Drawers, swipes, pull-to-refresh and keyboards behave the way each phone does.",
+  ],
+  [
+    "The web stays first.",
+    "It is still the web: your CSS, your React libraries, your browser tools.",
+  ],
+] as const
+
+const WHY_ART =
+  "One React file becomes the same app on a desktop browser, a phone browser, an iPhone and an Android phone."
+
+/** The illustration's layout: reserved box, CSS aspect-ratio and what it is drawn with. */
+function art(locator: Locator) {
+  return locator.evaluate((el) => ({
+    aspectRatio: getComputedStyle(el).aspectRatio,
+    svg: el.querySelectorAll("svg").length,
+    raster: el.querySelectorAll("img, picture, canvas, video, iframe, svg image").length,
+  }))
+}
+
+/** An eyebrow: a short line above the section's title. */
+async function expectEyebrow(sec: Locator, text: string, title: string) {
+  const eyebrow = sec.getByText(text, { exact: true })
+  await expect(eyebrow).toBeVisible()
+  const [e, h] = await Promise.all([
+    box(eyebrow),
+    box(sec.getByRole("heading", { level: 2, name: title })),
+  ])
+  expect(e.bottom, "eyebrow above the title").toBeLessThanOrEqual(h.top)
+}
+
+test.describe("Why adaptv", () => {
+  test("eyebrow, title, body and the three points", async ({ page }) => {
+    await open(page, 1440)
+    const why = section(page, WHY_TITLE)
+    await expect(why).toHaveCount(1)
+    await expectEyebrow(why, "Why adaptv", WHY_TITLE)
+    await expect(why).toContainText(WHY_BODY)
+    const points = why.getByRole("listitem")
+    await expect(points).toHaveText(WHY_POINTS.map(([lead, line]) => `${lead} ${line}`))
+    for (const [lead] of WHY_POINTS)
+      await expect.soft(why.getByText(lead, { exact: true }), `${lead} is its own run`).toBeVisible()
+    //no code and no step list: a drawing and three points
+    await expect(why.locator("pre, code, ol, [role=tablist]")).toHaveCount(0)
+  })
+
+  for (const width of [390, 1440]) {
+    test(`one SVG drawing with a fixed aspect ratio at ${width} px`, async ({ page }) => {
+      await open(page, width)
+      const why = section(page, WHY_TITLE)
+      const drawing = why.getByRole("img", { name: WHY_ART, exact: true })
+      await expect(drawing).toHaveCount(1)
+      await drawing.scrollIntoViewIfNeeded()
+      await expect(drawing).toBeVisible()
+      const a = await art(drawing)
+      expect(a.aspectRatio, "CSS aspect-ratio reserves its box").not.toBe("auto")
+      expect(a.svg, "drawn in SVG").toBeGreaterThan(0)
+      expect(a.raster, "no raster image").toBe(0)
+      const b = await box(drawing)
+      //three stages: left to right on desktop, top to bottom on a phone
+      if (width >= 768) expect(b.width, "landscape on desktop").toBeGreaterThan(b.height)
+      else expect(b.height, "portrait on a phone").toBeGreaterThan(b.width)
+      expect(b.right, "inside the viewport").toBeLessThanOrEqual(b.innerWidth)
+      //the points: one row on desktop, stacked on a phone
+      expect(await rows(why.getByRole("listitem"))).toHaveLength(width >= 768 ? 1 : 3)
+    })
+  }
+})
+
+const COMPARE: { name: string; text: string }[] = [
   {
-    title: "In a browser tab",
-    lines: [
-      "Inputs don't zoom the page when they get focus.",
-      "Scrolling a list doesn't drag the page behind it.",
-    ],
+    name: "Expo (React Native)",
+    text: "Renders real native views. Excellent native feel and a large ecosystem. The trade: you leave the web platform. Web support exists, but the web is not where it starts.",
   },
   {
-    title: "Installed from the browser",
-    lines: [
-      "Installs from the browser, no store.",
-      "Works offline.",
-      "Fixes reach users without a store review.",
-    ],
+    name: "Ionic",
+    text: "Builds apps with web technology on top of Capacitor, with ready-made iOS and Material themes. The trade: you adopt its own components and look.",
   },
   {
-    title: "In the App Store and Google Play",
-    lines: [
-      "Real iOS and Android builds through Capacitor.",
-      "Safe areas and the keyboard are handled.",
-      "Android's Back button closes the open sheet first.",
-    ],
+    name: "adaptv",
+    text: "Plain React and CSS on the web platform, with Capacitor for the native parts — the same native bridge Ionic uses. The web is the primary target, and the framework handles what each platform expects, so you don't need a second app.",
   },
 ]
 
-test.describe("Where it runs", () => {
-  test("title, lede, three columns and their lines", async ({ page }) => {
+test.describe("How it compares", () => {
+  test("eyebrow, title, three cards in order, the footnote", async ({ page }) => {
     await open(page, 1440)
-    const where = section(page, "Where it runs")
-    await expect(where).toHaveCount(1)
-    await expect(where).toContainText(
-      "The same code reaches people three ways. adaptv handles what each one gets wrong by default.",
+    const compare = section(page, COMPARE_TITLE)
+    await expect(compare).toHaveCount(1)
+    await expectEyebrow(compare, "How it compares", COMPARE_TITLE)
+    const cards = compare.getByRole("listitem")
+    await expect(cards).toHaveCount(3)
+    await expect(cards.getByRole("heading", { level: 3 })).toHaveText(
+      COMPARE.map((c) => c.name),
     )
-    const titles = where.getByRole("heading", { level: 3 })
-    await expect(titles).toHaveText(WHERE.map((c) => c.title))
-    for (const column of WHERE) {
-      const list = where.locator("li", { hasText: column.lines[0] }).locator("xpath=..")
-      await expect(list.locator("li")).toHaveText(column.lines)
-    }
-    //three columns side by side on desktop
-    expect(await rows(titles)).toHaveLength(1)
+    for (const [i, card] of COMPARE.entries())
+      await expect.soft(cards.nth(i), card.name).toContainText(card.text)
+    await expect(compare).toContainText("adaptv is pre-alpha and not yet on npm.")
+    //no table of checkmarks, no code
+    await expect(compare.locator("table, pre, code, ol")).toHaveCount(0)
+    await expect(compare).not.toContainText(/[✓✔✗✘]/)
   })
 
-  test("the four platform marks: one left-aligned row with one fixed gap at every width", async ({
+  test("fair: no winner styling, no put-downs or numbers about the others", async ({
     page,
   }) => {
     await open(page, 1440)
-    const list = section(page, "Where it runs").getByRole("list").first()
-    const marks = list.getByRole("listitem")
-    await expect(marks).toHaveText(["iOS", "Android", "PWA", "Capacitor"])
-
-    //design sign-off TUD-836: a 3-column grid left Capacitor alone on a phone, and
-    //justify-between spread the marks to a gap that changed with the width
-    const gaps = new Set<number>()
-    for (const width of [390, 768, 1440, 1920]) {
-      await page.setViewportSize({ width, height: 900 })
-      expect.soft(await rows(marks), `one row at ${width} px`).toHaveLength(1)
-      const [l, items] = await Promise.all([
-        box(list),
-        marks.evaluateAll((els) => els.map((el) => el.getBoundingClientRect())),
-      ])
-      expect.soft(Math.round(items[0].left - l.left), `starts at the left at ${width} px`).toBe(0)
-      expect
-        .soft(Math.round(items.at(-1)!.right), `fits in the viewport at ${width} px`)
-        .toBeLessThanOrEqual(l.innerWidth)
-      for (let i = 1; i < items.length; i++)
-        gaps.add(Math.round(items[i].left - items[i - 1].right))
+    const compare = section(page, COMPARE_TITLE)
+    const cards = compare.getByRole("listitem")
+    await expect(cards).toHaveCount(3)
+    await expect(compare).not.toContainText(/\b(recommended|best|winner)\b/i)
+    for (const i of [0, 1]) {
+      const text = (await cards.nth(i).innerText()).replace(/\s+/g, " ")
+      expect.soft(text, `${COMPARE[i].name}: no put-downs`).not.toMatch(
+        /\b(slow|dead|old|outdated|legacy|abandoned)\b/i,
+      )
+      expect.soft(text, `${COMPARE[i].name}: no numbers`).not.toMatch(/\d/)
     }
-    expect([...gaps], "one gap between marks, at every width").toHaveLength(1)
-
-    //and the three columns below still stack on a phone
-    await page.setViewportSize({ width: 390, height: 900 })
-    const titles = section(page, "Where it runs").getByRole("heading", { level: 3 })
-    expect(await rows(titles)).toHaveLength(3)
+    //same colour for all three
+    const looks = await cards.evaluateAll((els) =>
+      els.map((el) => {
+        const cs = getComputedStyle(el)
+        return [cs.backgroundColor, cs.borderTopColor, cs.borderTopWidth, cs.boxShadow].join(" | ")
+      }),
+    )
+    expect(new Set(looks).size, `one look: ${looks.join(" / ")}`).toBe(1)
   })
+
+  for (const width of [390, 1440]) {
+    test(`three equal cards, each with one SVG drawing, at ${width} px`, async ({ page }) => {
+      await open(page, width)
+      const cards = section(page, COMPARE_TITLE).getByRole("listitem")
+      await expect(cards).toHaveCount(3)
+      await cards.first().scrollIntoViewIfNeeded()
+      const sizes = await cards.evaluateAll((els) =>
+        els.map((el) => {
+          const r = el.getBoundingClientRect()
+          return { width: r.width, height: r.height }
+        }),
+      )
+      for (const s of sizes.slice(1))
+        expect.soft(Math.abs(s.width - sizes[0].width), "same width").toBeLessThanOrEqual(1)
+      //side by side on desktop, same height; stacked on a phone
+      if (width >= 768) {
+        for (const s of sizes.slice(1))
+          expect.soft(Math.abs(s.height - sizes[0].height), "same height").toBeLessThanOrEqual(1)
+        expect(await rows(cards)).toHaveLength(1)
+      } else expect(await rows(cards)).toHaveLength(3)
+
+      for (const [i, card] of COMPARE.entries()) {
+        const drawing = cards.nth(i).getByRole("img")
+        await expect.soft(drawing, `${card.name}: one drawing`).toHaveCount(1)
+        await expect.soft(drawing, `${card.name}: drawing is named`).toHaveAccessibleName(/\S/)
+        const a = await art(drawing)
+        expect.soft(a.aspectRatio, `${card.name}: aspect-ratio`).not.toBe("auto")
+        expect.soft(a.svg, `${card.name}: SVG`).toBeGreaterThan(0)
+        expect.soft(a.raster, `${card.name}: no raster`).toBe(0)
+      }
+    })
+  }
+})
+
+//landing-v3 "Zero layout shift": every layout-shift entry from the first paint through a
+//scroll to the bottom and back, at a phone and a desktop width. Reveals move by transform,
+//which is not a layout shift; a box that grows, a late font or an image without size is.
+test.describe("zero layout shift", () => {
+  for (const width of [390, 1440]) {
+    test(`CLS is 0 over a full scroll at ${width} px`, async ({ page }) => {
+      test.setTimeout(60_000)
+      await page.addInitScript(() => {
+        const w = window as unknown as { shifts: { value: number; nodes: string[] }[] }
+        w.shifts = []
+        new PerformanceObserver((list) => {
+          for (const entry of list.getEntries() as (PerformanceEntry & {
+            value: number
+            hadRecentInput: boolean
+            sources?: { node?: Node | null }[]
+          })[]) {
+            if (entry.hadRecentInput) continue
+            w.shifts.push({
+              value: entry.value,
+              nodes: (entry.sources ?? []).map((s) => {
+                const el = s.node as Element | null
+                if (!el?.tagName) return String(s.node?.nodeName)
+                return `${el.tagName.toLowerCase()}.${String(el.className).slice(0, 60)}`
+              }),
+            })
+          }
+        }).observe({ type: "layout-shift", buffered: true })
+      })
+      await open(page, width)
+      //down in viewport-sized steps, so every reveal and lazy part runs, then back up
+      const height = await page.evaluate(() => document.documentElement.scrollHeight)
+      for (let y = 0; y <= height; y += 450) {
+        await page.evaluate((top) => window.scrollTo(0, top), y)
+        await page.waitForTimeout(150)
+      }
+      await page.waitForTimeout(1000)
+      await page.evaluate(() => window.scrollTo(0, 0))
+      await page.waitForTimeout(500)
+      const shifts = await page.evaluate(
+        () => (window as unknown as { shifts: { value: number; nodes: string[] }[] }).shifts,
+      )
+      const cls = shifts.reduce((sum, s) => sum + s.value, 0)
+      expect(cls, `layout shifts: ${JSON.stringify(shifts)}`).toBe(0)
+    })
+  }
 })
 
 test.describe("components grid", () => {
@@ -409,161 +597,5 @@ test.describe("components grid", () => {
       await expect.soft(grid.getByText(line, { exact: true })).toBeAttached()
     }
     await expect(grid).not.toContainText("Tailwind")
-  })
-})
-
-const PICKER = readFileSync(
-  new URL(
-    "../../playground/apps/frontend/src/components/todos/priority-picker.tsx",
-    import.meta.url,
-  ),
-  "utf8",
-)
-
-/**
- * The JSX tags an excerpt leaves open, in order: `<Name` pushes, `/>` and `</Name>` pop.
- * Empty when the excerpt starts and ends on whole elements (TUD-865).
- */
-function openTags(code: string) {
-  const stack: string[] = []
-  for (const [, close, name, selfClose] of code.matchAll(/<(\/?)([A-Za-z][\w.]*)|(\/>)/g)) {
-    if (selfClose || close) stack.pop()
-    else stack.push(name)
-  }
-  return stack
-}
-
-/** The Reveal that wraps the step tabs (`components/reveal.tsx`). */
-function revealOf(idea: Locator) {
-  return idea.locator("[data-reveal]").filter({ has: idea.page().getByRole("tablist") })
-}
-
-/** A Reveal's computed opacity and vertical offset, in CSS px. */
-function motionOf(reveal: Locator) {
-  return reveal.evaluate((el) => {
-    const cs = getComputedStyle(el)
-    const m = new DOMMatrixReadOnly(cs.transform === "none" ? undefined : cs.transform)
-    return { opacity: Number(cs.opacity), y: m.m42 }
-  })
-}
-
-test.describe("From idea to installed", () => {
-  test("Write shows a 12–20 line excerpt of the real file, without a scroll box", async ({
-    page,
-  }) => {
-    await open(page, 1440)
-    const idea = section(page, "From idea to installed app")
-    await expect(idea).toContainText(
-      "Write React, run it on your phone, ship it to the web, iOS and Android.",
-    )
-    await expect(idea.getByRole("tab")).toHaveText(["Write", "Run", "Ship"])
-    await expect(idea.getByRole("tab", { name: "Write" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    )
-    const panel = idea.getByRole("tabpanel")
-    await expect(panel).toContainText(
-      "Plain React components. Behaviour comes from props, looks from className.",
-    )
-    const code = panel.locator("pre").first()
-    const text = (await code.innerText()).replace(/\n+$/, "")
-    const lines = text.split("\n")
-    expect(lines.length, "excerpt line count").toBeGreaterThanOrEqual(12)
-    expect(lines.length, "excerpt line count").toBeLessThanOrEqual(20)
-    //every line is the playground file's own, not a copy that drifts
-    for (const line of lines.filter((l) => l.trim()))
-      expect.soft(PICKER, "line comes from priority-picker.tsx").toContain(line)
-    //whole elements: nothing left open, and the last line closes one (TUD-865)
-    expect.soft(openTags(text), "tags left open in the excerpt").toEqual([])
-    expect
-      .soft(lines.at(-1)?.trim(), "the last line closes an element")
-      .toMatch(/^<\/[\w.]+>$|\/>$/)
-    const overflow = await code.evaluate((el) => ({
-      scrollHeight: el.scrollHeight,
-      clientHeight: el.clientHeight,
-    }))
-    expect(overflow.scrollHeight, "no inner vertical scroll").toBeLessThanOrEqual(
-      overflow.clientHeight + 1,
-    )
-  })
-
-  test("the tabs fade up as they scroll in, frame by frame", async ({ page }) => {
-    await open(page, 1440)
-    const idea = section(page, "From idea to installed app")
-    const reveal = revealOf(idea)
-    await expect(reveal, "one Reveal wraps the tabs").toHaveCount(1)
-    //below the fold on load: hidden and 24 px low, waiting for its entrance
-    expect(await motionOf(reveal)).toEqual({ opacity: 0, y: 24 })
-
-    //every frame from before the scroll until the 0.7 s fade has long ended
-    await reveal.evaluate((el) => {
-      const w = window as unknown as { revealPath: { opacity: number; y: number }[] }
-      w.revealPath = []
-      const t0 = performance.now()
-      const tick = () => {
-        const cs = getComputedStyle(el)
-        const m = new DOMMatrixReadOnly(cs.transform === "none" ? undefined : cs.transform)
-        w.revealPath.push({ opacity: Number(cs.opacity), y: m.m42 })
-        if (performance.now() - t0 < 1800) requestAnimationFrame(tick)
-        else document.documentElement.dataset.revealSampled = ""
-      }
-      requestAnimationFrame(tick)
-    })
-    await idea.getByRole("tablist").scrollIntoViewIfNeeded()
-    await page.locator("html[data-reveal-sampled]").waitFor({ state: "attached" })
-    const path = await page.evaluate(
-      () => (window as unknown as { revealPath: { opacity: number; y: number }[] }).revealPath,
-    )
-
-    expect(path[0], "starts hidden and low").toEqual({ opacity: 0, y: 24 })
-    expect(path.at(-1), "ends in place").toEqual({ opacity: 1, y: 0 })
-    const between = path.filter((f) => f.opacity > 0 && f.opacity < 1)
-    //a fade, not a jump: at 60 fps the 0.7 s ease paints about 40 frames
-    expect(between.length, "frames in mid-fade").toBeGreaterThanOrEqual(8)
-    for (let i = 1; i < path.length; i++) {
-      const [a, b] = [path[i - 1], path[i]]
-      expect.soft(b.opacity, `frame ${i}: opacity only rises`).toBeGreaterThanOrEqual(a.opacity)
-      expect.soft(b.y, `frame ${i}: it only moves up`).toBeLessThanOrEqual(a.y + 0.01)
-      expect.soft(b.y, `frame ${i}: no overshoot past its place`).toBeGreaterThanOrEqual(0)
-      //no frame that drops it in place while still invisible, or shows it fully while low
-      if (b.opacity === 1) expect.soft(b.y, `frame ${i}: opaque only in place`).toBeLessThan(1)
-    }
-  })
-
-  test("under reduced motion the tabs are in place from the start", async ({ page }) => {
-    await page.emulateMedia({ reducedMotion: "reduce" })
-    await open(page, 1440)
-    const reveal = revealOf(section(page, "From idea to installed app"))
-    await expect(reveal).toHaveCount(1)
-    expect(await motionOf(reveal)).toEqual({ opacity: 1, y: 0 })
-  })
-
-  test("captions, and switching tabs moves nothing below the panel", async ({ page }) => {
-    await open(page, 1440)
-    const idea = section(page, "From idea to installed app")
-    const tablist = idea.getByRole("tablist")
-    await tablist.scrollIntoViewIfNeeded()
-    //the base gap is read once the entrance has settled, not halfway up its 24 px rise
-    await expect.poll(() => motionOf(revealOf(idea))).toEqual({ opacity: 1, y: 0 })
-    const below = page.getByRole("heading", { name: "Start with the quick start" })
-    const gap = async () => {
-      const [a, b] = await Promise.all([box(tablist), box(below)])
-      return Math.round(b.top - a.top)
-    }
-    const captions = {
-      Write: "Plain React components. Behaviour comes from props, looks from className.",
-      Run: "One dev server. Your phone reloads as you edit.",
-      Ship: "One command builds it.",
-    }
-    const base = await gap()
-    for (const [tab, caption] of Object.entries(captions)) {
-      await idea.getByRole("tab", { name: tab }).click()
-      await expect(idea.getByRole("tabpanel")).toContainText(caption)
-      //sampled through the terminal replay (about 1.5 s), not only at its end
-      for (let i = 0; i < 6; i++) {
-        expect.soft(await gap(), `${tab} after ${i * 400} ms`).toBe(base)
-        await page.waitForTimeout(400)
-      }
-    }
   })
 })
