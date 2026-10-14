@@ -217,7 +217,11 @@ Rule of thumb: `app:` styles apply to **installed** (standalone **or** native); 
     again, so the control with `overflow-anchor: none` keeps the field 100px low (`scrollTop` 871,
     clearance -88) while the shipped run, anchored, lands at 971 with 12px clear: 22 of 30 runs
     fail the landing comparison on that. It also showed before the fix (2 of 4 runs), where the dead
-    anchoring hid it behind the at-rest failure. The spec keeps the drawer on webkit as `fixme`.
+    anchoring hid it behind the at-rest failure. **Decided:** -88 is the control doing what a control
+    does when nothing aims again; the shipped landing 12px clear is anchoring working. The drawer
+    runs on webkit with no `fixme`: a run whose control insertion came after the scroll had ended is
+    annotated `webkit-insert-after-last-aim` and skips only the control-vs-shipped landing
+    comparison; the at-rest half, the control check and the shipped clearance stay asserted.
 - **Test (iOS, target 2):** `xcrun simctl openurl booted "http://localhost:<port>/lab/drawer-keyboard"`,
   tap *Open drawer*, screenshot. **(Android, target 3):** `adb reverse tcp:<port> tcp:<port>` then
   `adb shell am start -a android.intent.action.VIEW -d "http://localhost:<port>/lab/drawer-keyboard"`.

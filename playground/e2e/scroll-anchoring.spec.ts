@@ -32,9 +32,13 @@ import { awaitClientHandover } from "./support/hydrated"
  * is exercised there only when a middle frame appears (0,528,628). Such a run carries a
  * `webkit-one-frame-scroll` annotation and skips only the premise check. What webkit
  * always checks is the at-rest half, the control, the landing comparison and the
- * clearance. Chromium asserts the premise on every run. The drawer on webkit is fixme:
- * its smooth scroll arrives in one frame, so the insertion lands after the drawer's last
- * aim, and the control, with no anchoring to absorb it, lands at clearance -88. Its
+ * clearance. Chromium asserts the premise on every run. The drawer on webkit has one more
+ * exception: when its smooth scroll arrived in one frame, the insertion lands after the
+ * drawer's last aim, and the control, with no anchoring to absorb it, lands at clearance
+ * -88 (scrollTop 871) where the shipped run, anchored, lands 12px clear (971). That is
+ * the control doing what it does when nothing aims again, so such a run carries a
+ * `webkit-insert-after-last-aim` annotation and skips only the landing comparison; the
+ * at-rest half, the control check and the shipped clearance stay asserted. Its
  * scroller used to stop anchoring for good as well: WebKit drops anchoring on a scroller
  * when a forced layout inside a scroll event flushes a pending mask (or opacity, or
  * filter) change on it, and the caret patch's rect read in its scroll listener flushed
@@ -313,10 +317,6 @@ for (const [name, surface] of [
   test(`${name}: anchoring adds no second adjustment to adaptv's scroll, and keeps the row at rest`, async ({
     browser,
   }, testInfo) => {
-    test.fixme(
-      name === "drawer" && testInfo.project.name.includes("webkit"),
-      "drawer on webkit: its smooth scroll arrives in one frame, the insertion lands after its last aim, and the control without anchoring lands at clearance -88 (docs/design/behaviors.md)",
-    )
     const runs: Record<Anchor, Run> = {} as Record<Anchor, Run>
     for (const anchor of ["none", "shipped"] as const) {
       //a fresh context per run, carrying the project's device (iPhone 13 on webkit)
@@ -355,11 +355,11 @@ for (const [name, surface] of [
     //Playwright's WebKit that scroll usually arrives in one frame (0,871,871), so there is
     //no middle frame to insert on; that run is annotated, and the premise is not asserted
     //for it. Chromium always asserts it.
+    const midScroll = (run: Run) =>
+      run.landing.scrollTop - run.scrollAtInsert > INSERT_PX
     for (const run of [shipped, none]) {
       expect(run.moved, "adaptv's scroll never started").toBe(true)
-      const midScroll =
-        run.landing.scrollTop - run.scrollAtInsert > INSERT_PX
-      if (!midScroll && testInfo.project.name.includes("webkit")) {
+      if (!midScroll(run) && testInfo.project.name.includes("webkit")) {
         testInfo.annotations.push({
           type: "webkit-one-frame-scroll",
           description: run.scrolls.slice(0, 12).join(","),
@@ -367,7 +367,7 @@ for (const [name, surface] of [
         continue
       }
       expect(
-        midScroll,
+        midScroll(run),
         `the insertion landed after the scroll had finished (scrollTop per frame from ${run.scrollAtInsert}: ${run.scrolls.slice(0, 12).join(",")})`,
       ).toBe(true)
     }
@@ -383,14 +383,31 @@ for (const [name, surface] of [
       INSERT_PX,
     )
 
-    //no second adjustment: the landing does not depend on the browser anchoring
-    expect(
-      Math.abs(shipped.landing.scrollTop - none.landing.scrollTop),
-      `landing with anchoring ${JSON.stringify(shipped.landing)} vs without ${JSON.stringify(none.landing)}`,
-    ).toBeLessThanOrEqual(2)
-    expect(
-      Math.abs(shipped.landing.fieldTop - none.landing.fieldTop),
-    ).toBeLessThanOrEqual(2)
+    //no second adjustment: the landing does not depend on the browser anchoring. Except
+    //when the drawer's one-frame scroll had ended before the insertion: that insertion
+    //comes after the drawer's last aim, nothing aims again, and the control keeps the
+    //field 100px low (scrollTop 871, clearance -88) where anchoring holds it at 971.
+    //That run is annotated and skips only this comparison; AvoidKeyboard's raise lands
+    //after the insertion and re-aims, so it is compared on every run.
+    const landingLabel = `landing with anchoring ${JSON.stringify(shipped.landing)} vs without ${JSON.stringify(none.landing)}`
+    if (
+      surface.trigger === "raise" &&
+      !midScroll(none) &&
+      testInfo.project.name.includes("webkit")
+    ) {
+      testInfo.annotations.push({
+        type: "webkit-insert-after-last-aim",
+        description: landingLabel,
+      })
+    } else {
+      expect(
+        Math.abs(shipped.landing.scrollTop - none.landing.scrollTop),
+        landingLabel,
+      ).toBeLessThanOrEqual(2)
+      expect(
+        Math.abs(shipped.landing.fieldTop - none.landing.fieldTop),
+      ).toBeLessThanOrEqual(2)
+    }
 
     //both surfaces aim again after the insertion (the drawer's re-aim, AvoidKeyboard's
     //keyboard raise and its look when the scroll ends), so the field ends clear: the
