@@ -54,6 +54,53 @@ export function Bar({
   )
 }
 
+/**
+ * Each end-aligned label's width in Geist, in mock pixels (`--u`), measured in Chromium at
+ * full size. The mocks set text at 4 px on a phone, where the fallback font is a third
+ * narrower than Geist: right-aligned, a label moved left when Geist swapped in, a layout
+ * shift. In a box as wide as its Geist width, pinned to the end, its start never moves.
+ * A label missing here is still drawn, right-aligned by its own width.
+ */
+const END_WIDTH: Record<string, number> = {
+  "Oct 14": 32.01,
+  "$312 of $400": 76.01,
+  "$156 of $300": 77.01,
+  "$62 of $200": 71.01,
+  "$48 of $60": 63.01,
+  Amount: 45.01,
+  "−$42.18": 44.01,
+  "−$8.90": 37.01,
+  "+$3,150.00": 61.01,
+  "−$12.99": 44.01,
+  "−$4.60": 37.01,
+}
+
+/** Text at the end of its row or cell, in a box of its Geist width (see END_WIDTH). */
+export function End({
+  children,
+  className,
+  widths = END_WIDTH,
+}: {
+  children: string
+  className?: string
+  /** The mock's own widths, when its text is set at another size. */
+  widths?: Record<string, number>
+}) {
+  const width = widths[children]
+  return (
+    <span
+      data-end
+      className={cn(
+        "ml-auto block shrink-0 whitespace-nowrap text-left",
+        className,
+      )}
+      style={width ? { width: `calc(${width} * var(--u))` } : undefined}
+    >
+      {children}
+    </span>
+  )
+}
+
 function Card({
   label,
   note,
@@ -191,7 +238,7 @@ export function TallyDesktop({ className }: { className?: string }) {
                   className="text-[length:calc(11*var(--u))] text-muted"
                 >
                   <span className="flex-1">Oct 1</span>
-                  <span className="flex-1 text-right">Oct 14</span>
+                  <End>Oct 14</End>
                 </View>
               </View>
 
@@ -203,9 +250,9 @@ export function TallyDesktop({ className }: { className?: string }) {
                   <View key={budget.name} className="gap-0.5">
                     <View row className="text-[length:calc(12*var(--u))]">
                       <span className="flex-1">{budget.name}</span>
-                      <span className="flex-1 text-right text-muted">
+                      <End className="text-muted">
                         {`${usd(budget.spent)} of ${usd(budget.limit)}`}
-                      </span>
+                      </End>
                     </View>
                     <Bar value={percent(budget.spent, budget.limit)} />
                   </View>
@@ -235,8 +282,8 @@ export function TallyDesktop({ className }: { className?: string }) {
                       Category
                     </th>
                     <th className="py-[calc(2*var(--u))] font-normal">Date</th>
-                    <th className="py-[calc(2*var(--u))] text-right font-normal">
-                      Amount
+                    <th className="py-[calc(2*var(--u))] font-normal">
+                      <End>Amount</End>
                     </th>
                   </tr>
                 </thead>
@@ -252,13 +299,15 @@ export function TallyDesktop({ className }: { className?: string }) {
                       <td className="py-[calc(2*var(--u))] text-subtle">
                         {t.date}
                       </td>
-                      <td
-                        className={cn(
-                          "py-[calc(2*var(--u))] text-right tabular-nums",
-                          t.amount > 0 && "text-success",
-                        )}
-                      >
-                        {signed(t.amount)}
+                      <td className="py-[calc(2*var(--u))]">
+                        <End
+                          className={cn(
+                            "tabular-nums",
+                            t.amount > 0 && "text-success",
+                          )}
+                        >
+                          {signed(t.amount)}
+                        </End>
                       </td>
                     </tr>
                   ))}

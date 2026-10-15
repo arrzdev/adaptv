@@ -92,7 +92,10 @@ test.describe("Tally showcase", () => {
         //landing-v4 §2.1: the window takes the full content width, the phone is about 26 % of
         //it and covers only the window's bottom-right corner
         expect.soft(d.width, "window fills the stage").toBeGreaterThanOrEqual(s.width - 1)
-        expect.soft(d.width, "window wider than the page column").toBeGreaterThanOrEqual(width - 32)
+        //the hero, not the viewport: a desktop browser's scrollbar takes 15 px of the 390
+        expect
+          .soft(d.width, "window wider than the page column")
+          .toBeGreaterThanOrEqual(heroBox.width - 32)
         expect.soft(p.width / s.width, "phone about 26 % of the width").toBeGreaterThanOrEqual(0.22)
         expect.soft(p.width / s.width, "phone about 26 % of the width").toBeLessThanOrEqual(0.3)
         expect.soft(p.top, "phone below the window's middle").toBeGreaterThan(d.top + d.height * 0.5)

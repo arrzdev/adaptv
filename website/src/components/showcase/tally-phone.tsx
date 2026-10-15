@@ -22,7 +22,7 @@ import {
   TRANSACTIONS,
   usd,
 } from "@/components/showcase/tally-data"
-import { Bar } from "@/components/showcase/tally-desktop"
+import { Bar, End } from "@/components/showcase/tally-desktop"
 import { cn } from "@/utils/cn"
 
 const TABS: { label: string; icon: LucideIcon }[] = [
@@ -31,6 +31,16 @@ const TABS: { label: string; icon: LucideIcon }[] = [
   { label: "Budgets", icon: PiggyBank },
   { label: "Settings", icon: Settings },
 ]
+
+/** The end-aligned labels' Geist widths at 17 pt (see `End` in tally-desktop.tsx). */
+const END_WIDTH: Record<string, number> = {
+  $312: 39.95,
+  $156: 38.35,
+  $62: 31.96,
+  "−$42.18": 62.32,
+  "−$8.90": 52.73,
+  "+$3,150.00": 84.69,
+}
 
 /** An inset grouped list, as iOS Settings draws one. */
 function Group({ title, children }: { title: string; children: ReactNode }) {
@@ -103,7 +113,9 @@ export function TallyPhone({ className }: { className?: string }) {
                       className="justify-between text-[length:calc(17*var(--u))]"
                     >
                       <span>{budget.name}</span>
-                      <span className="text-muted">{usd(budget.spent)}</span>
+                      <End widths={END_WIDTH} className="text-muted">
+                        {usd(budget.spent)}
+                      </End>
                     </View>
                     <Bar value={percent(budget.spent, budget.limit)} />
                   </View>
@@ -118,14 +130,15 @@ export function TallyPhone({ className }: { className?: string }) {
                     className="h-11 items-center justify-between px-4 text-[length:calc(17*var(--u))]"
                   >
                     <span>{t.merchant}</span>
-                    <span
+                    <End
+                      widths={END_WIDTH}
                       className={cn(
                         "tabular-nums",
                         t.amount > 0 ? "text-success" : "text-muted",
                       )}
                     >
                       {signed(t.amount)}
-                    </span>
+                    </End>
                   </View>
                 ))}
               </Group>
