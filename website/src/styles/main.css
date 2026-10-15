@@ -65,6 +65,15 @@
   --success: #12996a;
   --success-soft: #e6f6ef;
 
+  /* landing-v4 cards: a surface one shade off the page, no border, no shadow */
+  --card: #f6f6f7;
+  --tile: #ffffff; /* pieces on a card: diagram tiles, demo rows, comparison columns */
+  --tile-line: #dcdce0;
+  --wire: #c9c9cf; /* diagram hairlines, decoration only (1.53:1 on --card) */
+  --radius-card: 40px;
+  --radius-card-sm: 24px;
+  --radius-tile: 22px;
+
   /* code */
   --code-bg: #0c0c0f;
   --code-fg: #e4e4ea;
@@ -99,6 +108,11 @@
   --success: #4fdca0;
   --success-soft: #0d231a;
 
+  --card: #141418;
+  --tile: #08080a;
+  --tile-line: #2a2a31;
+  --wire: #3a3a43;
+
   --code-bg: #0b0b0e;
 }
 
@@ -120,6 +134,10 @@
   --color-danger-soft: var(--danger-soft);
   --color-success: var(--success);
   --color-success-soft: var(--success-soft);
+  --color-card: var(--card);
+  --color-tile: var(--tile);
+  --color-tile-line: var(--tile-line);
+  --color-wire: var(--wire);
   --color-code-bg: var(--code-bg);
   --color-code-fg: var(--code-fg);
   --color-code-muted: var(--code-muted);
@@ -150,11 +168,11 @@
 .tok-t { color: var(--code-tag); }
 .tok-c { color: var(--code-muted); font-style: italic; }
 
-/* one centred column; sections are separated by space and a single hairline, nothing else */
+/* one centred column, 1280 px at most; sections are separated by space, nothing else */
 .sheet {
   position: relative;
   width: 100%;
-  max-width: 1200px;
+  max-width: 1280px;
   margin-inline: auto;
 }
 .ruled {
@@ -231,7 +249,59 @@
 .stage-in { animation: stage-in 0.3s ease-out 0.24s both; }
 @keyframes caret { 50% { opacity: 0; } }
 .caret { animation: caret 1s steps(1) infinite; }
+
+/*
+ * Diagrams (components/diagram): inline SVG on a card, decoration only. Tiles one step off
+ * the card, hairline wires, one brand accent on the path that matters.
+ */
+.dg { display: block; width: 100%; height: auto; overflow: visible; }
+.dg .wire { fill: none; stroke: var(--wire); stroke-width: 1.25; }
+.dg .dash { fill: none; stroke: var(--wire); stroke-width: 1.25; stroke-dasharray: 6 7; }
+.dg .accent { fill: none; stroke: var(--brand); stroke-width: 2; stroke-linecap: round; }
+.dg .tile { fill: var(--tile); stroke: var(--tile-line); stroke-width: 1.25; }
+.dg .tile.brand { stroke: var(--brand); }
+.dg .label { fill: var(--foreground); font: 500 13px var(--font-sans); }
+.dg .caption { fill: var(--muted); font: 500 12.5px var(--font-sans); }
+.dg .mono { fill: var(--subtle); font: 500 12.5px var(--font-mono); }
+.dg .ink { fill: var(--foreground); }
+.dg .glyph { fill: none; stroke: var(--foreground); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.dg .soft { fill: var(--border-strong); }
+.dg .brand-fill { fill: var(--brand); }
+
+/*
+ * The one ambient loop: a short light runs along the accent path every 6 s, only while its
+ * card is on screen (`data-running`, set by an IntersectionObserver in diagram/kit.tsx).
+ */
+@keyframes wire-run {
+  from { stroke-dashoffset: 100; }
+  to { stroke-dashoffset: 0; }
+}
+.dg .run {
+  fill: none;
+  stroke: color-mix(in oklab, var(--brand) 40%, white);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 10 90;
+  animation: wire-run 6s linear infinite;
+  animation-play-state: paused;
+}
+.dg[data-running] .run { animation-play-state: running; }
+
+/*
+ * A reveal ships hidden in the HTML and Motion shows it once it scrolls in. Without JS (the
+ * theme script in <head> never stamped `light` or `dark` on <html>) and under reduced motion
+ * it is drawn in its final state; a wire drawn by `pathLength` gets its whole stroke back.
+ */
+:root:not(.light, .dark) [data-reveal] {
+  opacity: 1 !important;
+  transform: none !important;
+  filter: none !important;
+}
+:root:not(.light, .dark) [data-wire] { stroke-dasharray: none !important; }
+
 @media (prefers-reduced-motion: reduce) {
   .rise, .stage-in, .caret { animation: none; }
-  [data-reveal] { opacity: 1 !important; transform: none !important; }
+  [data-reveal] { opacity: 1 !important; transform: none !important; filter: none !important; }
+  [data-wire] { stroke-dasharray: none !important; }
+  .dg .run { animation: none; visibility: hidden; }
 }
