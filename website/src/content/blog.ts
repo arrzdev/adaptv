@@ -70,7 +70,7 @@ export const POSTS: Post[] = [
         items: [
           "**The frame and scroll.** Every page lives in a fixed frame and scrolls inside it ([The frame](/docs/the-frame)).",
           "**Safe areas.** Insets are CSS utilities and the shell writes the viewport tag ([Safe areas](/docs/safe-areas)).",
-          "**The keyboard.** One keyboard signal on every target, with the layout locked against it ([Keyboard](/docs/keyboard)).",
+          "**The keyboard.** One keyboard signal on every target. On iOS and in a browser, the page does not reflow when the keyboard opens ([Keyboard](/docs/keyboard)).",
           "**Gestures and back.** One controller arbitrates the drawer, swipe back and pull to refresh, and Android back follows a priority chain.",
         ],
       },
@@ -92,9 +92,9 @@ export const POSTS: Post[] = [
         type: "ul",
         items: [
           "adaptv is not on npm. An app links a local checkout, as the repository's `website/` and `playground/` folders do.",
-          "iOS builds need macOS, Xcode and CocoaPods. `adaptv build ios` makes an unsigned `.ipa`, and you sign it in Xcode ([Native builds](/docs/native-builds)).",
+          "iOS builds need macOS, Xcode and CocoaPods. `adaptv build ios` makes an unsigned `.ipa`, and you sign it in your own pipeline ([Native builds](/docs/native-builds)).",
           "adaptv has no server side. Server functions are a build failure on every target.",
-          "Background work, Bluetooth, NFC and a Face ID lock are not handled ([Capabilities](/docs/capabilities)).",
+          "Background work, Bluetooth, NFC and a Face ID lock are not handled ([What an installed iOS PWA still cannot do](/blog/ios-pwa-limits-and-adaptv)).",
         ],
       },
       { type: "h2", text: "Try it" },
