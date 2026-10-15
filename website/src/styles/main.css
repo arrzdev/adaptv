@@ -184,14 +184,23 @@
 :root:not(.dark) .aurora { opacity: 0.5; }
 
 /*
- * The hero showcase: a box laid out at a fixed width (--fit) and scaled down to its
- * container's width, never up. CSS alone, so no measuring effect moves it after the first
- * paint: tan(atan2(a, b)) is a / b as a plain number. The container sets the height.
+ * The hero showcase is drawn in container units, never scaled. --u is one pixel of the mock
+ * at full size (--mock-w of them across its container: 1000 for the desktop window, 393 for
+ * the phone screen), and Tailwind's spacing, radii and widths are re-based on it, so `px-4`
+ * is 16 mock pixels and `text-[length:calc(13*var(--u))]` is 13. The first version shrank a
+ * fixed-size box with `scale: tan(atan2(100cqw, 1000px))`; an iPhone that dropped that
+ * declaration drew the window at full size and the phone blank (landing-v4 §2.1). The tokens
+ * stay unresolved until used, so they need no container query inside the mock.
  */
-.fit {
-  width: var(--fit);
-  transform-origin: 0 0;
-  scale: min(1, tan(atan2(100cqw, var(--fit))));
+.mock {
+  --u: calc(100cqw / var(--mock-w));
+  --spacing: calc(var(--u) * 4);
+  --radius-md: calc(var(--u) * 6);
+  --radius-lg: calc(var(--u) * 8);
+  --radius-xl: calc(var(--u) * 12);
+  --radius-2xl: calc(var(--u) * 16);
+  --container-xs: calc(var(--u) * 320);
+  width: 100%;
 }
 
 .text-gradient {

@@ -19,30 +19,33 @@ export function PhoneFrame({
   className?: string
 }) {
   const ios = platform === "ios"
+  //the frame is measured in its own width (cqw), so the bezel and corners keep their
+  //proportions from a 95 px phone on a phone screen to a 260 px one on a desktop
   return (
-    <View
-      className={cn(
-        "bg-gradient-to-b from-[#3a3a42] via-[#1b1b20] to-[#2c2c33] shadow-[0_40px_80px_-20px_rgba(0,0,0,0.55),0_0_0_1px_rgba(255,255,255,0.06)]",
-        ios ? "rounded-[46px] p-[7px]" : "rounded-[34px] p-[6px]",
-        className,
-      )}
-    >
+    <div className={cn("@container", className)}>
       <View
         className={cn(
-          "relative overflow-hidden bg-black ring-1 ring-black",
-          ios ? "rounded-[39px]" : "rounded-[28px]",
+          "bg-gradient-to-b from-[#3a3a42] via-[#1b1b20] to-[#2c2c33] shadow-[0_15cqw_30cqw_-8cqw_rgba(0,0,0,0.55),0_0_0_1px_rgba(255,255,255,0.06)]",
+          ios ? "rounded-[17.7cqw] p-[2.7cqw]" : "rounded-[13cqw] p-[2.3cqw]",
         )}
       >
-        {children}
-        {ios ? (
-          //Dynamic Island: 126 × 37 pt, 11 pt down, on a 393 × 852 pt screen
-          <span className="pointer-events-none absolute top-[1.3%] left-1/2 h-[4.3%] w-[32%] -translate-x-1/2 rounded-full bg-black" />
-        ) : (
-          //punch-hole camera, centred in the status bar
-          <span className="pointer-events-none absolute top-[1.4%] left-1/2 aspect-square w-[3.4%] -translate-x-1/2 rounded-full bg-black" />
-        )}
+        <View
+          className={cn(
+            "relative overflow-hidden bg-black ring-1 ring-black",
+            ios ? "rounded-[15cqw]" : "rounded-[10.8cqw]",
+          )}
+        >
+          {children}
+          {ios ? (
+            //Dynamic Island: 126 × 37 pt, 11 pt down, on a 393 × 852 pt screen
+            <span className="pointer-events-none absolute top-[1.3%] left-1/2 h-[4.3%] w-[32%] -translate-x-1/2 rounded-full bg-black" />
+          ) : (
+            //punch-hole camera, centred in the status bar
+            <span className="pointer-events-none absolute top-[1.4%] left-1/2 aspect-square w-[3.4%] -translate-x-1/2 rounded-full bg-black" />
+          )}
+        </View>
       </View>
-    </View>
+    </div>
   )
 }
 
@@ -59,13 +62,13 @@ export function BrowserFrame({
   return (
     <View
       className={cn(
-        "overflow-hidden rounded-2xl border border-border-strong bg-surface shadow-[0_50px_100px_-30px_rgba(0,0,0,0.6)]",
+        "overflow-hidden rounded-2xl border border-border-strong bg-surface shadow-[0_calc(50*var(--u))_calc(100*var(--u))_calc(-30*var(--u))_rgba(0,0,0,0.6)]",
         className,
       )}
     >
       {/* three fixed columns, the last one empty: a spacer element after the address bar
           could be parsed after a first paint, and the bar centred again when it arrived */}
-      <View className="grid h-10 shrink-0 grid-cols-[42px_1fr_46px] items-center gap-3 border-border border-b bg-sunken px-4">
+      <View className="grid h-10 shrink-0 grid-cols-[calc(42*var(--u))_1fr_calc(46*var(--u))] items-center gap-3 border-border border-b bg-sunken px-4">
         <View row className="gap-1.5">
           <span className="size-2.5 rounded-full bg-[#ff5f57]" />
           <span className="size-2.5 rounded-full bg-[#febc2e]" />
@@ -73,7 +76,7 @@ export function BrowserFrame({
         </View>
         <View
           row
-          className="mx-auto h-6 w-full max-w-xs items-center gap-1.5 rounded-md px-2.5 bg-background font-mono text-[11px] text-muted"
+          className="mx-auto h-6 w-full max-w-xs items-center gap-1.5 rounded-md px-2.5 bg-background font-mono text-[length:calc(11*var(--u))] text-muted"
         >
           <Lock className="size-2.5" />
           {url}
