@@ -1,9 +1,9 @@
 import { expect, type Locator, type Page, test } from "@playwright/test"
 
-//The landing after landing-v3 (TUD-889 doc `landing-v3`, task TUD-890): the hero shows "Tally",
-//one budget app drawn in HTML/CSS as a desktop browser window and as a phone, then come the
-//platform marks strip, the components grid, Why adaptv, How it compares and the closing quick
-//start. "Where it runs", "From idea to installed app" and "Built with adaptv" are gone.
+//The landing after landing-v4 (doc `landing-v4`): the hero shows "Tally", one budget app drawn
+//in HTML/CSS as a desktop browser window and as a phone, then come the platform marks strip,
+//the components grid, "The hard parts are already decided", "Four ways to ship one app" and
+//the closing quick start. Sections are centred heads over large flat cards.
 //Layout is read from the rendered boxes, not from class names.
 
 const SHOWCASE_LABEL =
@@ -39,7 +39,7 @@ function box(locator: Locator) {
 
 test.describe("Tally showcase", () => {
   for (const width of [390, 1440]) {
-    test(`desktop window and phone are both visible at ${width} px`, async ({
+    test(`desktop window and phone are both visible at ${width} px @webkit`, async ({
       page,
     }) => {
       await open(page, width)
@@ -71,9 +71,10 @@ test.describe("Tally showcase", () => {
       const d = await box(desktop)
       const p = await box(phone)
       const s = await box(stage)
-      //the desktop window keeps its desktop layout at every width: laid out about 1000 px wide
-      expect.soft(d.layoutWidth, "desktop layout width").toBeGreaterThanOrEqual(960)
-      expect.soft(d.layoutWidth, "desktop layout width").toBeLessThanOrEqual(1040)
+      //the desktop window keeps its desktop layout at every width: the sidebar is a fifth of it
+      const side = await box(parts.sidebar)
+      expect.soft(side.width / d.width, "sidebar a fifth of the window").toBeGreaterThanOrEqual(0.18)
+      expect.soft(side.width / d.width, "sidebar a fifth of the window").toBeLessThanOrEqual(0.22)
       expect.soft(d.right, "desktop window inside the viewport").toBeLessThanOrEqual(d.innerWidth)
       expect.soft(d.left, "desktop window inside the viewport").toBeGreaterThanOrEqual(0)
       expect.soft(p.right, "phone inside the viewport").toBeLessThanOrEqual(p.innerWidth)
@@ -88,11 +89,27 @@ test.describe("Tally showcase", () => {
         expect.soft(p.width, "phone about 260 px wide").toBeGreaterThanOrEqual(230)
         expect.soft(p.width, "phone about 260 px wide").toBeLessThanOrEqual(290)
       } else {
-        //scaled down to the content width; the phone is about 46 % of it
-        expect.soft(d.width, "window fills the content width").toBeGreaterThanOrEqual(s.width * 0.9)
-        expect.soft(p.width / s.width, "phone about 46 % of the width").toBeGreaterThanOrEqual(0.38)
-        expect.soft(p.width / s.width, "phone about 46 % of the width").toBeLessThanOrEqual(0.55)
+        //landing-v4 §2.1: the window takes the full content width, the phone is about 26 % of
+        //it and covers only the window's bottom-right corner
+        expect.soft(d.width, "window fills the stage").toBeGreaterThanOrEqual(s.width - 1)
+        expect.soft(d.width, "window wider than the page column").toBeGreaterThanOrEqual(width - 32)
+        expect.soft(p.width / s.width, "phone about 26 % of the width").toBeGreaterThanOrEqual(0.22)
+        expect.soft(p.width / s.width, "phone about 26 % of the width").toBeLessThanOrEqual(0.3)
+        expect.soft(p.top, "phone below the window's middle").toBeGreaterThan(d.top + d.height * 0.5)
       }
+      //the phone screen is not empty: its large title is drawn inside the phone, at its scale
+      //the text's own box: the span is stretched to the screen's width
+      const title = await parts["large title"].evaluate((el) => {
+        const range = document.createRange()
+        range.selectNodeContents(el)
+        return range.getBoundingClientRect()
+      })
+      expect.soft(title.left, "title inside the phone").toBeGreaterThanOrEqual(p.left)
+      expect.soft(title.right, "title inside the phone").toBeLessThanOrEqual(p.right)
+      expect.soft(title.top, "title inside the phone").toBeGreaterThanOrEqual(p.top)
+      expect.soft(title.bottom, "title inside the phone").toBeLessThanOrEqual(p.bottom)
+      expect.soft(title.width / p.width, "title at the phone's scale").toBeGreaterThan(0.2)
+      expect.soft(title.width / p.width, "title at the phone's scale").toBeLessThan(0.6)
 
       const scroll = await page.evaluate(() => ({
         scrollWidth: document.documentElement.scrollWidth,
@@ -150,6 +167,28 @@ test.describe("Tally showcase", () => {
     //the inner content is decoration for assistive tech: the label says it all
     await expect(stage.locator(":scope > *").first()).toHaveAttribute("aria-hidden", "true")
   })
+
+  //landing-v4 §2.1: on an iPhone the window drew unscaled and the phone blank. Both views were
+  //laid out at a fixed size and shrunk by a computed `scale: tan(atan2(...))`; a browser that
+  //drops that declaration draws them at full size. Now they are drawn in container units, so
+  //no element of the showcase is scaled at all
+  for (const width of [390, 1440]) {
+    test(`nothing in the showcase is scaled at ${width} px @webkit`, async ({ page }) => {
+      await open(page, width)
+      const stage = showcase(page)
+      await expect(stage).toBeVisible()
+      const scaled = await stage.evaluate((root) =>
+        [root, ...root.querySelectorAll("*")]
+          .map((el) => {
+            const cs = getComputedStyle(el)
+            const name = `${el.tagName.toLowerCase()}.${String(el.getAttribute("class")).slice(0, 40)}`
+            return { name, scale: cs.scale, zoom: cs.zoom }
+          })
+          .filter((e) => !["none", "1"].includes(e.scale) || !["1", "normal"].includes(e.zoom)),
+      )
+      expect(scaled).toEqual([])
+    })
+  }
 
   test("one data set feeds both views", async ({ page }) => {
     await open(page, 1440)
@@ -295,11 +334,11 @@ test.describe("Tally showcase", () => {
 })
 
 const HERO_TITLE = "Write React once Feel native everywhere."
-const WHY_TITLE = "One React app. At home on every screen."
-const COMPARE_TITLE = "Good tools exist. adaptv picks a different trade."
+const HARD_TITLE = "The hard parts are already decided"
+const COMPARE_TITLE = "Four ways to ship one app"
 
 test.describe("section order", () => {
-  test("hero, strip, components, why adaptv, how it compares, quick start", async ({
+  test("hero, strip, components, the hard parts, four ways, quick start", async ({
     page,
   }) => {
     await open(page, 1440)
@@ -312,11 +351,18 @@ test.describe("section order", () => {
     expect(headings).toEqual([
       HERO_TITLE,
       "Try the components here",
-      WHY_TITLE,
+      HARD_TITLE,
       COMPARE_TITLE,
       "Start with the quick start",
     ])
-    for (const gone of ["Where it runs", "From idea to installed app", "Built with adaptv"])
+    for (const gone of [
+      "Where it runs",
+      "From idea to installed app",
+      "Built with adaptv",
+      "Why adaptv",
+      "How it compares",
+      "One React app. At home on every screen.",
+    ])
       await expect.soft(page.getByText(gone), `"${gone}" is gone`).toHaveCount(0)
   })
 
@@ -391,185 +437,306 @@ test.describe("platform strip", () => {
   }
 })
 
-const WHY_BODY =
-  "Most teams build their app twice: once for the web, once for phones. Or they wrap a website in an app shell, and users can tell. adaptv lets you write your app once, in ordinary React, and gives each platform what it expects: the gestures, the sheets, the back button, the safe areas, the offline mode, the home-screen icon."
-
-const WHY_POINTS = [
-  [
-    "One codebase.",
-    "Desktop web, mobile web, an installable home-screen app, and iOS and Android apps.",
-  ],
-  [
-    "Feels native, not wrapped.",
-    "Drawers, swipes, pull-to-refresh and keyboards behave the way each phone does.",
-  ],
-  [
-    "The web stays first.",
-    "It is still the web: your CSS, your React libraries, your browser tools.",
-  ],
-] as const
-
-const WHY_ART =
-  "One React file becomes the same app on a desktop browser, a phone browser, an iPhone and an Android phone."
-
-/** The illustration's layout: reserved box, CSS aspect-ratio and what it is drawn with. */
-function art(locator: Locator) {
-  return locator.evaluate((el) => ({
-    aspectRatio: getComputedStyle(el).aspectRatio,
-    svg: el.querySelectorAll("svg").length,
-    raster: el.querySelectorAll("img, picture, canvas, video, iframe, svg image").length,
-  }))
-}
-
-/** An eyebrow: a short line above the section's title. */
-async function expectEyebrow(sec: Locator, text: string, title: string) {
-  const eyebrow = sec.getByText(text, { exact: true })
-  await expect(eyebrow).toBeVisible()
-  const [e, h] = await Promise.all([
-    box(eyebrow),
-    box(sec.getByRole("heading", { level: 2, name: title })),
-  ])
-  expect(e.bottom, "eyebrow above the title").toBeLessThanOrEqual(h.top)
-}
-
-test.describe("Why adaptv", () => {
-  test("eyebrow, title, body and the three points", async ({ page }) => {
-    await open(page, 1440)
-    const why = section(page, WHY_TITLE)
-    await expect(why).toHaveCount(1)
-    await expectEyebrow(why, "Why adaptv", WHY_TITLE)
-    await expect(why).toContainText(WHY_BODY)
-    const points = why.getByRole("listitem")
-    await expect(points).toHaveText(WHY_POINTS.map(([lead, line]) => `${lead} ${line}`))
-    for (const [lead] of WHY_POINTS)
-      await expect.soft(why.getByText(lead, { exact: true }), `${lead} is its own run`).toBeVisible()
-    //no code and no step list: a drawing and three points
-    await expect(why.locator("pre, code, ol, [role=tablist]")).toHaveCount(0)
-  })
-
-  for (const width of [390, 1440]) {
-    test(`one SVG drawing with a fixed aspect ratio at ${width} px`, async ({ page }) => {
-      await open(page, width)
-      const why = section(page, WHY_TITLE)
-      const drawing = why.getByRole("img", { name: WHY_ART, exact: true })
-      await expect(drawing).toHaveCount(1)
-      await drawing.scrollIntoViewIfNeeded()
-      await expect(drawing).toBeVisible()
-      const a = await art(drawing)
-      expect(a.aspectRatio, "CSS aspect-ratio reserves its box").not.toBe("auto")
-      expect(a.svg, "drawn in SVG").toBeGreaterThan(0)
-      expect(a.raster, "no raster image").toBe(0)
-      const b = await box(drawing)
-      //three stages: left to right on desktop, top to bottom on a phone
-      if (width >= 768) expect(b.width, "landscape on desktop").toBeGreaterThan(b.height)
-      else expect(b.height, "portrait on a phone").toBeGreaterThan(b.width)
-      expect(b.right, "inside the viewport").toBeLessThanOrEqual(b.innerWidth)
-      //the points: one row on desktop, stacked on a phone
-      expect(await rows(why.getByRole("listitem"))).toHaveLength(width >= 768 ? 1 : 3)
-    })
-  }
-})
-
-const COMPARE: { name: string; text: string }[] = [
-  {
-    name: "Expo (React Native)",
-    text: "Renders real native views. Excellent native feel and a large ecosystem. The trade: you leave the web platform. Web support exists, but the web is not where it starts.",
-  },
-  {
-    name: "Ionic",
-    text: "Builds apps with web technology on top of Capacitor, with ready-made iOS and Material themes. The trade: you adopt its own components and look.",
-  },
-  {
-    name: "adaptv",
-    text: "Plain React and CSS on the web platform, with Capacitor for the native parts — the same native bridge Ionic uses. The web is the primary target, and the framework handles what each platform expects, so you don't need a second app.",
-  },
-]
-
-test.describe("How it compares", () => {
-  test("eyebrow, title, three cards in order, the footnote", async ({ page }) => {
-    await open(page, 1440)
-    const compare = section(page, COMPARE_TITLE)
-    await expect(compare).toHaveCount(1)
-    await expectEyebrow(compare, "How it compares", COMPARE_TITLE)
-    const cards = compare.getByRole("listitem")
-    await expect(cards).toHaveCount(3)
-    await expect(cards.getByRole("heading", { level: 3 })).toHaveText(
-      COMPARE.map((c) => c.name),
-    )
-    for (const [i, card] of COMPARE.entries())
-      await expect.soft(cards.nth(i), card.name).toContainText(card.text)
-    await expect(compare).toContainText("adaptv is pre-alpha and not yet on npm.")
-    //no table of checkmarks, no code
-    await expect(compare.locator("table, pre, code, ol")).toHaveCount(0)
-    await expect(compare).not.toContainText(/[✓✔✗✘]/)
-  })
-
-  test("fair: no winner styling, no put-downs or numbers about the others", async ({
-    page,
-  }) => {
-    await open(page, 1440)
-    const compare = section(page, COMPARE_TITLE)
-    const cards = compare.getByRole("listitem")
-    await expect(cards).toHaveCount(3)
-    await expect(compare).not.toContainText(/\b(recommended|best|winner)\b/i)
-    for (const i of [0, 1]) {
-      const text = (await cards.nth(i).innerText()).replace(/\s+/g, " ")
-      expect.soft(text, `${COMPARE[i].name}: no put-downs`).not.toMatch(
-        /\b(slow|dead|old|outdated|legacy|abandoned)\b/i,
-      )
-      expect.soft(text, `${COMPARE[i].name}: no numbers`).not.toMatch(/\d/)
+/** A section head as landing-v4 draws it: centred, no eyebrow above the title. */
+async function expectCentredHead(sec: Locator, title: string) {
+  const h2 = sec.getByRole("heading", { level: 2, name: title, exact: true })
+  await expect(h2).toBeVisible()
+  const [h, s] = await Promise.all([box(h2), box(sec)])
+  const centre = (h.left + h.right) / 2
+  expect.soft(Math.abs(centre - (s.left + s.right) / 2), `${title}: centred`).toBeLessThanOrEqual(2)
+  expect.soft(await h2.evaluate((el) => getComputedStyle(el).textAlign), `${title}: text centred`).toBe("center")
+  //no eyebrow: nothing in the section is drawn above the title
+  const above = await sec.evaluate((root, top) => {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+    const hits: string[] = []
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      const text = n.textContent?.trim()
+      if (!text) continue
+      const range = document.createRange()
+      range.selectNodeContents(n)
+      const r = range.getBoundingClientRect()
+      if (r.height > 0 && r.bottom <= top) hits.push(text)
     }
-    //same colour for all three
-    const looks = await cards.evaluateAll((els) =>
-      els.map((el) => {
-        const cs = getComputedStyle(el)
-        return [cs.backgroundColor, cs.borderTopColor, cs.borderTopWidth, cs.boxShadow].join(" | ")
-      }),
-    )
-    expect(new Set(looks).size, `one look: ${looks.join(" / ")}`).toBe(1)
-  })
+    return hits
+  }, h.top)
+  expect.soft(above, `${title}: no eyebrow`).toEqual([])
+}
 
+/** The cards of a section: the `data-card` boxes. */
+function cards(sec: Locator) {
+  return sec.locator("[data-card]")
+}
+
+/** A card's look: background, border, shadow, radius. */
+function look(locator: Locator) {
+  return locator.evaluateAll((els) =>
+    els.map((el) => {
+      const cs = getComputedStyle(el)
+      return {
+        background: cs.backgroundColor,
+        shadow: cs.boxShadow,
+        radius: cs.borderTopLeftRadius,
+        border: cs.borderTopColor,
+      }
+    }),
+  )
+}
+
+test.describe("card system", () => {
   for (const width of [390, 1440]) {
-    test(`three equal cards, each with one SVG drawing, at ${width} px`, async ({ page }) => {
+    test(`flat cards, 24 / 40 px radius, no shadow, no hairline between sections at ${width} px`, async ({
+      page,
+    }) => {
       await open(page, width)
-      const cards = section(page, COMPARE_TITLE).getByRole("listitem")
-      await expect(cards).toHaveCount(3)
-      await cards.first().scrollIntoViewIfNeeded()
-      const sizes = await cards.evaluateAll((els) =>
-        els.map((el) => {
-          const r = el.getBoundingClientRect()
-          return { width: r.width, height: r.height }
-        }),
-      )
-      for (const s of sizes.slice(1))
-        expect.soft(Math.abs(s.width - sizes[0].width), "same width").toBeLessThanOrEqual(1)
-      //side by side on desktop, same height; stacked on a phone
-      if (width >= 768) {
-        for (const s of sizes.slice(1))
-          expect.soft(Math.abs(s.height - sizes[0].height), "same height").toBeLessThanOrEqual(1)
-        expect(await rows(cards)).toHaveLength(1)
-      } else expect(await rows(cards)).toHaveLength(3)
-
-      for (const [i, card] of COMPARE.entries()) {
-        const drawing = cards.nth(i).getByRole("img")
-        await expect.soft(drawing, `${card.name}: one drawing`).toHaveCount(1)
-        await expect.soft(drawing, `${card.name}: drawing is named`).toHaveAccessibleName(/\S/)
-        const a = await art(drawing)
-        expect.soft(a.aspectRatio, `${card.name}: aspect-ratio`).not.toBe("auto")
-        expect.soft(a.svg, `${card.name}: SVG`).toBeGreaterThan(0)
-        expect.soft(a.raster, `${card.name}: no raster`).toBe(0)
+      for (const title of ["Try the components here", HARD_TITLE, COMPARE_TITLE]) {
+        const sec = section(page, title)
+        await expectCentredHead(sec, title)
+        const looks = await look(cards(sec))
+        expect(looks.length, `${title}: has cards`).toBeGreaterThan(0)
+        for (const l of looks) {
+          expect.soft(l.radius, `${title}: card radius`).toBe(width >= 768 ? "40px" : "24px")
+          expect.soft(l.shadow, `${title}: no shadow`).toBe("none")
+          expect.soft(l.border, `${title}: border transparent`).toBe("rgba(0, 0, 0, 0)")
+        }
+        expect.soft(new Set(looks.map((l) => l.background)).size, `${title}: one card colour`).toBe(1)
+        const pageBg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor)
+        expect.soft(looks[0].background, `${title}: one shade off the page`).not.toBe(pageBg)
+        expect
+          .soft(await sec.evaluate((el) => getComputedStyle(el).borderTopWidth), `${title}: no hairline`)
+          .toBe("0px")
       }
     })
   }
 })
 
+const HARD_LEDE =
+  "Gestures, scroll, the keyboard and safe areas behave the way each phone expects. You write the app."
+
+const HARD_CARDS = [
+  [
+    "One React app on every screen",
+    "The same code deploys to the web, installs from the browser, and builds for iOS and Android.",
+  ],
+  [
+    "One gesture at a time",
+    "One controller decides who owns each touch: the sheet, the back swipe or pull-to-refresh.",
+  ],
+  [
+    "The keyboard never hides the field",
+    "The page stays put, and the sheet rises with the keyboard instead.",
+  ],
+  [
+    "Edge to edge, inside the safe areas",
+    "The framework owns the insets and the scroll, so content never slides under the notch or drags the page.",
+  ],
+  [
+    "Mistakes stop at build time",
+    "Code that cannot run inside an app fails the build, not your users.",
+  ],
+] as const
+
+test.describe("The hard parts are already decided", () => {
+  test("lede, five cards in order, each a title, a body and one diagram", async ({ page }) => {
+    await open(page, 1440)
+    const hard = section(page, HARD_TITLE)
+    await expect(hard).toHaveCount(1)
+    await expect(hard).toContainText(HARD_LEDE)
+    const list = cards(hard)
+    await expect(list).toHaveCount(5)
+    await expect(list.getByRole("heading", { level: 3 })).toHaveText(HARD_CARDS.map(([t]) => t))
+    for (const [i, [, body]] of HARD_CARDS.entries()) {
+      const card = list.nth(i)
+      await expect.soft(card, `card ${i}`).toContainText(body)
+      //the diagram is decoration: the card's text carries the meaning
+      const svg = card.locator("svg[viewBox]")
+      await expect.soft(svg.first(), `card ${i}: diagram hidden from assistive tech`).toHaveAttribute("aria-hidden", "true")
+      expect.soft(await card.locator("img, picture, canvas, video, iframe").count(), `card ${i}: no raster`).toBe(0)
+    }
+    await expect(list.first().getByRole("link", { name: /See the targets/ })).toHaveAttribute(
+      "href",
+      "/docs/six-targets",
+    )
+    //the claim on card E is the build's own message
+    await expect(list.nth(4)).toContainText("adaptv apps have no server side")
+  })
+
+  for (const width of [390, 1440]) {
+    test(`the first card spans the grid, the rest pair up at ${width} px`, async ({ page }) => {
+      await open(page, width)
+      const list = cards(section(page, HARD_TITLE))
+      await expect(list).toHaveCount(5)
+      const boxes = await list.evaluateAll((els) =>
+        els.map((el) => {
+          const r = el.getBoundingClientRect()
+          return { left: r.left, top: Math.round(r.top), width: r.width, height: r.height }
+        }),
+      )
+      const [a, ...rest] = boxes
+      if (width >= 768) {
+        for (const b of rest)
+          expect.soft(a.width, "card A is two cards wide").toBeGreaterThan(b.width * 1.8)
+        expect.soft(new Set(rest.map((b) => b.top)).size, "two rows of two").toBe(2)
+      } else {
+        expect.soft(new Set(boxes.map((b) => b.top)).size, "one column").toBe(5)
+        for (const b of rest) expect.soft(Math.abs(b.width - a.width), "same width").toBeLessThanOrEqual(1)
+      }
+      for (const b of boxes) expect.soft(b.left + b.width, "inside the viewport").toBeLessThanOrEqual(width)
+    })
+  }
+})
+
+//landing-v4 §2.5, the rows from docs/research/landscape.md §1 (each one sourced there)
+const COMPARE = [
+  ["adaptv", "React, HTML and CSS", "The browser's DOM; a WebView in the apps", "The primary target"],
+  ["Ionic + Capacitor", "Angular, React or Vue", "Web Components in a WebView", "A web app"],
+  ["React Native + Expo", "React", "Real native views", "Through react-native-web"],
+  ["Flutter", "Dart", "Its own engine, every pixel", "Supported; not for text-heavy sites"],
+] as const
+const COMPARE_ROWS = ["You write", "What draws the UI", "The web"]
+
+test.describe("Four ways to ship one app", () => {
+  test("lede, four columns of three labelled rows, the footnote", async ({ page }) => {
+    await open(page, 1440)
+    const compare = section(page, COMPARE_TITLE)
+    await expect(compare).toHaveCount(1)
+    await expect(compare).toContainText("Each tool draws the line in a different place. Here is where.")
+    const columns = compare.getByRole("listitem")
+    await expect(columns).toHaveCount(4)
+    await expect(columns.getByRole("heading", { level: 3 })).toHaveText(COMPARE.map(([name]) => name))
+    for (const [i, [name, ...values]] of COMPARE.entries()) {
+      const col = columns.nth(i)
+      await expect.soft(col.locator("dt"), `${name}: labels`).toHaveText(COMPARE_ROWS)
+      await expect.soft(col.locator("dd"), `${name}: rows`).toHaveText([...values])
+      for (const v of values) expect.soft(v.split(/\s+/).length, `${name}: "${v}" ≤ 8 words`).toBeLessThanOrEqual(8)
+    }
+    await expect(compare).toContainText("adaptv is pre-alpha and not yet on npm.")
+    await expect(compare).not.toContainText(/[✓✔✗✘]/)
+    await expect(compare).not.toContainText(/\b(recommended|best|winner|can't|cannot)\b/i)
+    await expect(compare).not.toContainText("Draft copy")
+  })
+
+  for (const width of [390, 1440]) {
+    test(`four equal columns, one look, at ${width} px`, async ({ page }) => {
+      await open(page, width)
+      const columns = section(page, COMPARE_TITLE).getByRole("listitem")
+      await expect(columns).toHaveCount(4)
+      await columns.first().scrollIntoViewIfNeeded()
+      const sizes = await columns.evaluateAll((els) =>
+        els.map((el) => {
+          const r = el.getBoundingClientRect()
+          const cs = getComputedStyle(el)
+          return {
+            width: r.width,
+            height: r.height,
+            look: [cs.backgroundColor, cs.borderTopColor, cs.borderTopWidth, cs.boxShadow].join(" | "),
+          }
+        }),
+      )
+      for (const s of sizes.slice(1)) {
+        expect.soft(Math.abs(s.width - sizes[0].width), "same width").toBeLessThanOrEqual(1)
+        expect.soft(s.look, "same look as adaptv's column").toBe(sizes[0].look)
+      }
+      if (width >= 768) {
+        for (const s of sizes.slice(1))
+          expect.soft(Math.abs(s.height - sizes[0].height), "same height").toBeLessThanOrEqual(1)
+        expect(await rows(columns)).toHaveLength(1)
+      } else expect(await rows(columns)).toHaveLength(4)
+    })
+  }
+})
+
+test.describe("closing", () => {
+  test("one large app-icon tile behind the title, copy unchanged", async ({ page }) => {
+    await open(page, 1440)
+    const close = section(page, "Start with the quick start")
+    await expect(close).toContainText(
+      "Clone the repository and run the playground on a simulator or your phone.",
+    )
+    const tile = close.locator("[data-icon-tile]")
+    await expect(tile).toHaveCount(1)
+    const [t, h] = await Promise.all([box(tile), box(close.getByRole("heading", { level: 2 }))])
+    expect.soft(Math.abs(t.width - t.height), "square").toBeLessThanOrEqual(1)
+    expect.soft(t.width, "460 px").toBeGreaterThanOrEqual(440)
+    expect.soft(Math.abs((t.left + t.right) / 2 - (h.left + h.right) / 2), "behind the title").toBeLessThanOrEqual(2)
+  })
+})
+
 //landing-v3 "Zero layout shift": every layout-shift entry from the first paint through a
 //scroll to the bottom and back, at a phone and a desktop width. Reveals move by transform,
 //which is not a layout shift; a box that grows, a late font or an image without size is.
-test.describe("zero layout shift", () => {
+/** Down in viewport-sized steps, so every reveal and lazy part runs, then back up. */
+async function scrollThrough(page: Page) {
+  const height = await page.evaluate(() => document.documentElement.scrollHeight)
+  for (let y = 0; y <= height; y += 450) {
+    await page.evaluate((top) => window.scrollTo(0, top), y)
+    await page.waitForTimeout(150)
+  }
+  await page.waitForTimeout(1500)
+  await page.evaluate(() => window.scrollTo(0, 0))
+  await page.waitForTimeout(500)
+}
+
+/** Every revealed block that is not drawn in its final state: faded, moved or blurred. */
+function unrevealed(page: Page) {
+  return page.locator("[data-reveal]").evaluateAll((els) =>
+    els
+      .map((el) => {
+        const cs = getComputedStyle(el)
+        return {
+          text: (el.textContent ?? "").trim().slice(0, 40),
+          opacity: cs.opacity,
+          transform: cs.transform,
+          filter: cs.filter,
+        }
+      })
+      .filter((e) => e.opacity !== "1" || e.transform !== "none" || e.filter !== "none"),
+  )
+}
+
+//landing-v4 §3: under reduced motion every reveal is drawn in its final state and nothing runs
+test.describe("reduced motion", () => {
   for (const width of [390, 1440]) {
-    test(`CLS is 0 over a full scroll at ${width} px`, async ({ page }) => {
+    test(`no animation runs and every block is in place at ${width} px`, async ({ page }) => {
       test.setTimeout(60_000)
+      await page.emulateMedia({ reducedMotion: "reduce" })
+      await open(page, width)
+      await expect(page.locator("[data-reveal]").first()).toBeAttached()
+      await scrollThrough(page)
+      const running = await page.evaluate(() =>
+        document.getAnimations().map((a) => {
+          const target = (a.effect as KeyframeEffect | null)?.target as Element | null
+          return `${a.constructor.name} on ${target?.tagName.toLowerCase()}.${String(target?.getAttribute("class")).slice(0, 40)}`
+        }),
+      )
+      expect(running).toEqual([])
+      expect(await unrevealed(page)).toEqual([])
+    })
+  }
+})
+
+//landing-v4 §3 rule 5: a reveal ships hidden in the HTML; without JS it must not stay hidden
+test.describe("without JavaScript", () => {
+  test.use({ javaScriptEnabled: false })
+  test("every section is visible", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 900 })
+    await page.goto("/")
+    await expect(page.locator("[data-reveal]").first()).toBeAttached()
+    expect(await unrevealed(page)).toEqual([])
+    for (const title of ["Try the components here", HARD_TITLE, COMPARE_TITLE, "Start with the quick start"])
+      await expect.soft(page.getByRole("heading", { level: 2, name: title })).toBeVisible()
+  })
+})
+
+test.describe("zero layout shift", () => {
+  for (const [width, colorScheme] of [
+    [390, "light"],
+    [390, "dark"],
+    [1440, "light"],
+    [1440, "dark"],
+  ] as const) {
+    test(`CLS is 0 over a full scroll at ${width} px, ${colorScheme}`, async ({ page }) => {
+      test.setTimeout(60_000)
+      await page.emulateMedia({ colorScheme })
       await page.addInitScript(() => {
         const w = window as unknown as { shifts: { value: number; nodes: string[] }[] }
         w.shifts = []
@@ -592,15 +759,8 @@ test.describe("zero layout shift", () => {
         }).observe({ type: "layout-shift", buffered: true })
       })
       await open(page, width)
-      //down in viewport-sized steps, so every reveal and lazy part runs, then back up
-      const height = await page.evaluate(() => document.documentElement.scrollHeight)
-      for (let y = 0; y <= height; y += 450) {
-        await page.evaluate((top) => window.scrollTo(0, top), y)
-        await page.waitForTimeout(150)
-      }
-      await page.waitForTimeout(1000)
-      await page.evaluate(() => window.scrollTo(0, 0))
-      await page.waitForTimeout(500)
+      await expect(page.locator("html")).toHaveClass(new RegExp(`\\b${colorScheme}\\b`))
+      await scrollThrough(page)
       const shifts = await page.evaluate(
         () => (window as unknown as { shifts: { value: number; nodes: string[] }[] }).shifts,
       )
