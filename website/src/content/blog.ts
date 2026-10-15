@@ -17,6 +17,94 @@ export type Post = {
 
 export const POSTS: Post[] = [
   {
+    slug: "one-react-codebase-web-and-ios",
+    title: "One React codebase for web and iOS: what adaptv does today",
+    date: "2026-10-15",
+    kind: "Field note",
+    author: "arrz.dev",
+    summary:
+      "adaptv runs one React codebase as a website, an installed PWA and a native iOS or Android app. What you write, what the framework decides, how it differs from Ionic, and what is not ready.",
+    seoTitle: "One React codebase for web and iOS with adaptv",
+    seoDescription:
+      "One React codebase for web, an installed PWA and native iOS and Android. What adaptv decides for you, how it differs from Ionic, and what is not ready.",
+    blocks: [
+      {
+        type: "note",
+        tone: "warn",
+        text: "adaptv is pre-alpha and not on npm yet. There is no install command. You run it from a checkout of the repository, and this page describes what the `main` branch does today.",
+      },
+      {
+        type: "p",
+        text: "The question is a common one: can one React codebase ship as a website and as an iOS app, without a second UI to maintain? With adaptv the answer is yes, with one condition: the app is a web app. You write React and CSS. The same code runs in a browser tab, as an installed PWA, and inside a native shell for iOS and Android.",
+      },
+      { type: "h2", text: "What you write" },
+      {
+        type: "p",
+        text: "A minimal app is five source files plus `package.json` and `tsconfig.json`. You write no `index.html`, manifest, service worker or native project. One `adaptv.config.ts` holds the name, colours and app id, and the CLI generates the rest ([Quick start](/docs/quick-start)).",
+      },
+      { type: "h2", text: "One code, six targets" },
+      {
+        type: "p",
+        text: "adaptv counts six targets: desktop browser, an iOS tab, an Android tab, an installed iOS PWA, an installed Android PWA, and a native app. Where they differ, you say so in the markup instead of branching your code tree:",
+      },
+      {
+        type: "code",
+        label: "header.tsx",
+        lang: "tsx",
+        code: `<View row className="web:py-4 app:pt-safe-offset-2 app:pb-2">
+  <BackButton className="web:hidden app:flex" />
+  <Title />
+</View>`,
+      },
+      {
+        type: "p",
+        text: "`app:` applies in an installed PWA and in a native app, and `web:` applies in a browser tab. In JavaScript, `isInstalledApp()`, `isNativePlatform()` and `getOS()` answer the same questions. The page [The six targets](/docs/six-targets) has the full list.",
+      },
+      { type: "h2", text: "What the framework decides" },
+      {
+        type: "p",
+        text: "Most of the work in a cross-platform app is the part nobody sees. adaptv owns it, so you cannot get it wrong by accident:",
+      },
+      {
+        type: "ul",
+        items: [
+          "**The frame and scroll.** Every page lives in a fixed frame and scrolls inside it ([The frame](/docs/the-frame)).",
+          "**Safe areas.** Insets are CSS utilities and the shell writes the viewport tag ([Safe areas](/docs/safe-areas)).",
+          "**The keyboard.** One keyboard signal on every target. On iOS and in a browser, the page does not reflow when the keyboard opens ([Keyboard](/docs/keyboard)).",
+          "**Gestures and back.** One controller arbitrates the drawer, swipe back and pull to refresh, and Android back follows a priority chain.",
+        ],
+      },
+      {
+        type: "p",
+        text: "The behaviour on iOS is the reason this exists, and we write it up with device findings: [Freezing the iOS viewport when the keyboard opens](/blog/ios-keyboard-viewport-freeze) and [What an installed iOS PWA still cannot do](/blog/ios-pwa-limits-and-adaptv).",
+      },
+      { type: "h2", text: "How it differs from Ionic" },
+      {
+        type: "p",
+        text: "If you are looking for an Ionic alternative for React, the honest comparison is narrow. Both run web code in a WebView on native. Ionic ships a component set whose styles adapt to iOS or Material mode, and you can override them ([Ionic platform styles](https://ionicframework.com/docs/theming/platform-styles)). adaptv ships primitives instead of a themed kit, and it decides scroll, safe areas, keyboard and gestures in the framework, so your app does not carry that glue. adaptv is React only, where Ionic also supports Angular and Vue.",
+      },
+      {
+        type: "note",
+        text: "We did not compare Ionic's component-level keyboard and gesture handling line by line, so this page makes no claim that adaptv does it better.",
+      },
+      { type: "h2", text: "What is not ready" },
+      {
+        type: "ul",
+        items: [
+          "adaptv is not on npm. An app links a local checkout, as the repository's `website/` and `playground/` folders do.",
+          "iOS builds need macOS, Xcode and CocoaPods. `adaptv build ios` makes an unsigned `.ipa`, and you sign it in your own pipeline ([Native builds](/docs/native-builds)).",
+          "adaptv has no server side. Server functions are a build failure on every target.",
+          "Background work, Bluetooth, NFC and a Face ID lock are not handled ([What an installed iOS PWA still cannot do](/blog/ios-pwa-limits-and-adaptv)).",
+        ],
+      },
+      { type: "h2", text: "Try it" },
+      {
+        type: "p",
+        text: "Clone the repository and follow [Quick start](/docs/quick-start) to run the playground in a browser or in the iOS Simulator. If this is the problem you have, [star adaptv on GitHub](https://github.com/arrzdev/adaptv) to follow it to the first release.",
+      },
+    ],
+  },
+  {
     slug: "ios-pwa-limits-and-adaptv",
     title:
       "What an installed iOS PWA still cannot do, and what adaptv does about it",
