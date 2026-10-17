@@ -266,13 +266,17 @@ test.describe("Spinner", () => {
         e.ph === "b" &&
         e.args?.data?.displayName?.startsWith("adaptv-spinner"),
     )
-    const verdicts = events
-      .filter(
-        (e) =>
-          ids.has(e.id2?.local) &&
-          typeof e.args?.data?.compositeFailed === "number",
+    //Chromium re-judges an animation as the frame it rides changes; a cold, loaded
+    //host reports a transient reason (8224 on the first frame) before the settled 0.
+    //The last verdict per animation is the one that says where it runs.
+    const lastById = new Map<string | undefined, number>()
+    for (const e of events)
+      if (
+        ids.has(e.id2?.local) &&
+        typeof e.args?.data?.compositeFailed === "number"
       )
-      .map((e) => e.args?.data?.compositeFailed)
+        lastById.set(e.id2?.local, e.args.data.compositeFailed)
+    const verdicts = [...lastById.values()]
     console.log(
       `[spinner-q2-trace chromium] nodes=${JSON.stringify([...new Set(begun.map((e) => e.args?.data?.nodeName?.split(" ")[0]))])} compositeFailed=${JSON.stringify(verdicts)}`,
     )
