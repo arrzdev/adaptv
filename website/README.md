@@ -31,7 +31,10 @@ crash that names neither.
 | `src/components/sections/` | The landing page, one file per band, in page order. |
 | `src/components/inbox/` | The hero's app: one `useInbox()` state, rendered as a phone layout and a desktop layout. Both are real adaptv components, so the hero is interactive rather than a picture. |
 | `src/components/demos/` | The live *plain web view vs adaptv* side-by-sides. |
-| `src/components/section.tsx`, `reveal.tsx` | The band primitive (figure number, claim left, one sentence right) and the scroll-in fade. |
+| `src/components/section.tsx`, `card.tsx` | The band primitive (a centred title and one sentence over its cards) and the flat card (`--card`, 40 / 24 px radius, no border or shadow): a visual, a title, a body, a link. |
+| `src/components/reveal.tsx`, `motion.ts` | The scroll-in reveal and its variants (`head`, `visual`, `text`, plus `tile` and `wire` for diagrams). Hidden in the HTML, drawn in place without JS and under reduced motion. |
+| `src/components/diagram/` | The diagrams on the landing cards: inline SVG, `aria-hidden`, tiles and wires on the `--tile` / `--tile-line` / `--wire` tokens, one brand accent. |
+| `src/components/showcase/` | Tally, the hero's budget app, as a desktop window and a phone. Drawn in container units (`.mock` in `main.css`), never scaled. |
 | `src/components/frames.tsx` | Phone and browser frames drawn in CSS. They take children, because what is inside them runs. |
 | `src/content/` | Everything the landing page and blog say: code samples, field notes. |
 | `src/content/docs/` | The documentation. `pages/<slug>.ts` is one page; `index.ts` is the sidebar order, and the overview, search and pager all read it. `../blocks.ts` is the block vocabulary (prose, props tables, API signatures, per-target tables, live demos). |

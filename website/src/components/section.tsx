@@ -4,8 +4,9 @@ import { Reveal } from "@/components/reveal"
 import { cn } from "@/utils/cn"
 
 /**
- * A band of the ruled sheet. The head is two columns — the claim on the left, the one
- * sentence that earns it on the right — so a section never opens with a wall of text.
+ * A band of the landing: a centred head (the claim, then the one sentence that earns it)
+ * over its cards. No eyebrow and no hairline: sections are separated by space alone
+ * (landing-v4 §2).
  */
 export function Section({
   title,
@@ -21,18 +22,22 @@ export function Section({
   id?: string
 }) {
   return (
-    <section id={id} className="sheet ruled">
-      <View className={cn("gap-14 px-6 py-20 md:px-10 md:py-28", className)}>
-        <Reveal className="grid items-end gap-6 md:grid-cols-[1.25fr_1fr] md:gap-16">
-          <h2 className="text-balance font-semibold text-[clamp(2rem,4.6vw,3.5rem)] leading-[1.02] tracking-[-0.04em]">
-            {title}
-          </h2>
+    <section id={id} className="sheet">
+      <View className={cn("px-4 pt-22 md:px-10 md:pt-28", className)}>
+        <View className="mx-auto mb-8 max-w-[720px] items-center text-center md:mb-12">
+          <Reveal variant="head">
+            <h2 className="text-balance font-semibold text-[clamp(2rem,1.1rem+2.9vw,3rem)] leading-[1.08] tracking-[-0.035em]">
+              {title}
+            </h2>
+          </Reveal>
           {lede ? (
-            <p className="text-pretty text-[16.5px] text-subtle leading-relaxed md:pb-1.5 md:text-[17.5px]">
-              {lede}
-            </p>
+            <Reveal variant="head" delay={0.12}>
+              <p className="mt-4 max-w-[34rem] text-pretty text-[16px] text-subtle leading-[1.55] md:text-[17px]">
+                {lede}
+              </p>
+            </Reveal>
           ) : null}
-        </Reveal>
+        </View>
         {children}
       </View>
     </section>

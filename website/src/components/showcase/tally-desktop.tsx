@@ -54,6 +54,53 @@ export function Bar({
   )
 }
 
+/**
+ * Each end-aligned label's width in Geist, in mock pixels (`--u`), measured in Chromium at
+ * full size. The mocks set text at 4 px on a phone, where the fallback font is a third
+ * narrower than Geist: right-aligned, a label moved left when Geist swapped in, a layout
+ * shift. In a box as wide as its Geist width, pinned to the end, its start never moves.
+ * A label missing here is still drawn, right-aligned by its own width.
+ */
+const END_WIDTH: Record<string, number> = {
+  "Oct 14": 32.01,
+  "$312 of $400": 76.01,
+  "$156 of $300": 77.01,
+  "$62 of $200": 71.01,
+  "$48 of $60": 63.01,
+  Amount: 45.01,
+  "−$42.18": 44.01,
+  "−$8.90": 37.01,
+  "+$3,150.00": 61.01,
+  "−$12.99": 44.01,
+  "−$4.60": 37.01,
+}
+
+/** Text at the end of its row or cell, in a box of its Geist width (see END_WIDTH). */
+export function End({
+  children,
+  className,
+  widths = END_WIDTH,
+}: {
+  children: string
+  className?: string
+  /** The mock's own widths, when its text is set at another size. */
+  widths?: Record<string, number>
+}) {
+  const width = widths[children]
+  return (
+    <span
+      data-end
+      className={cn(
+        "ml-auto block shrink-0 whitespace-nowrap text-left",
+        className,
+      )}
+      style={width ? { width: `calc(${width} * var(--u))` } : undefined}
+    >
+      {children}
+    </span>
+  )
+}
+
 function Card({
   label,
   note,
@@ -68,11 +115,20 @@ function Card({
 }) {
   return (
     <View className="gap-0.5 rounded-xl border border-border bg-surface px-4 py-3">
-      <View row className="justify-between text-[12px] text-muted">
+      {/* the note sits left-aligned after a fixed edge, in a box as wide as it is in Geist:
+          right-aligned, it moved when the web font swapped in */}
+      <View
+        row
+        className="justify-between text-[length:calc(12*var(--u))] text-muted"
+      >
         <span>{label}</span>
-        {note ? <span>{note}</span> : null}
+        {note ? (
+          <span className="w-[calc(56*var(--u))] shrink-0 whitespace-nowrap">
+            {note}
+          </span>
+        ) : null}
       </View>
-      <span className="font-semibold text-[20px] tracking-[-0.02em]">
+      <span className="font-semibold text-[length:calc(20*var(--u))] tracking-[-0.02em]">
         {value}
       </span>
       {children}
@@ -82,26 +138,29 @@ function Card({
 
 /**
  * Tally in a desktop browser window: a sidebar, the month at a glance, a chart, the budgets
- * and the latest transactions. Laid out at 1000 × 580 and scaled down as a whole on a phone,
- * so it keeps its desktop layout at every width.
+ * and the latest transactions. Drawn on a 1000 × 580 grid in container units (`.mock`), so it
+ * keeps its desktop layout at every width without being scaled.
  */
 export function TallyDesktop({ className }: { className?: string }) {
   return (
     <div
       data-testid="tally-desktop"
-      className={cn("fit [--fit:1000px]", className)}
+      className={cn("mock [--mock-w:1000]", className)}
     >
-      <BrowserFrame url="tally.app" className="h-[580px] text-left">
+      <BrowserFrame
+        url="tally.app"
+        className="h-[calc(580*var(--u))] text-left"
+      >
         <View row className="h-full min-h-0">
           <View
             data-testid="tally-sidebar"
-            className="w-[200px] shrink-0 gap-6 border-border border-r bg-sunken px-4 py-5"
+            className="w-[calc(200*var(--u))] shrink-0 gap-6 border-border border-r bg-sunken px-4 py-5"
           >
             <View row className="items-center gap-2 px-2">
-              <span className="grid size-6 place-items-center rounded-md bg-brand font-bold text-[13px] text-brand-foreground">
+              <span className="grid size-6 place-items-center rounded-md bg-brand font-bold text-[length:calc(13*var(--u))] text-brand-foreground">
                 T
               </span>
-              <span className="font-semibold text-[15px] tracking-[-0.01em]">
+              <span className="font-semibold text-[length:calc(15*var(--u))] tracking-[-0.01em]">
                 Tally
               </span>
             </View>
@@ -111,7 +170,7 @@ export function TallyDesktop({ className }: { className?: string }) {
                   key={label}
                   row
                   className={cn(
-                    "h-8 items-center gap-2.5 rounded-md px-2 text-[13px]",
+                    "h-8 items-center gap-2.5 rounded-md px-2 text-[length:calc(13*var(--u))]",
                     index === 0
                       ? "bg-surface font-medium text-foreground"
                       : "text-subtle",
@@ -126,10 +185,10 @@ export function TallyDesktop({ className }: { className?: string }) {
 
           <View className="min-w-0 flex-1 gap-3 overflow-hidden px-7 py-4">
             <View className="gap-0.5">
-              <span className="font-semibold text-[24px] leading-tight tracking-[-0.03em]">
+              <span className="font-semibold text-[length:calc(24*var(--u))] leading-tight tracking-[-0.03em]">
                 {MONTH}
               </span>
-              <span className="text-[13px] text-muted">
+              <span className="text-[length:calc(13*var(--u))] text-muted">
                 {`${usd(LEFT)} left to spend`}
               </span>
             </View>
@@ -142,13 +201,15 @@ export function TallyDesktop({ className }: { className?: string }) {
               <Card label="Left" value={usd(LEFT)} />
             </div>
 
-            <div className="grid grid-cols-[1.15fr_1fr] gap-3">
+            <div className="grid grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] gap-3">
               <View className="gap-2 rounded-xl border border-border bg-surface px-4 py-3">
-                <span className="font-medium text-[13px]">Daily spending</span>
+                <span className="font-medium text-[length:calc(13*var(--u))]">
+                  Daily spending
+                </span>
                 <View
                   row
                   data-testid="tally-chart"
-                  className="h-[64px] items-end gap-1.5 border-border border-b"
+                  className="h-[calc(64*var(--u))] items-end gap-1.5 border-border border-b"
                 >
                   {DAILY.map((amount, index) => {
                     const future = index + 1 > TODAY
@@ -158,7 +219,7 @@ export function TallyDesktop({ className }: { className?: string }) {
                         key={index}
                         data-testid="tally-bar"
                         className={cn(
-                          "flex-1 rounded-t-[3px]",
+                          "flex-1 rounded-t-[calc(3*var(--u))]",
                           future
                             ? "h-1/4 border border-border-strong border-b-0"
                             : "bg-brand",
@@ -172,21 +233,26 @@ export function TallyDesktop({ className }: { className?: string }) {
                     )
                   })}
                 </View>
-                <View row className="justify-between text-[11px] text-muted">
-                  <span>Oct 1</span>
-                  <span>Oct 14</span>
+                <View
+                  row
+                  className="text-[length:calc(11*var(--u))] text-muted"
+                >
+                  <span className="flex-1">Oct 1</span>
+                  <End>Oct 14</End>
                 </View>
               </View>
 
               <View className="gap-1.5 rounded-xl border border-border bg-surface px-4 py-3">
-                <span className="font-medium text-[13px]">Budgets</span>
+                <span className="font-medium text-[length:calc(13*var(--u))]">
+                  Budgets
+                </span>
                 {BUDGETS.map((budget) => (
                   <View key={budget.name} className="gap-0.5">
-                    <View row className="justify-between text-[12px]">
-                      <span>{budget.name}</span>
-                      <span className="text-muted">
+                    <View row className="text-[length:calc(12*var(--u))]">
+                      <span className="flex-1">{budget.name}</span>
+                      <End className="text-muted">
                         {`${usd(budget.spent)} of ${usd(budget.limit)}`}
-                      </span>
+                      </End>
                     </View>
                     <Bar value={percent(budget.spent, budget.limit)} />
                   </View>
@@ -195,29 +261,53 @@ export function TallyDesktop({ className }: { className?: string }) {
             </div>
 
             <View className="rounded-xl border border-border bg-surface px-4 py-2.5">
-              <span className="pb-0.5 font-medium text-[13px]">Recent</span>
-              <table className="w-full text-[12px]">
+              <span className="pb-0.5 font-medium text-[length:calc(13*var(--u))]">
+                Recent
+              </span>
+              {/* fixed columns, as wide as Geist lays them out: auto widths follow the
+                  font, and the swap moved every cell */}
+              <table className="w-full table-fixed text-[length:calc(12*var(--u))]">
+                <colgroup>
+                  <col className="w-[calc(207.56*var(--u))]" />
+                  <col className="w-[calc(221.78*var(--u))]" />
+                  <col className="w-[calc(105.2*var(--u))]" />
+                  <col className="w-[calc(173.45*var(--u))]" />
+                </colgroup>
                 <thead className="text-left text-muted">
                   <tr>
-                    <th className="py-[2px] font-normal">Merchant</th>
-                    <th className="py-[2px] font-normal">Category</th>
-                    <th className="py-[2px] font-normal">Date</th>
-                    <th className="py-[2px] text-right font-normal">Amount</th>
+                    <th className="py-[calc(2*var(--u))] font-normal">
+                      Merchant
+                    </th>
+                    <th className="py-[calc(2*var(--u))] font-normal">
+                      Category
+                    </th>
+                    <th className="py-[calc(2*var(--u))] font-normal">Date</th>
+                    <th className="py-[calc(2*var(--u))] font-normal">
+                      <End>Amount</End>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {TRANSACTIONS.map((t) => (
                     <tr key={t.merchant} className="border-border border-t">
-                      <td className="py-[2px] font-medium">{t.merchant}</td>
-                      <td className="py-[2px] text-subtle">{t.category}</td>
-                      <td className="py-[2px] text-subtle">{t.date}</td>
-                      <td
-                        className={cn(
-                          "py-[2px] text-right tabular-nums",
-                          t.amount > 0 && "text-success",
-                        )}
-                      >
-                        {signed(t.amount)}
+                      <td className="py-[calc(2*var(--u))] font-medium">
+                        {t.merchant}
+                      </td>
+                      <td className="py-[calc(2*var(--u))] text-subtle">
+                        {t.category}
+                      </td>
+                      <td className="py-[calc(2*var(--u))] text-subtle">
+                        {t.date}
+                      </td>
+                      <td className="py-[calc(2*var(--u))]">
+                        <End
+                          className={cn(
+                            "tabular-nums",
+                            t.amount > 0 && "text-success",
+                          )}
+                        >
+                          {signed(t.amount)}
+                        </End>
                       </td>
                     </tr>
                   ))}
