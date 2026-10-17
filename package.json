@@ -1,7 +1,6 @@
 {
   "name": "adaptv",
   "version": "0.1.0-alpha.1",
-  "private": true,
   "description": "One React codebase, shipped as desktop web, mobile web, an installable home-screen app, and real iOS and Android apps that don't feel like a website in a box.",
   "type": "module",
   "license": "MIT",
@@ -11,7 +10,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/arrzdev/adaptv.git"
+    "url": "git+https://github.com/arrzdev/adaptv.git"
   },
   "bin": {
     "adaptv": "./bin/adaptv.mjs"
