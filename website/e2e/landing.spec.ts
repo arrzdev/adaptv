@@ -78,7 +78,11 @@ test.describe("Tally showcase", () => {
       expect.soft(d.right, "desktop window inside the viewport").toBeLessThanOrEqual(d.innerWidth)
       expect.soft(d.left, "desktop window inside the viewport").toBeGreaterThanOrEqual(0)
       expect.soft(p.right, "phone inside the viewport").toBeLessThanOrEqual(p.innerWidth)
-      //the phone overlaps the window's bottom-right corner
+      //the phone stands level with the window: centred on its height, never hanging below it
+      expect
+        .soft(Math.abs((p.top + p.bottom) / 2 - (d.top + d.bottom) / 2), "phone level with the window")
+        .toBeLessThanOrEqual(2)
+      //the phone overlaps the window's right edge
       expect.soft(p.left, "phone overlaps the window").toBeLessThan(d.right)
       expect.soft(p.top, "phone overlaps the window").toBeLessThan(d.bottom)
       expect.soft(p.right, "phone sits at the right").toBeGreaterThan(d.right - p.width)
@@ -89,16 +93,15 @@ test.describe("Tally showcase", () => {
         expect.soft(p.width, "phone about 260 px wide").toBeGreaterThanOrEqual(230)
         expect.soft(p.width, "phone about 260 px wide").toBeLessThanOrEqual(290)
       } else {
-        //landing-v4 §2.1: the window takes the full content width, the phone is about 26 % of
-        //it and covers only the window's bottom-right corner
+        //landing-v4 §2.1: the window takes the full content width, the phone is about a
+        //quarter of it and covers only the window's right edge
         expect.soft(d.width, "window fills the stage").toBeGreaterThanOrEqual(s.width - 1)
         //the hero, not the viewport: a desktop browser's scrollbar takes 15 px of the 390
         expect
           .soft(d.width, "window wider than the page column")
           .toBeGreaterThanOrEqual(heroBox.width - 32)
-        expect.soft(p.width / s.width, "phone about 26 % of the width").toBeGreaterThanOrEqual(0.22)
-        expect.soft(p.width / s.width, "phone about 26 % of the width").toBeLessThanOrEqual(0.3)
-        expect.soft(p.top, "phone below the window's middle").toBeGreaterThan(d.top + d.height * 0.5)
+        expect.soft(p.width / s.width, "phone about a quarter of the width").toBeGreaterThanOrEqual(0.22)
+        expect.soft(p.width / s.width, "phone about a quarter of the width").toBeLessThanOrEqual(0.3)
       }
       //the phone screen is not empty: its large title is drawn inside the phone, at its scale
       //the text's own box: the span is stretched to the screen's width
