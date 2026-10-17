@@ -252,6 +252,15 @@ test.describe("Tally showcase", () => {
   //the network: the hero is laid out once in the fallback font (Geist blocked) and once in
   //Geist, and the showcase must sit at the same place in both (TUD-861: the intro wrapped to
   //3 lines in the fallback and 4 in Geist, and the swap pushed the showcase down 31 px).
+  //The showcase slides up 24 px as it enters (`stage-in`, done 540 ms after the first style):
+  //its box is read once that has finished, or the two loads compare two points of the slide
+  //and not two layouts. When Geist arrived inside those 540 ms the Geist reading sat 8 px
+  //lower than the fallback one at 640 px, with the same layout in both fonts.
+  async function restingBox(locator: Locator) {
+    await locator.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)))
+    return box(locator)
+  }
+
   for (const width of [640, 768, 1024, 1440]) {
     test(`the web font swap moves nothing in the hero at ${width} px`, async ({
       page,
@@ -259,7 +268,7 @@ test.describe("Tally showcase", () => {
       //two full page loads: on a loaded VM each one has taken 12-15 s
       test.setTimeout(60_000)
       await open(page, width)
-      const geist = await box(showcase(page))
+      const geist = await restingBox(showcase(page))
       //the intro's box is as tall as its lines in Geist: a copy edit that wraps it to 3 or 5
       //lines must change its reserved height too
       const intro = page.getByText(/^adaptv is a React framework/)
@@ -279,7 +288,7 @@ test.describe("Tally showcase", () => {
           [...document.fonts].some((f) => f.family.includes("Geist")),
         ),
       ).toBe(false)
-      const fallback = await box(showcase(page))
+      const fallback = await restingBox(showcase(page))
       expect(fallback.top).toBe(geist.top)
     })
   }
