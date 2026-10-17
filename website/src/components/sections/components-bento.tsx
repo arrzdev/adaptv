@@ -8,10 +8,46 @@ import {
   WheelColumn,
 } from "adaptv/components"
 import { BellOff, Moon, Pin, Plane, Trash2, Wifi } from "lucide-react"
+import type { ReactNode } from "react"
 import { useMemo, useState } from "react"
-import { Card } from "@/components/card"
+import { Reveal } from "@/components/reveal"
 import { Section } from "@/components/section"
 import { cn } from "@/utils/cn"
+
+function Card({
+  title,
+  line,
+  children,
+  className,
+  stageClassName,
+}: {
+  title: string
+  line: string
+  children: ReactNode
+  className?: string
+  stageClassName?: string
+}) {
+  return (
+    <Reveal className={cn("h-full", className)}>
+      <View className="h-full overflow-hidden rounded-3xl border border-border bg-surface">
+        <View
+          className={cn(
+            "dots relative min-h-[260px] flex-1 items-center justify-center p-6 sm:p-8",
+            stageClassName,
+          )}
+        >
+          {children}
+        </View>
+        <View className="gap-1.5 border-border border-t p-6">
+          <span className="font-medium text-[16px] tracking-tight">
+            {title}
+          </span>
+          <span className="text-[14px] text-muted leading-relaxed">{line}</span>
+        </View>
+      </View>
+    </Reveal>
+  )
+}
 
 const NOTES = [
   ["Standup moved to 10:30", "Calendar"],
@@ -30,7 +66,7 @@ function SwipeRows() {
             <Swipeable.Content>
               <View
                 row
-                className="items-center gap-3 rounded-2xl border border-tile-line bg-tile px-4 py-3 text-left"
+                className="items-center gap-3 rounded-2xl border border-border-strong bg-raised px-4 py-3.5"
               >
                 <span
                   className={cn(
@@ -80,7 +116,7 @@ function SwipeRows() {
       {rows.length === 0 ? (
         <Pressable
           onPress={() => setRows([0, 1, 2])}
-          className="self-center rounded-full bg-tile px-4 py-2 font-medium text-[13px] active:opacity-70"
+          className="self-center rounded-full bg-sunken px-4 py-2 font-medium text-[13px] active:opacity-70"
         >
           Bring them back
         </Pressable>
@@ -147,12 +183,12 @@ const SETTINGS = [
 function Switches() {
   const [state, setState] = useState<boolean[]>(SETTINGS.map((row) => row.on))
   return (
-    <View className="w-full max-w-xs overflow-hidden rounded-2xl border border-tile-line bg-tile text-left">
+    <View className="w-full max-w-xs overflow-hidden rounded-2xl border border-border bg-raised">
       {SETTINGS.map(({ icon: Icon, label }, index) => (
         <View
           key={label}
           row
-          className="items-center gap-3 border-tile-line px-4 py-3 [&:not(:first-child)]:border-t"
+          className="items-center gap-3 border-border px-4 py-3 [&:not(:first-child)]:border-t"
         >
           <Icon className="size-4 text-muted" />
           <span className="flex-1 text-[14px]">{label}</span>
@@ -213,9 +249,6 @@ function SheetTrigger() {
   )
 }
 
-/** A demo's box: a fixed height, so a demo never resizes its card. */
-const STAGE = "h-[220px] md:h-[260px]"
-
 /** Not screenshots of components: the components. */
 export function ComponentsBento() {
   return (
@@ -226,34 +259,30 @@ export function ComponentsBento() {
       <View className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <Card
           className="md:col-span-2"
-          visualClassName={STAGE}
-          visual={<SwipeRows />}
-          small
           title="Swipe a row"
-          body="Follows your finger, leaves vertical scrolling alone, and keeps one row open at a time."
-        />
+          line="Follows your finger, leaves vertical scrolling alone, and keeps one row open at a time."
+        >
+          <SwipeRows />
+        </Card>
         <Card
-          visualClassName={STAGE}
-          visual={<TimeWheel />}
-          small
           title="Spin the wheel"
-          body="Flick it: it coasts, slows down and settles on a value without a jump."
-        />
+          line="Flick it: it coasts, slows down and settles on a value without a jump."
+        >
+          <TimeWheel />
+        </Card>
         <Card
-          visualClassName={STAGE}
-          visual={<SheetTrigger />}
-          small
           title="Open a sheet"
-          body="Pull it down to close it. On a phone it stays above the keyboard; on Android, Back closes it."
-        />
+          line="Pull it down to close it. On a phone it stays above the keyboard; on Android, Back closes it."
+        >
+          <SheetTrigger />
+        </Card>
         <Card
           className="md:col-span-2"
-          visualClassName={STAGE}
-          visual={<Switches />}
-          small
           title="Flip a switch"
-          body="Screen readers get the label and the state. On a phone you feel a haptic tick."
-        />
+          line="Screen readers get the label and the state. On a phone you feel a haptic tick."
+        >
+          <Switches />
+        </Card>
       </View>
     </Section>
   )

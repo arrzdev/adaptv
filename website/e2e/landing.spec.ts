@@ -491,7 +491,9 @@ test.describe("card system", () => {
       page,
     }) => {
       await open(page, width)
-      for (const title of ["Try the components here", HARD_TITLE, COMPARE_TITLE]) {
+      //the components grid keeps v3's cards on the dotted canvas (board): a centred head only
+      await expectCentredHead(section(page, "Try the components here"), "Try the components here")
+      for (const title of [HARD_TITLE, COMPARE_TITLE]) {
         const sec = section(page, title)
         await expectCentredHead(sec, title)
         const looks = await look(cards(sec))
@@ -649,18 +651,15 @@ test.describe("Four ways to ship one app", () => {
 })
 
 test.describe("closing", () => {
-  test("one large app-icon tile behind the title, copy unchanged", async ({ page }) => {
+  //the board kept v3's closing: the soft brand gradient under the title, copy unchanged
+  test("the brand gradient under the title, copy unchanged", async ({ page }) => {
     await open(page, 1440)
     const close = section(page, "Start with the quick start")
     await expect(close).toContainText(
       "Clone the repository and run the playground on a simulator or your phone.",
     )
-    const tile = close.locator("[data-icon-tile]")
-    await expect(tile).toHaveCount(1)
-    const [t, h] = await Promise.all([box(tile), box(close.getByRole("heading", { level: 2 }))])
-    expect.soft(Math.abs(t.width - t.height), "square").toBeLessThanOrEqual(1)
-    expect.soft(t.width, "460 px").toBeGreaterThanOrEqual(440)
-    expect.soft(Math.abs((t.left + t.right) / 2 - (h.left + h.right) / 2), "behind the title").toBeLessThanOrEqual(2)
+    await expect(close.locator(".aurora")).toHaveCount(1)
+    await expect(close.locator("[data-icon-tile]")).toHaveCount(0)
   })
 })
 
@@ -803,5 +802,7 @@ test.describe("components grid", () => {
       await expect.soft(grid.getByText(line, { exact: true })).toBeAttached()
     }
     await expect(grid).not.toContainText("Tailwind")
+    //the board kept v3's cards: each demo sits on the dotted canvas
+    await expect(grid.locator(".dots")).toHaveCount(4)
   })
 })
