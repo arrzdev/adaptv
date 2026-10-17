@@ -2,7 +2,7 @@
 
 A fair comparison, for two readers: the team (what adaptv really is) and the website (what to say to
 a new developer). Every outside claim carries a link that was opened on **2026-10-14**; what could
-not be opened is marked `[TBD: awaiting real data]`. Repo claims point at a path. Market numbers
+not be opened is marked `[TBD: awaiting real data]`; rival cells with no link are marked the same way. Two pages were opened later: Ionic platform styles (2026-10-15) and expo-updates/Expo web (2026-10-17). Repo claims point at a path. Market numbers
 live in [`../decisions/positioning.md`](../decisions/positioning.md) §1 and are not repeated here.
 
 > **Correction to carry forward.** "Ionic can't do custom UI" is wrong. Ionic styles adapt per platform mode: iOS styles on Apple devices, Material Design on Android, and the mode is set as a class on `<html>` ([platform styles](https://ionicframework.com/docs/theming/platform-styles)), which is the hook for overriding them.
@@ -17,18 +17,18 @@ live in [`../decisions/positioning.md`](../decisions/positioning.md) §1 and are
 | UI kit | Primitives carrying the platform divergences (`src/interface/components.index.ts`, 36 export lines) | Component set that adapts to iOS or Material Design mode ([platform styles](https://ionicframework.com/docs/theming/platform-styles)) | Core components mapped to native views; richer kits are third-party ([RN docs](https://reactnative.dev/docs/intro-react-native-components)) | Material and Cupertino widget sets ([Cupertino](https://docs.flutter.dev/ui/widgets/cupertino)) |
 | Web output | First-class: the web is the primary target. `docs/VISION.md` §1 | A web app; Capacitor says "if it works in the browser, it probably works" in the app ([Capacitor](https://capacitorjs.com/docs)) | Supported, static or client rendering ([Expo web](https://docs.expo.dev/workflow/web/)) | Supported, but "not suitable for static websites with text-rich flow-based content"; SEO limits ([Flutter web FAQ](https://docs.flutter.dev/platform-integration/web/faq)) |
 | Native API access | Capacitor plugins wrapped as hooks/functions, branch chosen inside (`src/capabilities/`, `README.md`) | Capacitor plugin API: Swift, Java, JS ([Capacitor](https://capacitorjs.com/docs)) | Native modules; New Architecture (JSI, Fabric, TurboModules) on by default since 0.76 ([RN](https://reactnative.dev/docs/the-new-architecture/landing-page)) | Platform channels and FFI ([architecture](https://docs.flutter.dev/resources/architectural-overview)) |
-| OTA | Self-hosted signed channel, `docs/design/ota.md`, `src/ota/` | Appflow Live Updates pushes HTML, JS and CSS changes only, binary-compatible ([Appflow](https://ionic.io/docs/appflow/deploy/intro)); Capacitor's own live-updates guide returned 404 → `[TBD: awaiting real data]` on whether Capacitor alone has one | EAS Update; JS and assets only, native changes need a new binary, code signing supported ([expo-updates](https://docs.expo.dev/versions/latest/sdk/updates/)) | `[TBD: awaiting real data]` (not researched this run) |
-| Distribution | Web deploy, installable PWA, `.ipa`/`.apk` from `adaptv build` (`README.md`) | Web, PWA, stores via Capacitor | Stores; web hosting | Stores; web hosting |
-| Learning curve | Know React and CSS; the CLI hides the native project (`docs/decisions/positioning.md` §2 "The consumer never touches Capacitor") | Know your web framework plus Ionic components; Capacitor config by hand | React plus a second layout/styling model and native tooling | A new language and widget system |
-| Typical trade-offs | WebView ceiling; pre-alpha, unpublished (`README.md`) | WebView ceiling; UI-layer health, see `positioning.md` §1 | Leaves the DOM; the web is not the home target | Separate engine and language; web text/SEO limits |
+| OTA | Self-hosted signed channel, `docs/design/ota.md`, `src/ota/` | Appflow Live Updates pushes HTML, JS and CSS changes only, binary-compatible ([Appflow](https://ionic.io/docs/appflow/deploy/intro)); Capacitor's own live-updates guide returned 404 → `[TBD: awaiting real data]` on whether Capacitor alone has one | `expo-updates` speaks the Expo Updates protocol; EAS Update is one server, a custom server also works ([expo-updates](https://docs.expo.dev/versions/latest/sdk/updates/), [custom server](https://github.com/expo/custom-expo-updates-server)); optional code signing via `codeSigningCertificate` | `[TBD: awaiting real data]` (not researched this run) |
+| Distribution | Web deploy, installable PWA, `.ipa`/`.apk` from `adaptv build` (`README.md`) | Web, PWA, stores via Capacitor `[TBD: awaiting real data]` | Stores; web hosting `[TBD: awaiting real data]` | Stores; web hosting `[TBD: awaiting real data]` |
+| Learning curve | Know React and CSS; the CLI hides the native project (`docs/decisions/positioning.md` §2 "The consumer never touches Capacitor") | `[TBD: awaiting real data]` | `[TBD: awaiting real data]` | Dart and its widget system ([architecture](https://docs.flutter.dev/resources/architectural-overview)) |
+| Typical trade-offs | WebView ceiling; pre-alpha, unpublished (`README.md`) | UI-layer health, see `positioning.md` §1; WebView ceiling `[TBD: awaiting real data]` | Renders native views, not the DOM ([RN docs](https://reactnative.dev/docs/intro-react-native-components)) | Separate engine and language; web text/SEO limits ([Flutter web FAQ](https://docs.flutter.dev/platform-integration/web/faq)) |
 
 ## 2. What the developer decides vs what the framework decides
 
 | Area | adaptv | Ionic | React Native/Expo | Flutter |
 |---|---|---|---|---|
-| Navigation and transitions | Framework (TanStack Router + adaptv shell) | Ionic's router and page transitions | Dev picks navigator (Expo Router is the Expo default) | Dev uses Navigator/router package |
-| Gestures, scroll, keyboard, safe areas | **Framework decides** (§3) | Components handle much of it; the dev owns app-level glue `[TBD: awaiting real data]` | Native views supply platform behaviour | Engine re-implements the behaviour |
-| Visual look | Dev owns it (className, Tailwind-optional) | Dev themes iOS/MD modes | Dev styles with `StyleSheet` | Dev picks Material/Cupertino or draws their own |
+| Navigation and transitions | Framework (TanStack Router + adaptv shell) | `[TBD: awaiting real data]` | `[TBD: awaiting real data]` | `[TBD: awaiting real data]` |
+| Gestures, scroll, keyboard, safe areas | **Framework decides** (§3) | Components handle much of it; the dev owns app-level glue `[TBD: awaiting real data]` | Native views supply platform behaviour ([RN docs](https://reactnative.dev/docs/intro-react-native-components)) | Engine draws instead of native widgets ([architecture](https://docs.flutter.dev/resources/architectural-overview)) |
+| Visual look | Dev owns it (className, Tailwind-optional) | Dev themes the iOS/MD modes ([platform styles](https://ionicframework.com/docs/theming/platform-styles)) | `[TBD: awaiting real data]` | Material or Cupertino widgets ([Cupertino](https://docs.flutter.dev/ui/widgets/cupertino)) or custom painting `[TBD: awaiting real data]` |
 
 Rows for non-adaptv tools that I could not open are `[TBD]`; do not turn them into website copy.
 
@@ -68,7 +68,7 @@ Short, true, fair. One per difference.
 3. **Scroll, keyboard, safe areas and gestures are already decided.** Source: §3 rows above; `docs/design/behaviors.md`.
 4. **Capacitor underneath, hidden from you.** The CLI generates and reverts the native config. Source: `docs/decisions/positioning.md` §2 "The consumer never touches Capacitor"; Capacitor is the shared runtime ([Capacitor](https://capacitorjs.com/docs)).
 5. **The dangerous mistakes fail at build time.** Server functions that cannot run in an app are rejected by the build. Source: `docs/design/server-boundary.md`.
-6. **Updates you host and sign yourself.** Source: `docs/design/ota.md`. Fair note: Expo also offers signed OTA, but hosted by Expo, while adaptv's is self-hosted ([expo-updates](https://docs.expo.dev/versions/latest/sdk/updates/)).
+6. **Updates you host and sign yourself, built in.** Source: `docs/design/ota.md`. Fair note: Expo also supports signed OTA on EAS or on your own server that implements its protocol ([expo-updates](https://docs.expo.dev/versions/latest/sdk/updates/)); do not claim self-hosting as unique to adaptv.
 7. **Your app is also a website.** Same code deploys to the web and installs as a PWA. Source: `README.md` ("What you get"). Fair note: Flutter web has SEO limits ([FAQ](https://docs.flutter.dev/platform-integration/web/faq)).
 
 Lines to avoid: "Ionic can't do custom UI" (false); "feels exactly native" (the objection to beat is
