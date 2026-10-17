@@ -7,6 +7,7 @@ the investigation cost real time and the codebase cannot tell you any of it.
 
 | Finding | Engine / platform | Reproduces on |
 |---|---|---|
+| [The landscape: Ionic, React Native/Expo, Flutter](landscape.md) | comparison | docs only |
 | [Where a transform is authored decides whether it settles](composited-transform-authoring.md) | WebKit | physical iPhone only |
 
 ## What belongs here
