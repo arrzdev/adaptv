@@ -57,6 +57,8 @@ API.
   reset `window` and an adaptv app has no document scroll. The router now also resets the page's root
   `ScrollView`. `resetScroll: false` on a `Link` or `navigate` keeps the offset; an app's own
   `scrollToTopSelectors` are added to adaptv's.
+- **`Link` takes `resetScroll`.** `<Link resetScroll={false}>` keeps the page where it is scrolled;
+  it was not a `Link` prop, so the opt-out above was a type error on adaptv's `Link`.
 
 ### Security
 

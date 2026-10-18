@@ -19,6 +19,7 @@ vi.mock("@tanstack/react-router", () => ({
     className,
     params: _params,
     search: _search,
+    resetScroll,
     ...rest
   }: {
     children?: ReactNode
@@ -26,9 +27,18 @@ vi.mock("@tanstack/react-router", () => ({
     className?: string
     params?: unknown
     search?: unknown
+    resetScroll?: boolean
     [attribute: string]: unknown
   }) => (
-    <a data-internal href={to} className={className} {...rest}>
+    <a
+      data-internal
+      data-reset-scroll={
+        resetScroll === undefined ? undefined : String(resetScroll)
+      }
+      href={to}
+      className={className}
+      {...rest}
+    >
       {children}
     </a>
   ),
@@ -66,6 +76,20 @@ describe("Link", () => {
     const a = getByRole("link")
     expect(a.getAttribute("data-internal")).not.toBeNull()
     expect(a.getAttribute("target")).toBeNull()
+  })
+
+  //a navigation resets the page scroller to the top (create-adaptv-router.ts); the
+  //router's own `resetScroll` is the way to keep the offset, so the link takes it.
+  //Typed on `LinkProps`: without it this file does not typecheck
+  it("passes resetScroll to the router link", () => {
+    const { getByRole } = render(
+      <Link to="/settings" search={{ tab: "b" }} resetScroll={false}>
+        Settings
+      </Link>,
+    )
+    expect(getByRole("link").getAttribute("data-reset-scroll")).toBe(
+      "false",
+    )
   })
 
   it("hands an external URL to ExternalLink's own new-tab anchor", () => {
