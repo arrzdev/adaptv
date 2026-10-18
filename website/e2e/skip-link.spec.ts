@@ -40,5 +40,17 @@ for (const { name, path } of PAGES) {
       }
     })
     expect(target).toEqual({ insideMain: true, insideHeader: false, insideNav: false })
+
+    //The next Tab lands on the first control after the skip point, not back in the header
+    //or the docs sidebar (which sits inside `main` but before the article).
+    await page.keyboard.press("Tab")
+    const next = await page.evaluate(() => {
+      const active = document.activeElement
+      return {
+        inContent: !!active?.closest("article, main"),
+        inChrome: !!active?.closest("header, nav, aside"),
+      }
+    })
+    expect(next).toEqual({ inContent: true, inChrome: false })
   })
 }
