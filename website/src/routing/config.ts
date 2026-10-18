@@ -7,6 +7,8 @@ export const routes = rootRoute([
   route("/docs/$slug", "pages/docs/doc.page.tsx"),
   route("/blog", "pages/blog.page.tsx"),
   route("/blog/$slug", "pages/blog/post.page.tsx"),
+  //a review page for the landing's visuals: linked from nowhere, noindex
+  route("/lab/visuals", "pages/lab/visuals.page.tsx"),
 ])
 
 export default routes
