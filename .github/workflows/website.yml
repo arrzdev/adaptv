@@ -206,11 +206,16 @@ jobs:
             echo "_Commit \`${GITHUB_SHA:0:7}\`._"
           } >> "$GITHUB_STEP_SUMMARY"
 
+      # The build wrote /version.json from GITHUB_SHA, so the site answering with this
+      # commit is the proof the deploy is live (and the drift check reads the same file).
       - name: Smoke
         run: |
           for i in 1 2 3 4 5 6; do
             code=$(curl -s -o /dev/null -w '%{http_code}' https://adaptv.tudu.dev/ || true)
-            [ "$code" = "200" ] && { echo "https://adaptv.tudu.dev/ → 200"; exit 0; }
-            echo "attempt $i: $code"; sleep 10
+            body=$(curl -s -H 'Cache-Control: no-cache' https://adaptv.tudu.dev/version.json || true)
+            if [ "$code" = "200" ] && printf '%s' "$body" | grep -q "\"sha\":\"${GITHUB_SHA}\""; then
+              echo "https://adaptv.tudu.dev/ → 200, /version.json → $body"; exit 0
+            fi
+            echo "attempt $i: $code $body"; sleep 10
           done
-          echo "::error::https://adaptv.tudu.dev/ did not answer 200"; exit 1
+          echo "::error::https://adaptv.tudu.dev/ did not answer 200 with /version.json at ${GITHUB_SHA}"; exit 1

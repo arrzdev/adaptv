@@ -1,6 +1,7 @@
 import tailwindcss from "@tailwindcss/vite"
 import { adaptv } from "adaptv/vite"
 import { defineConfig } from "vite"
+import { buildShaFile } from "./scripts/build-sha-file"
 import { docsMarkdown } from "./scripts/docs-markdown"
 
 //41760 sits clear of the playground's blocks (41730/41740, 41830/41840), so the site
@@ -14,5 +15,5 @@ export default defineConfig({
     tsconfigPaths: true,
     dedupe: ["react", "react-dom"],
   },
-  plugins: [adaptv(), tailwindcss(), docsMarkdown()],
+  plugins: [adaptv(), tailwindcss(), docsMarkdown(), buildShaFile()],
 })
