@@ -4,21 +4,22 @@ import { Reveal } from "@/components/reveal"
 
 type Glyph = "npm" | "avatars" | "folder" | "targets"
 
-//PLACEHOLDER (board request): fake numbers, replace with real data before this ships
-//adaptv is not on npm yet, so none of these counts exist. Every number on the band is in
-//this one constant, so replacing them is one edit.
-export const STATS: readonly {
+export type Stat = {
   value: string
   /** words between the number and the glyph */
   before?: string
   glyph: Glyph
   label: string
-}[] = [
-  { value: "120K+", before: "weekly", glyph: "npm", label: "downloads" },
-  { value: "18K+", glyph: "avatars", label: "developers" },
-  { value: "4,500+", glyph: "folder", label: "apps shipped" },
-  { value: "6", glyph: "targets", label: "targets, one codebase" },
-]
+  /** the URL the figure was read from, and when, in a comment beside it */
+  source: string
+}
+
+//Only real figures, each with its source. adaptv is not on npm yet (the registry answers
+//"package adaptv not found" for https://api.npmjs.org/downloads/point/last-week/adaptv) and
+//https://api.github.com/repos/arrzdev/adaptv reports 0 stars (both read 2026-10-18), so no
+//download, developer or app count exists and the band renders nothing. Add a figure here
+//once its source reports one.
+export const STATS: readonly Stat[] = []
 
 /** The mark sits in a tile one em tall, so it scales with the line it is set in. */
 function Tile({ children }: { children: ReactNode }) {
@@ -91,11 +92,12 @@ function GlyphFor({ glyph }: { glyph: Glyph }) {
  * small mark, then what it counts. Set in container units so the longest line still fits
  * one line on a 320 px phone; each line is one line at every width (`whitespace-nowrap`).
  */
-export function Stats() {
+export function Stats({ stats = STATS }: { stats?: readonly Stat[] }) {
+  if (stats.length === 0) return null
   return (
     <section className="sheet @container">
       <ul className="flex flex-col items-center gap-[0.32em] px-4 py-16 text-center font-semibold text-[clamp(1.25rem,7cqi,4.25rem)] leading-[1.1] tracking-[-0.04em] md:px-10 md:py-24">
-        {STATS.map((stat, index) => (
+        {stats.map((stat, index) => (
           <li key={stat.label}>
             <Reveal delay={index * 0.06}>
               <span className="inline-flex items-center gap-[0.28em] whitespace-nowrap">
