@@ -2,12 +2,6 @@
 //it becomes the public address when the project is opened.
 export const GITHUB_URL = "https://github.com/arrzdev/adaptv"
 
-//The line the hero and the README give to try adaptv: clone, then the root `example`
-//script installs, packs and serves examples/basic. `examples/basic.test.mjs` holds the
-//README to this copy.
-export const ONE_COMMAND =
-  "git clone https://github.com/arrzdev/adaptv.git && cd adaptv && pnpm example"
-
 //The production address (wrangler.toml's custom domain). Social cards and canonical
 //links must be absolute, and a crawler never sees the preview host, so it is fixed.
 export const SITE_URL = "https://adaptv.tudu.dev"
