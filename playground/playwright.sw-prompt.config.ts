@@ -17,7 +17,9 @@ import { defineConfig, devices } from "@playwright/test"
 process.env.ADAPTV_RENDER = "ssr"
 process.env.ADAPTV_SW_UPDATE = "prompt"
 
-const port = Number(process.env.E2E_SW_PROMPT_PORT ?? 41770)
+const port = Number(
+  process.env.E2E_SW_PROMPT_PORT ?? process.env.E2E_APP_PORT ?? 41770,
+)
 const baseURL = `http://localhost:${port}`
 
 export default defineConfig({

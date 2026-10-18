@@ -18,7 +18,9 @@ import { defineConfig, devices } from "@playwright/test"
 //alone would leave the tests thinking they were looking at an ssr build.
 process.env.ADAPTV_RENDER = "spa"
 
-const port = Number(process.env.E2E_SW_SPA_PORT ?? 41760)
+const port = Number(
+  process.env.E2E_SW_SPA_PORT ?? process.env.E2E_APP_PORT ?? 41760,
+)
 const baseURL = `http://localhost:${port}`
 
 export default defineConfig({

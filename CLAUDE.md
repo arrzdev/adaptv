@@ -62,3 +62,11 @@ final period: `fix(drawer): a drag begun mid-slide follows the finger`. One logi
 commit. PR body: what was wrong and what changes, `Reproduce:`, `Verify:` with the commands you ran,
 `Tested on:` / `Not tested:`. PRs target `main` and merge as squash. The full rules live in
 [`CONTRIBUTING.md`](CONTRIBUTING.md); if the two disagree, `CONTRIBUTING.md` wins.
+
+## Running e2e on the shared host
+
+Several suites share one machine, so run e2e only through `pnpm test:e2e` (`scripts/e2e-lock.sh`), never `playwright test` directly.
+- The lock gives each suite one of `e2e_max` slots (read from the company `capacity.json`, 1 when it is missing) and waits up to `E2E_LOCK_WAIT` seconds (900), then exits 75.
+- Outside CI it also exports a distinct free port for every unset port variable and prints them with the slot. Ports in this repo: E2E_APP_PORT, used by every playground config unless its own variable (E2E_PORT, E2E_SW_PORT, ...) is set; defaults 41730-41780. A port you set yourself is kept; CI uses the defaults.
+- A suite always boots its own servers. A server already on a port is reused only with `E2E_REUSE=1`.
+- `bash scripts/test/e2e-lock.test.sh` tests the lock.

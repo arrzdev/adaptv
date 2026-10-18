@@ -23,7 +23,9 @@ process.env.ADAPTV_RENDER = "spa"
 //`subpath.spec.ts`, which cannot import a config without re-running it.
 const SUBPATH = "/app/"
 
-const port = Number(process.env.E2E_SW_SUBPATH_PORT ?? 41780)
+const port = Number(
+  process.env.E2E_SW_SUBPATH_PORT ?? process.env.E2E_APP_PORT ?? 41780,
+)
 const baseURL = `http://localhost:${port}`
 
 export default defineConfig({

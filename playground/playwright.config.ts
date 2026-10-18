@@ -11,9 +11,13 @@ import { defineConfig, devices } from "@playwright/test"
  * "element not found" on routes that plainly exist, which reads as a broken app.
  *
  * Override with E2E_PORT (or E2E_BASE_URL for a server this config must not boot)
- * when running two worktrees at once.
+ * when running two worktrees at once. `pnpm test:e2e` goes through
+ * scripts/e2e-lock.sh, which hands each suite a free E2E_APP_PORT outside CI. A
+ * server already on the port is reused only with E2E_REUSE=1.
  */
-const port = Number(process.env.E2E_PORT ?? 41730)
+const port = Number(
+  process.env.E2E_PORT ?? process.env.E2E_APP_PORT ?? 41730,
+)
 const baseURL = process.env.E2E_BASE_URL ?? `http://localhost:${port}`
 
 export default defineConfig({
@@ -72,7 +76,7 @@ export default defineConfig({
       VITE_APP_PORT: String(port),
     },
     url: baseURL,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: process.env.E2E_REUSE === "1",
     timeout: 120_000,
   },
 })

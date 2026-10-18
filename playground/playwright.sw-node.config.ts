@@ -14,7 +14,9 @@ import { defineConfig, devices } from "@playwright/test"
 //Explicit, like the preview config: the build reads it, and so do the specs.
 process.env.ADAPTV_RENDER = "ssr"
 
-const port = Number(process.env.E2E_SW_NODE_PORT ?? 41780)
+const port = Number(
+  process.env.E2E_SW_NODE_PORT ?? process.env.E2E_APP_PORT ?? 41780,
+)
 const baseURL = `http://localhost:${port}`
 
 export default defineConfig({
