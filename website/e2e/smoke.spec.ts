@@ -118,3 +118,36 @@ test.describe("every docs page and blog post, phone 390x844", () => {
     })
   }
 })
+
+//A block that scrolls sideways must be reachable and named without a mouse. Chrome makes a
+//scroller focusable itself; Safari does not, and axe `scrollable-region-focusable` flagged it
+//on 60 pages (TUD-2115). A scroller with a focusable child (the sample tabs) is exempt, as in
+//axe. Measured at the phone width, where the blocks overflow.
+test.describe("scrollable regions are keyboard-reachable and named, phone 390x844", () => {
+  test.use({ viewport: { width: 390, height: 844 } })
+
+  for (const path of ["/", ...EVERY_PAGE]) {
+    test(`${path} @webkit`, async ({ page: tab }) => {
+      await tab.goto(path)
+      await tab.waitForLoadState("networkidle")
+      const bad = await tab.evaluate(() => {
+        const FOCUSABLE = "a[href],button,input,select,textarea,[tabindex]:not([tabindex='-1'])"
+        const out: string[] = []
+        for (const el of document.querySelectorAll<HTMLElement>("body *")) {
+          const style = getComputedStyle(el)
+          const scrolls = ["auto", "scroll"].includes(style.overflowX) && el.scrollWidth > el.clientWidth + 1
+          const scrollsY = ["auto", "scroll"].includes(style.overflowY) && el.scrollHeight > el.clientHeight + 1
+          if (!scrolls && !scrollsY) continue
+          if (el.querySelector(FOCUSABLE)) continue
+          const ok =
+            el.getAttribute("tabindex") === "0" &&
+            el.getAttribute("role") === "region" &&
+            (el.getAttribute("aria-label") ?? "").trim() !== ""
+          if (!ok) out.push(`${el.tagName.toLowerCase()}.${el.className}`.slice(0, 80))
+        }
+        return out
+      })
+      expect(bad, "scrollers without tabindex=0, role=region and an aria-label").toEqual([])
+    })
+  }
+})

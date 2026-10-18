@@ -5,6 +5,7 @@ import { CodePanel } from "@/components/code"
 import { Inline } from "@/components/inline"
 import type { Block, PropRow, TargetRow } from "@/content/blocks"
 import { cn } from "@/utils/cn"
+import { scrollRegion } from "./scroll-region"
 
 /** "Drag to dismiss" → "drag-to-dismiss". Headings and the table of contents share it. */
 function headingId(text: string) {
@@ -87,6 +88,7 @@ function TableShell({
     <div className={cn("relative", className)}>
       <div
         ref={scroller}
+        {...scrollRegion("Table")}
         className="overflow-x-auto rounded-xl border border-border"
       >
         <table className="w-full border-collapse text-left text-[14px]">
@@ -371,7 +373,10 @@ function ProseBlock({ block, id }: { block: Block; id?: string }) {
           >
             {block.name}
           </h3>
-          <pre className="overflow-x-auto rounded-xl border border-border bg-sunken px-4 py-3 font-mono text-[13px] text-subtle leading-relaxed">
+          <pre
+            {...scrollRegion(`${block.name} signature`)}
+            className="overflow-x-auto rounded-xl border border-border bg-sunken px-4 py-3 font-mono text-[13px] text-subtle leading-relaxed"
+          >
             {block.signature}
           </pre>
           <p className="text-[16px] text-subtle leading-[1.75]">

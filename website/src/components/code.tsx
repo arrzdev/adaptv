@@ -2,6 +2,7 @@ import { View } from "adaptv/components"
 import { Check, Copy } from "lucide-react"
 import { type ReactNode, useState } from "react"
 import { cn } from "@/utils/cn"
+import { scrollRegion } from "./scroll-region"
 
 /*
  * A deliberately small highlighter. It knows comments, strings, a keyword list, JSX
@@ -121,7 +122,10 @@ export function CodePanel({
         </View>
         <CopyButton text={sample.code} />
       </View>
-      <pre className="overflow-x-auto p-5 font-mono text-[13px] text-code-fg leading-[1.7]">
+      <pre
+        {...scrollRegion("Code sample")}
+        className="overflow-x-auto p-5 font-mono text-[13px] text-code-fg leading-[1.7]"
+      >
         <code>{highlight(sample.code, sample.lang)}</code>
       </pre>
     </View>
