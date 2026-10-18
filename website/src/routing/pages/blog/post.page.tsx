@@ -5,7 +5,7 @@ import { Prose } from "@/components/prose"
 import { SitePage } from "@/components/site-page"
 import { POSTS } from "@/content/blog"
 import { RSS_LINK } from "@/content/feeds"
-import { socialHead } from "@/content/site"
+import { articleJsonLd, socialHead } from "@/content/site"
 
 export const Route = createFileRoute("/blog/$slug")({
   loader: ({ params }) => {
@@ -18,6 +18,7 @@ export const Route = createFileRoute("/blog/$slug")({
       seoTitle: post.seoTitle,
       seoDescription: post.seoDescription,
       date: post.date,
+      author: post.author,
     }
   },
   head: ({ loaderData }) =>
@@ -29,6 +30,14 @@ export const Route = createFileRoute("/blog/$slug")({
           path: `/blog/${loaderData.slug}`,
           published: loaderData.date,
           links: [RSS_LINK],
+          jsonLd: articleJsonLd({
+            title: loaderData.title,
+            description: loaderData.seoDescription ?? loaderData.summary,
+            path: `/blog/${loaderData.slug}`,
+            section: { name: "Blog", path: "/blog" },
+            published: loaderData.date,
+            author: loaderData.author,
+          }),
         })
       : {},
   component: PostRoute,

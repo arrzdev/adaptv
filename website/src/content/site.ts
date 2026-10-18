@@ -27,6 +27,7 @@ export function socialHead({
   published,
   tabTitle,
   links = [],
+  jsonLd = [],
 }: {
   /** The tab title is `title — adaptv`; the card shows `title` alone. */
   title: string
@@ -39,6 +40,8 @@ export function socialHead({
   published?: string
   /** More `<link>` tags: the blog's RSS feed. */
   links?: Record<string, string>[]
+  /** Schema.org nodes for search engines, written as one JSON-LD `@graph`. */
+  jsonLd?: Record<string, unknown>[]
 }) {
   const url = `${SITE_URL}${path}`
   return {
@@ -60,7 +63,88 @@ export function socialHead({
         ? [{ property: "article:published_time", content: published }]
         : []),
       { name: "twitter:card", content: "summary_large_image" },
+      ...(jsonLd.length
+        ? [
+            {
+              "script:ld+json": {
+                "@context": "https://schema.org",
+                "@graph": jsonLd,
+              },
+            },
+          ]
+        : []),
     ],
     links: [{ rel: "canonical", href: url }, ...links],
   }
+}
+
+/**
+ * The landing's structured data: the framework, its licence and its repository. It says
+ * no more than the page does (pre-alpha, no release, no price), so it has no `offers`,
+ * rating or download link.
+ */
+export function softwareJsonLd(): Record<string, unknown> {
+  return {
+    "@type": ["SoftwareApplication", "SoftwareSourceCode"],
+    "@id": `${SITE_URL}/#software`,
+    name: "adaptv",
+    description: SITE_DESCRIPTION,
+    url: `${SITE_URL}/`,
+    applicationCategory: "DeveloperApplication",
+    license: "https://opensource.org/licenses/MIT",
+    codeRepository: GITHUB_URL,
+    programmingLanguage: "TypeScript",
+  }
+}
+
+/**
+ * A docs page or a post: a TechArticle, and the trail from the home page to it. `section`
+ * is the middle crumb, `/docs` or `/blog`.
+ */
+export function articleJsonLd({
+  title,
+  description,
+  path,
+  section,
+  published,
+  author,
+}: {
+  title: string
+  description: string
+  path: string
+  section: { name: string; path: string }
+  /** A post's date (YYYY-MM-DD). Docs pages have none. */
+  published?: string
+  /** A post's byline. */
+  author?: string
+}): Record<string, unknown>[] {
+  const url = `${SITE_URL}${path}`
+  return [
+    {
+      "@type": "TechArticle",
+      "@id": `${url}#article`,
+      headline: title,
+      description,
+      url,
+      mainEntityOfPage: url,
+      image: `${SITE_URL}/og.png`,
+      inLanguage: "en",
+      ...(published ? { datePublished: published } : {}),
+      ...(author ? { author: { "@type": "Person", name: author } } : {}),
+      publisher: { "@type": "Organization", name: "adaptv", url: SITE_URL },
+    },
+    {
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        { name: "adaptv", path: "/" },
+        section,
+        { name: title, path },
+      ].map((crumb, index) => ({
+        "@type": "ListItem",
+        position: index + 1,
+        name: crumb.name,
+        item: `${SITE_URL}${crumb.path}`,
+      })),
+    },
+  ]
 }

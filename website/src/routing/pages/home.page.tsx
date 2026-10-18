@@ -5,12 +5,22 @@ import { Hero } from "@/components/sections/hero"
 import { IdeaToInstalled } from "@/components/sections/idea-to-installed"
 import { WhereItRuns } from "@/components/sections/where-it-runs"
 import { SitePage } from "@/components/site-page"
-import { SITE_DESCRIPTION, SITE_TITLE, socialHead } from "@/content/site"
+import {
+  SITE_DESCRIPTION,
+  SITE_TITLE,
+  socialHead,
+  softwareJsonLd,
+} from "@/content/site"
 
 export const Route = createFileRoute("/")({
   component: HomePage,
   head: () =>
-    socialHead({ title: SITE_TITLE, description: SITE_DESCRIPTION, path: "/" }),
+    socialHead({
+      title: SITE_TITLE,
+      description: SITE_DESCRIPTION,
+      path: "/",
+      jsonLd: [softwareJsonLd()],
+    }),
 })
 
 function HomePage() {
