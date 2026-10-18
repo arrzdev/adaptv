@@ -158,7 +158,7 @@
     "ink": "6.4.0",
     "lightningcss": "1.32.0",
     "nitro": "3.0.260610-beta",
-    "postcss": "8.5.19",
+    "postcss": "8.5.23",
     "sharp": "0.35.5",
     "workbox-build": "7.4.1",
     "workbox-core": "7.4.1",
