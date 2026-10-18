@@ -75,6 +75,12 @@
     color: var(--color-gray-900, oklch(21% 0.034 264.665));
   }
 
+  /* the scrollbar, WebKit/Blink half: `scrollbar-width: none` is inline (a lock, like
+   * ScrollView's), and a pseudo-element has no inline style */
+  :where([data-adaptv="wheel-column"])::-webkit-scrollbar {
+    display: none;
+  }
+
   [data-adaptv="wheel-column"]:focus-visible button[data-active="true"] {
     outline: 2px solid var(--adaptv-ring, currentColor);
     outline-offset: -2px;
