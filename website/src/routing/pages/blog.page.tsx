@@ -26,8 +26,9 @@ const NEWEST_FIRST = [...POSTS].sort((a, b) => b.date.localeCompare(a.date))
 function BlogIndex() {
   return (
     <SitePage>
-      <View className="mx-auto w-full max-w-3xl gap-10 px-5 py-14 md:py-20">
-        <View className="gap-4">
+      {/* on the floating header's lines; the copy keeps a reading measure */}
+      <View className="site-container gap-10 py-14 md:py-20">
+        <View className="max-w-3xl gap-4">
           <h1 className="font-semibold text-[44px] text-foreground leading-[1.05] tracking-[-0.035em]">
             Blog
           </h1>
@@ -36,7 +37,7 @@ function BlogIndex() {
             <Inline text="The [docs](/docs) cover every component, hook and command; the [home page](/) shows what adaptv is." />
           </p>
         </View>
-        <View className="gap-4">
+        <View className="max-w-3xl gap-4">
           {NEWEST_FIRST.map((post) => (
             <Link
               key={post.slug}

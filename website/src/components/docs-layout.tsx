@@ -10,7 +10,8 @@ import {
 import type { ReactNode } from "react"
 import { useEffect, useMemo, useState } from "react"
 import { Inline } from "@/components/inline"
-import { headingIds, Prose } from "@/components/prose"
+import { OnThisPage } from "@/components/on-this-page"
+import { Prose } from "@/components/prose"
 import { SitePage } from "@/components/site-page"
 import { ALL_DOCS, DOCS, type DocPage } from "@/content/docs"
 import { GITHUB_URL } from "@/content/site"
@@ -185,49 +186,6 @@ function MobileNav({ current, label }: { current: string; label: string }) {
   )
 }
 
-function OnThisPage({ page }: { page: DocPage }) {
-  const ids = headingIds(page.blocks)
-  const headings = page.blocks.flatMap((block, index) => {
-    const id = ids[index]
-    if (!id) return []
-    if (block.type === "h2")
-      return [{ id, text: block.text.replace(/`/g, ""), depth: 0, mono: false }]
-    if (block.type === "h3")
-      return [{ id, text: block.text.replace(/`/g, ""), depth: 1, mono: false }]
-    if (block.type === "api")
-      return [{ id, text: block.name, depth: 1, mono: true }]
-    return []
-  })
-  if (headings.length < 2) return null
-  return (
-    <View className="gap-2.5">
-      <span className="pb-1 font-mono text-[11px] text-muted uppercase tracking-[0.14em]">
-        On this page
-      </span>
-      {headings.map((heading) => (
-        <button
-          key={heading.id}
-          type="button"
-          // The document never scrolls in an adaptv app, so a #hash link has nothing to
-          // move. scrollIntoView walks up to the page's own scroller instead.
-          onClick={() =>
-            document
-              .getElementById(heading.id)
-              ?.scrollIntoView({ behavior: "smooth", block: "start" })
-          }
-          className={cn(
-            "cursor-pointer text-left text-[13.5px] text-subtle leading-snug hover:text-foreground",
-            heading.depth === 1 && "pl-3 text-[13px] text-muted",
-            heading.mono && "font-mono text-[12px]",
-          )}
-        >
-          {heading.text}
-        </button>
-      ))}
-    </View>
-  )
-}
-
 export function Pager({ page }: { page: DocPage }) {
   const index = ALL_DOCS.findIndex((item) => item.slug === page.slug)
   const previous = ALL_DOCS[index - 1]
@@ -333,7 +291,9 @@ export function DocsShell({
 }) {
   return (
     <SitePage>
-      <View className="mx-auto w-full max-w-[1440px] flex-row gap-10 px-5 py-8 md:px-8 lg:py-10 xl:gap-14">
+      {/* on the header's lines (`site-container`): the rail starts under the logo's pill edge
+          and the on-this-page column ends under the theme toggle's */}
+      <View className="site-container flex-row gap-10 py-8 lg:py-10">
         <nav className="hidden w-64 shrink-0 border-border border-r lg:block">
           <ScrollView className="sticky top-24 max-h-[calc(100dvh-7.5rem)] pr-6 pb-6">
             <DocsNav current={current} />
@@ -363,7 +323,7 @@ export function DocsLayout({ page }: { page: DocPage }) {
     <DocsShell
       current={page.slug}
       label={page.title}
-      aside={<OnThisPage page={page} />}
+      aside={<OnThisPage blocks={page.blocks} />}
     >
       <View className="gap-4 pb-8">
         {group ? (

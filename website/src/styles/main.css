@@ -222,6 +222,26 @@
 .tok-t { color: var(--code-tag); }
 .tok-c { color: var(--code-muted); font-style: italic; }
 
+/*
+ * The content box of every page that is not the landing: the floating header's lines. The
+ * header pill is 1200 px at most and centred, so a page's content is 1200 px at most and
+ * centred too, with the landing's gutters (20 px, 40 px from md). From 1280 px the blog, the
+ * docs, the header and the landing's `.sheet` (1280 less its 40 px padding) share both edges.
+ * In `components`, so a utility on the same element still wins.
+ */
+@layer components {
+  .site-container {
+    --gutter: 20px;
+    width: 100%;
+    max-width: calc(1200px + 2 * var(--gutter));
+    margin-inline: auto;
+    padding-inline: var(--gutter);
+  }
+  @media (min-width: 48rem) {
+    .site-container { --gutter: 40px; }
+  }
+}
+
 /* one centred column, 1280 px at most; sections are separated by space, nothing else */
 .sheet {
   position: relative;
