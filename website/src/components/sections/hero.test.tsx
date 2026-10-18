@@ -31,12 +31,11 @@ describe("hero", () => {
     )
   })
 
-  it("gives the one command that runs an app", () => {
-    render(<Hero />)
-    expect(
-      screen.getByText(
-        "git clone https://github.com/arrzdev/adaptv.git && cd adaptv && pnpm example",
-      ).tagName,
-    ).toBe("CODE")
+  // the board wants no clone line on the landing (2026-10-18): the buttons lead
+  // to the docs and the repo, and no command or code block sits under them
+  it("shows no install or clone command", () => {
+    const { container } = render(<Hero />)
+    expect(container.querySelector("pre, code")).toBeNull()
+    expect(container.textContent).not.toMatch(/git clone|pnpm example/)
   })
 })

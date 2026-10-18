@@ -43,7 +43,7 @@ const [open, setOpen] = useState(false)
     { type: "h2", text: "Usage" },
     {
       type: "p",
-      text: "`Drawer` is a compound component. Put `Drawer.Trigger` in place. Put `Drawer.Overlay` and `Drawer.Content` inside `Drawer.Portal`, which renders into `document.body` while the drawer is open. Your `className` on each part wins over the neutral baseline. A drawer closes on a drag down, a fast flick, a press on the overlay, `Drawer.Close`, `hide()` and the Android back button.",
+      text: "`Drawer` is a compound component. Put `Drawer.Trigger` in place. Put `Drawer.Overlay` and `Drawer.Content` inside `Drawer.Portal`, which renders into `document.body` while the drawer is open. Your `className` on each part wins over the neutral baseline. A drawer closes on a drag down, a fast flick, a press on the overlay, `Drawer.Close`, `hide()`, Escape and the Android back button.",
     },
     {
       type: "note",
@@ -283,7 +283,7 @@ const [open, setOpen] = useState(false)
     { type: "h2", text: "Accessibility" },
     {
       type: "p",
-      text: 'The panel has `role="dialog"` and `aria-modal="true"`. Pass `aria-labelledby` and `aria-describedby` to `Drawer.Content` yourself. Escape does not close the drawer, and focus is not trapped.',
+      text: 'The panel has `role="dialog"` and `aria-modal="true"`. Pass `aria-labelledby` and `aria-describedby` to `Drawer.Content` yourself. For keyboard users, focus moves into the sheet when it opens (the `data-autofocus` element, else the first focusable element unless it is a text field, else the panel), Tab and Shift+Tab stay inside it, Escape closes the top drawer, and focus goes back to what opened it.',
     },
     { type: "h2", text: "Where it works" },
     {

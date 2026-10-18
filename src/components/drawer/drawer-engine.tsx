@@ -29,6 +29,7 @@ import {
   dragOffsetFor,
   drawerReleaseCloses,
 } from "#adaptv/components/drawer/drawer-constants"
+import { useDrawerFocus } from "#adaptv/components/drawer/drawer-focus"
 import {
   startDrawerFpsSample,
   stopDrawerFpsSample,
@@ -299,6 +300,8 @@ export type DrawerEngineProps = {
   disableDrag?: boolean
   /** Notified when the on-screen keyboard opens/closes for a field inside the drawer. */
   onKeyboardOpenChange?: (isOpen: boolean) => void
+  /** What had focus when the drawer opened; it gets focus back on close (drawer-focus.ts). */
+  returnFocusRef?: RefObject<HTMLElement | null>
   /** The drawer composition — Overlay + Content parts that self-wire via context. */
   children?: ReactNode
 }
@@ -311,6 +314,7 @@ export function DrawerEngine({
   blurInputs = true,
   disableDrag = false,
   onKeyboardOpenChange,
+  returnFocusRef,
   children,
 }: DrawerEngineProps) {
   const panelRef = useRef<HTMLDivElement>(null)
@@ -1485,6 +1489,16 @@ export function DrawerEngine({
     if (!openRef.current || isGestureClosingRef.current) return
     onRequestCloseRef.current()
   }, [])
+
+  //focus in, the Tab trap, Escape and focus return. Declared after the blurInputs effect: on a
+  //reopen mid-close both run in one commit, and the focus has to land after the blur.
+  useDrawerFocus({
+    open,
+    panelReady: mounted && portalTarget !== null,
+    panelRef,
+    returnFocusRef,
+    requestClose,
+  })
 
   const closeFromDrag = useCallback(
     (dragOffsetY: number) => {

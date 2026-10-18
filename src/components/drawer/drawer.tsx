@@ -458,6 +458,9 @@ function DrawerContent({
 
   return (
     <div
+      //focus lands on the panel itself when it has no Tab stop (drawer-focus.ts); before the
+      //spread so a consumer can still make it a Tab stop
+      tabIndex={-1}
       {...props}
       ref={engine.panelRef}
       role="dialog"
@@ -740,8 +743,19 @@ function DrawerTree({
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false)
   const { portal, rest } = partitionDrawerRootChildren(children)
 
+  //what had focus when the drawer opened, read before activeBlur() drops it (drawer-focus.ts)
+  const returnFocusRef = useRef<HTMLElement | null>(null)
+  const isOpenRef = useRef(isOpen)
+  isOpenRef.current = isOpen
   const triggerOpenLifecycle = useCallback(
     (nextState: boolean) => {
+      if (nextState && !isOpenRef.current) {
+        const active = document.activeElement
+        returnFocusRef.current =
+          active instanceof HTMLElement && active !== document.body
+            ? active
+            : null
+      }
       activeBlur()
 
       if (isControlled) {
@@ -853,6 +867,7 @@ function DrawerTree({
               avoidKeyboard={avoidKeyboard}
               blurInputs={blurInputs}
               disableDrag={disableDrag}
+              returnFocusRef={returnFocusRef}
             >
               {portal}
             </DrawerEngine>
