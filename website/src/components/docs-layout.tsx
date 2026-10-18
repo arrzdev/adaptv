@@ -72,8 +72,9 @@ function DocsNav({ current }: { current: string }) {
   return (
     <View className="gap-6">
       {/* the input drops its own ring (it would hug the text, not the field), so the
-          field draws the site's ring: 2 px of --adaptv-ring, like every other stop */}
-      <label className="flex h-9 flex-row items-center gap-2 rounded-lg border border-border bg-surface px-3 text-muted focus-within:border-border-strong has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-(--adaptv-ring)">
+          field draws the site's 2 px --adaptv-ring, inset: the scrolling sidebar clips
+          anything drawn outside the field's box */}
+      <label className="flex h-9 flex-row items-center gap-2 rounded-lg border border-border bg-surface px-3 text-muted focus-within:border-border-strong has-focus-visible:outline-2 has-focus-visible:-outline-offset-2 has-focus-visible:outline-(--adaptv-ring)">
         <Search className="size-3.5 shrink-0" />
         <input
           type="search"
