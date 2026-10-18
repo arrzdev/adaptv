@@ -183,13 +183,11 @@ function TimeWheel() {
   )
   const item =
     "text-[20px] text-muted tabular-nums data-[active=true]:font-medium data-[active=true]:text-foreground"
-  //each column is a scroller; in a desktop browser tab its scrollbar would stand beside
-  //the drum, so the demo hides it (`scrollbar-hidden`, adaptv's own utility)
   return (
     <View row className="relative w-44 items-stretch">
       <span className="pointer-events-none absolute inset-x-0 top-1/2 h-[30px] -translate-y-1/2 rounded-lg bg-foreground/[0.07]" />
       <WheelColumn
-        className="relative flex-1 scrollbar-hidden"
+        className="relative flex-1"
         itemClassName={item}
         items={hours}
         value={hour}
@@ -197,7 +195,7 @@ function TimeWheel() {
         ariaLabel="Hour"
       />
       <WheelColumn
-        className="relative flex-1 scrollbar-hidden"
+        className="relative flex-1"
         itemClassName={item}
         items={minutes}
         value={minute}
