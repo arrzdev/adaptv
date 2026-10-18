@@ -18,7 +18,8 @@ export type Post = {
 export const POSTS: Post[] = [
   {
     slug: "ionic-alternative-for-react",
-    title: "The closest Ionic alternative for React is adaptv, if you are web first",
+    title:
+      "The closest Ionic alternative for React is adaptv, if you are web first",
     date: "2026-10-18",
     kind: "Field note",
     author: "arrz.dev",
