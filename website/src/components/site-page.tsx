@@ -25,10 +25,37 @@ export function SitePage({
 }) {
   return (
     <ScrollView showsVerticalScrollIndicator className="bg-background">
+      <SkipLink />
       <SiteHeader />
-      <main className={cn("flex w-full flex-col", className)}>{children}</main>
+      <main
+        id={MAIN_ID}
+        tabIndex={-1}
+        className={cn("flex w-full flex-col outline-none", className)}
+      >
+        {children}
+      </main>
       <SiteFooter />
     </ScrollView>
+  )
+}
+
+const MAIN_ID = "main-content"
+
+/** First tab stop: hidden until focused, then moves focus into the content, past the header and the docs sidebar. */
+function SkipLink() {
+  return (
+    <a
+      href={`#${MAIN_ID}`}
+      onClick={(event) => {
+        event.preventDefault()
+        const main = document.getElementById(MAIN_ID)
+        main?.focus({ preventScroll: true })
+        main?.scrollIntoView({ block: "start" })
+      }}
+      className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:rounded-full focus:bg-foreground focus:px-4 focus:py-2 focus:font-medium focus:text-[14px] focus:text-background"
+    >
+      Skip to content
+    </a>
   )
 }
 
