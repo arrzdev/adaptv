@@ -5,7 +5,6 @@ import { FourWays } from "@/components/sections/four-ways"
 import { HardParts } from "@/components/sections/hard-parts"
 import { Hero } from "@/components/sections/hero"
 import { Stats } from "@/components/sections/stats"
-import { Targets } from "@/components/sections/targets"
 import { SitePage } from "@/components/site-page"
 import {
   SITE_DESCRIPTION,
@@ -29,7 +28,6 @@ function HomePage() {
   return (
     <SitePage>
       <Hero />
-      <Targets />
       <Stats />
       <ComponentsBento />
       <HardParts />

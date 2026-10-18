@@ -277,6 +277,15 @@
   opacity: 0.8;
 }
 :root:not(.dark) .aurora { opacity: 0.5; }
+/* its foot under the stage, behind the platform strip: masked to nothing at its bottom, so
+   the hero's clip cuts no glow and the colour fades out instead of ending on a line */
+.aurora-tail {
+  background: radial-gradient(45% 40% at 50% 52%, #ffb86a 0%, transparent 72%);
+  filter: blur(64px) saturate(1.15);
+  opacity: 0.8;
+  mask-image: linear-gradient(to bottom, #000 50%, transparent);
+}
+:root:not(.dark) .aurora-tail { opacity: 0.5; }
 
 /*
  * The hero showcase is drawn in container units, never scaled. --u is one pixel of the mock

@@ -1,13 +1,14 @@
 import { ExternalLink, Link, View } from "adaptv/components"
 import { ArrowRight, Github } from "lucide-react"
 import { DeviceStage } from "@/components/sections/device-stage"
+import { Targets } from "@/components/sections/targets"
 import { GITHUB_URL } from "@/content/site"
 
 export function Hero() {
   return (
     <section className="relative w-full overflow-hidden">
       <div className="grid-lines pointer-events-none absolute inset-0" />
-      <View className="sheet @container items-center px-5 pt-20 pb-20 text-center sm:pt-28">
+      <View className="sheet @container items-center px-5 pt-20 pb-24 text-center sm:pt-28">
         {/* Geist swaps in late, after the first paint on a slow phone. Every box here keeps its
             size in any font, so the swap moves nothing: the lines are centred inside full-width
             boxes, the buttons are as wide as Geist makes them with their icons pinned to an edge,
@@ -71,8 +72,13 @@ export function Hero() {
           Open source, MIT. Pre-alpha, so expect rough edges.
         </p>
 
+        {/* the aurora's orange foot, under the stage and the platform strip. It fades out above
+            the hero's bottom edge, where the section clips: the glow has no edge to show */}
+        <div className="aurora-tail pointer-events-none absolute -inset-x-16 bottom-0 h-[440px]" />
+
         {/* when the public sample app ("project zero") exists, the phones link to it */}
         <DeviceStage />
+        <Targets />
       </View>
     </section>
   )

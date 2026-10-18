@@ -1,8 +1,8 @@
 import { expect, type Locator, type Page, test } from "@playwright/test"
 
 //The landing after landing-v4 (doc `landing-v4`): the hero shows "Tally", one budget app drawn
-//in HTML/CSS as a desktop browser window and as a phone, then come the platform marks strip,
-//the components grid, "The hard parts are already decided", "Four ways to ship one app" and
+//in HTML/CSS as a desktop browser window and as a phone, with the platform marks strip under
+//it on the hero's glow; then come the components grid, "The hard parts are already decided", "Four ways to ship one app" and
 //the closing quick start. Sections are centred heads over large flat cards.
 //Layout is read from the rendered boxes, not from class names.
 
@@ -383,7 +383,7 @@ const HARD_TITLE = "The hard parts are already decided"
 const COMPARE_TITLE = "Four ways to ship one app"
 
 test.describe("section order", () => {
-  test("hero, strip, components, the hard parts, four ways, quick start", async ({
+  test("hero, components, the hard parts, four ways, quick start", async ({
     page,
   }) => {
     await open(page, 1440)
@@ -392,7 +392,7 @@ test.describe("section order", () => {
       .evaluateAll((els) =>
         els.map((el) => (el as HTMLElement).innerText.replace(/\s+/g, " ").trim()),
       )
-    //the strip has no heading: it sits between the hero and the components grid
+    //the strip has no heading: it sits in the hero, under the showcase
     expect(headings).toEqual([
       HERO_TITLE,
       "Try the components here",
@@ -437,15 +437,70 @@ function rows(locator: Locator) {
   ])
 }
 
-/** The section right after the hero: the platform marks strip (landing-v3 §2). */
+/** The platform marks strip: the line "One app. Every platform." and the marks under it. */
 function strip(page: Page) {
-  return page.locator("section:has(h1) + section")
+  return page.getByText("One app. Every platform.", { exact: true }).locator("xpath=..")
 }
 
-//The strip is `targets.tsx` from before #444 (64bbb23^), back in its place under the hero,
-//minus the Windows and macOS marks (#448: desktop native is not built).
+//The strip is `targets.tsx` from before #444 (64bbb23^), minus the Windows and macOS marks
+//(#448: desktop native is not built). It sits in the hero, under the showcase, on the orange
+//foot of the glow behind it; it had its own section under the hero before.
 test.describe("platform strip", () => {
-  test("four marks under the hero, no heading, no cards", async ({ page }) => {
+  test("the strip sits in the hero under the showcase, with no section of its own", async ({
+    page,
+  }) => {
+    await open(page, 1440)
+    const hero = page.locator("section:has(h1)")
+    await expect(hero.getByText("One app. Every platform.", { exact: true })).toHaveCount(1)
+    const [s, show] = await Promise.all([box(strip(page)), box(showcase(page))])
+    expect(s.top).toBeGreaterThan(show.bottom)
+    //the section after the hero opens with a heading: no headless strip section between
+    await expect(
+      page.locator("section:has(h1) + section").getByRole("heading", { level: 2 }).first(),
+    ).toHaveText("Try the components here")
+  })
+
+  //The glow behind the showcase was cut by the hero's clip: a straight line of colour across
+  //the page under the showcase. It now fades out above the hero's bottom edge, so the hero's
+  //last row is the page's background, the colour of the plain space under it.
+  for (const colorScheme of ["light", "dark"] as const) {
+    test(`the glow under the strip fades out before the hero ends, ${colorScheme}`, async ({
+      page,
+    }) => {
+      await page.emulateMedia({ colorScheme })
+      await page.addInitScript(
+        (t) => localStorage.setItem("ui-theme-preference", t),
+        colorScheme,
+      )
+      await open(page, 1440)
+      const hero = page.locator("section:has(h1)")
+      const bottom = Math.round((await box(hero)).bottom)
+      //everything down to the hero's edge in view: the site scrolls inside its app container
+      await page.setViewportSize({ width: 1440, height: bottom + 40 })
+      await hero.evaluate((el) =>
+        Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished)),
+      )
+      const row = async (y: number) => {
+        const png = await page.screenshot({ clip: { x: 0, y, width: 1440, height: 1 } })
+        return page.evaluate(async (b64) => {
+          const img = new Image()
+          img.src = `data:image/png;base64,${b64}`
+          await img.decode()
+          const c = new OffscreenCanvas(img.width, img.height)
+          const ctx = c.getContext("2d")!
+          ctx.drawImage(img, 0, 0)
+          return [...ctx.getImageData(0, 0, img.width, 1).data]
+        }, png.toString("base64"))
+      }
+      const edge = await row(bottom - 1)
+      const below = await row(bottom + 20)
+      let worst = 0
+      for (let i = 0; i < edge.length; i++) worst = Math.max(worst, Math.abs(edge[i] - below[i]))
+      expect(worst, "largest channel difference across the hero's edge").toBeLessThanOrEqual(2)
+    })
+  }
+
+  test("four marks, no heading, no cards", async ({ page }) => {
     await open(page, 1440)
     const s = strip(page)
     await expect(s).toHaveCount(1)

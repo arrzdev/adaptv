@@ -47,25 +47,23 @@ const PLATFORMS: { name: string; mark: Mark; size: string }[] = [
  * Where an adaptv app runs, as one still row of marks: no motion, no captions. Each mark
  * carries its name as hidden text, so assistive tech reads a plain list of four. One
  * centred row at every width: a 3-column grid left Capacitor alone on a second row on a
- * phone (TUD-836).
+ * phone (TUD-836). It sits in the hero, under the device stage, on the aurora's orange foot.
  */
 export function Targets() {
   return (
-    <section className="sheet">
-      <div className="flex flex-col items-center gap-7 px-6 py-12 md:px-10">
-        <p className="text-[14px] text-muted">One app. Every platform.</p>
-        <ul className="flex items-center justify-center gap-[clamp(22px,6vw,40px)] md:gap-12">
-          {PLATFORMS.map(({ name, mark: Mark, size }) => (
-            <li
-              key={name}
-              className="flex h-7 items-center text-foreground opacity-50 transition-opacity duration-200 ease-out hover:opacity-80"
-            >
-              <Mark className={`w-auto ${size}`} />
-              <span className="sr-only">{name}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </section>
+    <div className="relative mt-16 flex w-full flex-col items-center gap-7">
+      <p className="text-[14px] text-muted">One app. Every platform.</p>
+      <ul className="flex items-center justify-center gap-[clamp(22px,6vw,40px)] md:gap-12">
+        {PLATFORMS.map(({ name, mark: Mark, size }) => (
+          <li
+            key={name}
+            className="flex h-7 items-center text-foreground opacity-50 transition-opacity duration-200 ease-out hover:opacity-80"
+          >
+            <Mark className={`w-auto ${size}`} />
+            <span className="sr-only">{name}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }
