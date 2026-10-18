@@ -18,7 +18,9 @@ import { defineConfig, devices } from "@playwright/test"
 //it to pick which rows apply, and the dev server's own config sets it again.
 process.env.PLAYGROUND_CSS = "plain"
 
-const port = Number(process.env.E2E_PLAIN_PORT ?? 41780)
+const port = Number(
+  process.env.E2E_PLAIN_PORT ?? process.env.E2E_APP_PORT ?? 41780,
+)
 const baseURL =
   process.env.E2E_PLAIN_BASE_URL ?? `http://localhost:${port}`
 
@@ -82,7 +84,7 @@ export default defineConfig({
       VITE_APP_PORT: String(port),
     },
     url: baseURL,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: process.env.E2E_REUSE === "1",
     timeout: 120_000,
   },
 })

@@ -21,7 +21,9 @@ import { defineConfig, devices } from "@playwright/test"
 //second copy of the spa suite.
 process.env.ADAPTV_RENDER = "ssr"
 
-const port = Number(process.env.E2E_SW_PORT ?? 41750)
+const port = Number(
+  process.env.E2E_SW_PORT ?? process.env.E2E_APP_PORT ?? 41750,
+)
 const baseURL = `http://localhost:${port}`
 
 export default defineConfig({

@@ -10,7 +10,9 @@ import { defineConfig, devices } from "@playwright/test"
  * is the main config's shape — the port, no retries, the reporter, the two
  * engines — so a spec moves between the two suites without changing.
  */
-const port = Number(process.env.E2E_PORT ?? 41730)
+const port = Number(
+  process.env.E2E_PORT ?? process.env.E2E_APP_PORT ?? 41730,
+)
 const baseURL = process.env.E2E_BASE_URL ?? `http://localhost:${port}`
 
 export default defineConfig({
@@ -37,7 +39,7 @@ export default defineConfig({
     cwd: "apps/frontend",
     env: { VITE_APP_PORT: String(port) },
     url: baseURL,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: process.env.E2E_REUSE === "1",
     timeout: 120_000,
   },
 })
