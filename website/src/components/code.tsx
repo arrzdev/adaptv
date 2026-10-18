@@ -2,6 +2,7 @@ import { View } from "adaptv/components"
 import { Check, Copy } from "lucide-react"
 import { type ReactNode, useState } from "react"
 import { cn } from "@/utils/cn"
+import { ScrollFade, useMoreToScroll } from "./scroll-fade"
 import { scrollRegion } from "./scroll-region"
 
 /*
@@ -91,6 +92,7 @@ export function CodePanel({
 }) {
   const [active, setActive] = useState(0)
   const sample = samples[active] ?? samples[0]
+  const [scroller, more] = useMoreToScroll<HTMLPreElement>(sample)
   if (!sample) return null
   return (
     <View
@@ -122,12 +124,49 @@ export function CodePanel({
         </View>
         <CopyButton text={sample.code} />
       </View>
-      <pre
-        {...scrollRegion("Code sample")}
-        className="overflow-x-auto p-5 font-mono text-[13px] text-code-fg leading-[1.7]"
-      >
-        <code>{highlight(sample.code, sample.lang)}</code>
-      </pre>
+      <div className="relative">
+        <pre
+          ref={scroller}
+          {...scrollRegion("Code sample")}
+          className="overflow-x-auto p-5 font-mono text-[13px] text-code-fg leading-[1.7]"
+        >
+          <code>{highlight(sample.code, sample.lang)}</code>
+        </pre>
+        {/* the panel clips its corners, so the fade needs no rounding of its own */}
+        <ScrollFade more={more} className="inset-y-0 right-0 from-code-bg" />
+      </div>
     </View>
+  )
+}
+
+/** One line of code on the page's sunken grey: an import, a signature. */
+export function CodeLine({
+  label,
+  className,
+  children,
+}: {
+  /** Names the scroller for a keyboard and a screen reader. */
+  label: string
+  className?: string
+  children: ReactNode
+}) {
+  const [scroller, more] = useMoreToScroll<HTMLPreElement>()
+  return (
+    <div className="relative">
+      <pre
+        ref={scroller}
+        {...scrollRegion(label)}
+        className={cn(
+          "overflow-x-auto rounded-xl border border-border bg-sunken px-4 py-3 font-mono text-[13px] text-subtle",
+          className,
+        )}
+      >
+        {children}
+      </pre>
+      <ScrollFade
+        more={more}
+        className="inset-y-px right-px rounded-r-xl from-sunken"
+      />
+    </div>
   )
 }

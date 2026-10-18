@@ -1,10 +1,11 @@
 import { View } from "adaptv/components"
 import { Check, Minus, TriangleAlert, X } from "lucide-react"
-import { type ReactNode, useEffect, useRef, useState } from "react"
-import { CodePanel } from "@/components/code"
+import type { ReactNode } from "react"
+import { CodeLine, CodePanel } from "@/components/code"
 import { Inline } from "@/components/inline"
 import type { Block, PropRow, TargetRow } from "@/content/blocks"
 import { cn } from "@/utils/cn"
+import { ScrollFade, useMoreToScroll } from "./scroll-fade"
 import { scrollRegion } from "./scroll-region"
 
 /** "Drag to dismiss" → "drag-to-dismiss". Headings and the table of contents share it. */
@@ -67,23 +68,7 @@ function TableShell({
   className?: string
   children: ReactNode
 }) {
-  const scroller = useRef<HTMLDivElement>(null)
-  const [more, setMore] = useState(false)
-  useEffect(() => {
-    const node = scroller.current
-    if (!node) return
-    //a pixel of slack: zoomed layouts report fractional widths
-    const measure = () =>
-      setMore(node.scrollLeft + node.clientWidth < node.scrollWidth - 1)
-    measure()
-    node.addEventListener("scroll", measure, { passive: true })
-    const resize = new ResizeObserver(measure)
-    resize.observe(node)
-    return () => {
-      node.removeEventListener("scroll", measure)
-      resize.disconnect()
-    }
-  }, [])
+  const [scroller, more] = useMoreToScroll<HTMLDivElement>()
   return (
     <div className={cn("relative", className)}>
       <div
@@ -95,14 +80,9 @@ function TableShell({
           {children}
         </table>
       </div>
-      <div
-        aria-hidden
-        data-testid="scroll-fade"
-        data-more={more}
-        className={cn(
-          "pointer-events-none absolute inset-y-px right-px w-12 rounded-r-xl bg-linear-to-l from-background to-transparent transition-opacity",
-          more ? "opacity-100" : "opacity-0",
-        )}
+      <ScrollFade
+        more={more}
+        className="inset-y-px right-px rounded-r-xl from-background"
       />
     </div>
   )
@@ -374,12 +354,12 @@ function ProseBlock({ block, id }: { block: Block; id?: string }) {
           >
             {block.name}
           </h3>
-          <pre
-            {...scrollRegion(`${block.name} signature`)}
-            className="overflow-x-auto rounded-xl border border-border bg-sunken px-4 py-3 font-mono text-[13px] text-subtle leading-relaxed"
+          <CodeLine
+            label={`${block.name} signature`}
+            className="leading-relaxed"
           >
             {block.signature}
-          </pre>
+          </CodeLine>
           <p className="text-[16px] text-subtle leading-[1.75]">
             <Inline text={block.description} />
           </p>
