@@ -7,10 +7,11 @@ import { GITHUB_URL } from "@/content/site"
 import { cn } from "@/utils/cn"
 
 //each link is as wide as it is in Geist, in any font: the group is right-aligned, so a link
-//that changed width when Geist swapped in moved the whole group (a layout shift)
+//that changed width when Geist swapped in moved the whole group (a layout shift). The label
+//plus 8 px a side on a phone (both stay over the 44 px touch target), 12 px from `sm`
 const NAV = [
-  { to: "/docs", label: "Docs", width: "w-[58px]" },
-  { to: "/blog", label: "Blog", width: "w-[55px]" },
+  { to: "/docs", label: "Docs", width: "w-[50px] sm:w-[58px]" },
+  { to: "/blog", label: "Blog", width: "w-[47px] sm:w-[55px]" },
 ] as const
 
 /**
