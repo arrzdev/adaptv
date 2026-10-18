@@ -46,6 +46,11 @@ API.
 - **Tapping a link while its route is still preloading no longer logs a `TypeError`.** The tap
   navigated mid-preload; the navigation evicted the preloaded route from the cache, and the preload
   then read the evicted entry (`match._nonReactive`). The navigation itself always worked.
+- **A navigation starts the next page at the top.** A page scroller that survived the navigation (a
+  layout over several routes, a param or search change) kept its offset, because the router only
+  reset `window` and an adaptv app has no document scroll. The router now also resets the page's root
+  `ScrollView`. `resetScroll: false` on a `Link` or `navigate` keeps the offset; an app's own
+  `scrollToTopSelectors` are added to adaptv's.
 
 ### Security
 

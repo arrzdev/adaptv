@@ -128,7 +128,9 @@ internal claims and name the machinery freely. Host where the playground already
   it. Correct behaviour, but it means every comparison demo is raw unlayered CSS.
 - **No document scroll** (🔒 [`../decisions/browser-chrome-autohide.md`](../decisions/browser-chrome-autohide.md))
   means a content site on a mobile *browser* never retracts the URL bar, and `#hash` links and
-  scroll restoration are the app's to build. Accepted cost; the first content site is where it is felt.
+  back/forward scroll restoration are the app's to build. A navigation does reset the page's root
+  `ScrollView` to the top (`createAdaptvRouter` adds it to the router's `scrollToTopSelectors`).
+  Accepted cost; the first content site is where it is felt.
 
 **Docs written 2026-09-21.** 48 pages in `website/src/content/docs/pages/`, shaped after Expo's
 docs because the product has the same parts: guides (get started, concepts, shipping) and a
