@@ -88,6 +88,29 @@ describe("examples/basic", () => {
   })
 })
 
+/*
+ * The README and the site's hero give one line that takes a machine with Node and pnpm from
+ * nothing to this example on a dev server. It runs the quick start's steps from one script,
+ * so the line is only as true as that script and the two copies of it.
+ */
+const ONE_COMMAND =
+  "git clone https://github.com/arrzdev/adaptv.git && cd adaptv && pnpm example"
+
+describe("the one command", () => {
+  it("is the README's and the hero's", () => {
+    expect(read(ROOT, "README.md")).toContain(ONE_COMMAND)
+    expect(read(ROOT, "website/src/content/site.ts")).toContain(
+      `export const ONE_COMMAND =\n  "${ONE_COMMAND}"`,
+    )
+  })
+
+  it("installs, packs and serves examples/basic", () => {
+    expect(rootPkg.scripts.example).toBe(
+      "pnpm install && pnpm build && pnpm pack && pnpm --dir examples/basic install && pnpm --dir examples/basic dev",
+    )
+  })
+})
+
 /** A port nothing listens on, from the OS. */
 function freePort() {
   return new Promise((resolve, reject) => {

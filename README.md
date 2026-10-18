@@ -69,9 +69,15 @@ adaptv icons --input ./mark.png      # every icon your app needs
 
 ## ⚡ Quick start
 
-Nothing is published yet, so you install the package you pack. You need Node 22.15 or newer and
-pnpm 11. [`examples/basic/`](examples/basic) is a minimal app that installs adaptv from that
-tarball, not from this checkout:
+You need Node 22.15 or newer and pnpm 11. One line clones the repo, builds adaptv and serves
+[`examples/basic/`](examples/basic) on http://localhost:3000:
+
+```bash
+git clone https://github.com/arrzdev/adaptv.git && cd adaptv && pnpm example
+```
+
+Nothing is published yet, so the example installs the package you pack, not this checkout.
+`pnpm example` runs these steps; run them by hand to stop at any one:
 
 ```bash
 git clone https://github.com/arrzdev/adaptv.git && cd adaptv
