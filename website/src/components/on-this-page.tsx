@@ -1,4 +1,5 @@
 import { View } from "adaptv/components"
+import { Fragment } from "react"
 import { headingIds } from "@/components/prose"
 import type { Block } from "@/content/blocks"
 import { cn } from "@/utils/cn"
@@ -35,15 +36,29 @@ export function OnThisPage({ blocks }: { blocks: Block[] }) {
               ?.scrollIntoView({ behavior: "smooth", block: "start" })
           }
           className={cn(
-            //a file path is one long word: let it break rather than overrun the column
+            // a file path is one long word: break it rather than overrun the column
             "cursor-pointer text-left text-[13.5px] text-subtle leading-snug [overflow-wrap:anywhere] hover:text-foreground",
             heading.depth === 1 && "pl-3 text-[13px] text-muted",
             heading.mono && "font-mono text-[12px]",
           )}
         >
-          {heading.text}
+          <PathBreaks text={heading.text} />
         </button>
       ))}
     </View>
   )
+}
+
+/**
+ * Offers a line break after each `/`, so `src/routing/pages/home.page.tsx` wraps at a
+ * folder and `overflow-wrap: anywhere` only cuts a segment too long for a line.
+ */
+function PathBreaks({ text }: { text: string }) {
+  return text.split(/(?<=\/)/).map((part, index) => (
+    // biome-ignore lint/suspicious/noArrayIndexKey: the parts never reorder
+    <Fragment key={index}>
+      {index > 0 ? <wbr /> : null}
+      {part}
+    </Fragment>
+  ))
 }
