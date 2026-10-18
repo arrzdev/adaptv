@@ -34,7 +34,7 @@
   /* code */
   --code-bg: #0c0c0f;
   --code-fg: #e4e4ea;
-  --code-muted: #6d6d7a;
+  --code-muted: #85858f; /* AA: 5.35:1 on --code-bg */
   --code-keyword: #a5aefb;
   --code-string: #8fd6a8;
   --code-fn: #f2c78a;
