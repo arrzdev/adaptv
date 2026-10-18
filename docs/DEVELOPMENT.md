@@ -37,7 +37,11 @@ Reach for these to verify anything native, keyboard, inset, or splash — not on
 (`AUTONOMOUS-UI-TESTING.md`). Two caveats worth internalising: `dev`/`preview` are turbo
 **interactive** tasks and refuse a non-TTY shell (run them in a real terminal), and after a
 framework-only edit pass `--force` or the fingerprint installs the previous bundle (see
-`## Things worth knowing`). When something genuinely needs a physical device (a hardware-keyboard
+`## The board preview of the website
+
+https://preview.adaptv.tudu.dev is the site in `website/` as its own Cloudflare Worker (`adaptv-website-preview`), behind Cloudflare Access (board only). To show a branch, push it to `site/preview` (`git push --force-with-lease origin <branch>:site/preview`); `.github/workflows/website-preview.yml` builds and deploys it in about 3 minutes. The workflow is also dispatchable once it is on `main`: `gh workflow run website-preview.yml --ref <branch>`. Secrets live in the `preview` GitHub Environment. Never deploy the playground worker.
+
+## Things worth knowing`). When something genuinely needs a physical device (a hardware-keyboard
 quirk, a specific OEM), say *that* — not that it can't be run at all.
 
 ## What the playground is

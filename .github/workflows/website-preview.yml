@@ -1,0 +1,81 @@
+name: Website preview
+
+# The board preview, https://preview.adaptv.tudu.dev: the site in `website/` as its own Worker,
+# `adaptv-website-preview`, behind Cloudflare Access (board only). It replaces the VM dev
+# server (TUD-1088). Push the branch to preview to `site/preview`, or dispatch this workflow
+# on any branch that carries it:
+#
+#   gh workflow run website-preview.yml --ref <branch>
+#
+# The build skips the checks `website.yml` runs on PRs: this only shows a branch.
+
+on:
+  push:
+    branches:
+      - site/preview
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: website-preview
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: preview
+      url: https://preview.adaptv.tudu.dev
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            website/pnpm-lock.yaml
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Install (website)
+        run: pnpm --dir website install --frozen-lockfile
+
+      - name: Build (framework)
+        run: pnpm build
+
+      - name: Build
+        env:
+          NITRO_PRESET: cloudflare_module
+        run: pnpm --dir website build
+
+      - name: Deploy
+        working-directory: website
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          account=$(printf '%s' "$CLOUDFLARE_ACCOUNT_ID" | tr -cd '0-9a-fA-F')
+          if [ "${#account}" != 32 ]; then echo "::error::CLOUDFLARE_ACCOUNT_ID is not 32 hex characters"; exit 1; fi
+          export CLOUDFLARE_ACCOUNT_ID="$account"
+          npx --yes wrangler@4.147.0 deploy --config .output/server/wrangler.json --env preview
+
+      # Access answers 302 to the login page when the Worker is up, 200 only for a signed-in user.
+      - name: Smoke
+        run: |
+          for i in 1 2 3 4 5 6; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' https://preview.adaptv.tudu.dev/ || true)
+            case "$code" in 200|302) echo "preview → $code"; exit 0;; esac
+            echo "attempt $i: $code"; sleep 10
+          done
+          echo "::error::preview did not answer"; exit 1

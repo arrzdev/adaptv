@@ -17,3 +17,10 @@ name = "adaptv-website"
 # pinned: without it, every deploy would also publish a *.workers.dev address
 workers_dev = false
 routes = [{ pattern = "adaptv.tudu.dev", custom_domain = true }]
+
+# The board preview (TUD-1088): same build, its own Worker, behind Cloudflare Access.
+# `.github/workflows/website-preview.yml` deploys it with `--env preview`.
+[env.preview]
+name = "adaptv-website-preview"
+workers_dev = false
+routes = [{ pattern = "preview.adaptv.tudu.dev", custom_domain = true }]
