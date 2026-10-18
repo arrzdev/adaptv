@@ -1,5 +1,5 @@
 import { act, fireEvent, render } from "@testing-library/react"
-import type { ComponentProps, ReactNode } from "react"
+import type { ComponentProps, ReactNode, Ref } from "react"
 import { createRef, useState } from "react"
 import { renderToString } from "react-dom/server"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
@@ -1576,6 +1576,72 @@ describe("Swipeable · slots and structure", () => {
       "inset(0 round 12px 12px 12px 12px)",
     )
     expect(parts(container, 1).root.style.clipPath).toBe("")
+  })
+
+  /** A row that "is a rounded card": the radius on the consumer's card inside
+   *  the content, none on the root. */
+  function CardRow(props: { rowRef?: Ref<SwipeableHandle> }) {
+    return (
+      <Swipeable ref={props.rowRef}>
+        <Swipeable.LeftActions>
+          <button type="button">pin</button>
+        </Swipeable.LeftActions>
+        <Swipeable.Content>
+          <div data-card style={{ borderRadius: "16px" }}>
+            card
+          </div>
+        </Swipeable.Content>
+        <Swipeable.RightActions>
+          <button type="button">delete</button>
+        </Swipeable.RightActions>
+      </Swipeable>
+    )
+  }
+
+  const corners = (el: HTMLElement) => [
+    el.style.borderTopLeftRadius,
+    el.style.borderTopRightRadius,
+    el.style.borderBottomRightRadius,
+    el.style.borderBottomLeftRadius,
+  ]
+
+  it("a square root takes the rounded card's radius, so the actions are clipped to the card's corners", () => {
+    const { container } = render(<CardRow />)
+    expect(parts(container).root.style.clipPath).toBe(
+      "inset(0 round 16px 16px 16px 16px)",
+    )
+  })
+
+  it("a rounded card meets its action at a square seam while open, and gets its corners back home", () => {
+    const ref = createRef<SwipeableHandle>()
+    const { container } = render(<CardRow rowRef={ref} />)
+    const { content, root } = parts(container)
+    const card = container.querySelector<HTMLElement>("[data-card]")
+    if (!card) throw new Error("no card")
+
+    //mid-drag to the left: the right tray shows, so the right corners are
+    //the seam; the left ones slide out under the root clip, untouched
+    mouseDrag(content, -40, { release: false })
+    expect(tx(content)).toBeLessThan(0)
+    expect(corners(card)).toEqual(["16px", "0px", "0px", "16px"])
+    //the clip keeps the card's radius, not the squared seam
+    expect(root.style.clipPath).toBe("inset(0 round 16px 16px 16px 16px)")
+
+    act(() => {
+      fireEvent.pointerUp(content, { pointerId: 1, pointerType: "mouse" })
+    })
+    settle()
+    expect(ref.current?.open).toBe("right")
+    expect(corners(card)).toEqual(["16px", "0px", "0px", "16px"])
+
+    act(() => ref.current?.close())
+    settle()
+    expect(ref.current?.open).toBe(false)
+    expect(corners(card)).toEqual(["16px", "16px", "16px", "16px"])
+
+    //the other way: the left tray, the left corners
+    mouseDrag(content, 40, { release: false })
+    expect(corners(card)).toEqual(["0px", "16px", "16px", "0px"])
   })
 
   it("useSwipeable outside a row is a loud error", () => {

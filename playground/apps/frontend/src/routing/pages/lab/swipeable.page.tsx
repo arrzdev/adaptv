@@ -116,6 +116,87 @@ function LabSwipeablePage() {
       </LabSection>
 
       <LabSection
+        title="In a rounded card and an inset list"
+        description="The actions take the row's corners at rest, mid-swipe and open. A card rounds its root, or only the card inside the content: then the row clips to the card's radius, and the card's corners on the action side square off while the row is open, so card and action meet at a straight seam. In an inset list the wrapper rounds the group and the first and last rows carry the same corners, which keeps the clip on iOS WebKit, where overflow alone lets a moving child past a rounded corner."
+      >
+        <div data-lab-rounded="card">
+          <AppSwipeable className="rounded-2xl bg-surface">
+            {/* the padding is on an element inside the slot: a slot drops its own
+                props, and so does a wrapper named after it (Swipeable docs, Slots) */}
+            <AppSwipeable.Content>
+              <div className="px-4 py-4 text-foreground text-sm">
+                a rounded card — drag me left
+              </div>
+            </AppSwipeable.Content>
+            <AppSwipeable.RightActions>
+              <IconButton
+                onClick={() => note("card deleted")}
+                aria-label="Delete the card"
+                className={`${ACTION_CLASS} bg-error hover:bg-error`}
+              >
+                <Trash2 size={20} strokeWidth={1.75} aria-hidden />
+              </IconButton>
+            </AppSwipeable.RightActions>
+          </AppSwipeable>
+        </div>
+        <div data-lab-rounded="content-card">
+          <AppSwipeable className="rounded-none">
+            <AppSwipeable.Content>
+              <div className="rounded-2xl border border-border bg-surface px-4 py-4 text-foreground text-sm">
+                a card rounded on its content — drag me left
+              </div>
+            </AppSwipeable.Content>
+            <AppSwipeable.RightActions>
+              <IconButton
+                onClick={() => note("content card deleted")}
+                aria-label="Delete the content card"
+                className={`${ACTION_CLASS} bg-error hover:bg-error`}
+              >
+                <Trash2 size={20} strokeWidth={1.75} aria-hidden />
+              </IconButton>
+            </AppSwipeable.RightActions>
+          </AppSwipeable>
+        </div>
+        <AppSwipeable.Group>
+          <div
+            data-lab-rounded="inset"
+            className="overflow-hidden rounded-2xl bg-surface"
+          >
+            {ROWS.map((row, index) => (
+              <AppSwipeable
+                key={row}
+                className="rounded-none bg-surface first:rounded-t-2xl last:rounded-b-2xl"
+              >
+                <AppSwipeable.Content>
+                  <div className="pl-4 text-foreground text-sm">
+                    {/* the separator is inset, as on iOS: it starts at the text */}
+                    <div
+                      className={
+                        index === 0
+                          ? "py-4 pr-4"
+                          : "border-border border-t py-4 pr-4"
+                      }
+                    >
+                      the {row} inset row
+                    </div>
+                  </div>
+                </AppSwipeable.Content>
+                <AppSwipeable.RightActions>
+                  <IconButton
+                    onClick={() => note(`inset ${row} deleted`)}
+                    aria-label={`Delete the ${row} inset row`}
+                    className={`${ACTION_CLASS} bg-error hover:bg-error`}
+                  >
+                    <Trash2 size={20} strokeWidth={1.75} aria-hidden />
+                  </IconButton>
+                </AppSwipeable.RightActions>
+              </AppSwipeable>
+            ))}
+          </div>
+        </AppSwipeable.Group>
+      </LabSection>
+
+      <LabSection
         title="A row containing an image"
         description="The historical failure: a selection-drag starting on an <img> is the browser's cue to begin a native image drag, which steals the pointer and the row stops tracking. adaptv makes media unselectable on every target, regardless of ui.noSelect, precisely for this."
       >

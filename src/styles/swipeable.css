@@ -4,7 +4,8 @@
  *
  * Model: the root is the single clipping surface (overflow + a JS-mirrored
  * clip-path so the translated content never bleeds past rounded corners on iOS
- * WebKit). Action panels live behind the content, pinned to their edge; their
+ * WebKit; the clip takes the root's radius, or the content's card's when the
+ * root is square). Action panels live behind the content, pinned to their edge; their
  * outer corners are rounded by the root clip, so they sit flush with no
  * per-element radius copying. Overshoot past the natural action width is covered
  * by a panel-width solid block that tracks the content's trailing edge and parks
