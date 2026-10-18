@@ -73,7 +73,7 @@ function CopyButton({ text }: { text: string }) {
           setTimeout(() => setCopied(false), 1400)
         })
       }}
-      className="grid size-8 shrink-0 cursor-pointer place-items-center rounded-md text-code-muted hover:bg-white/5 hover:text-code-fg"
+      className="grid size-11 shrink-0 cursor-pointer place-items-center rounded-md text-code-muted hover:bg-white/5 hover:text-code-fg"
     >
       {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
     </button>

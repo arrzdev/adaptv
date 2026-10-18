@@ -40,17 +40,17 @@ function SiteHeader() {
     <header className="sticky top-0 z-40 w-full px-3 pt-safe-offset-3">
       <View
         row
-        className="mx-auto h-12 w-full max-w-[1200px] items-center justify-between rounded-full border border-border-strong/70 bg-background/70 pr-2 pl-5 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.35)] backdrop-blur-xl"
+        className="mx-auto h-12 w-full max-w-[1200px] items-center justify-between rounded-full border border-border-strong/70 bg-background/70 pr-1 pl-3 sm:pr-2 sm:pl-5 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.35)] backdrop-blur-xl"
       >
-        <Link to="/" className="text-foreground">
+        <Link to="/" className="flex h-11 items-center text-foreground">
           <Wordmark />
         </Link>
-        <View row className="items-center gap-1">
+        <View row className="items-center sm:gap-1">
           {NAV.map((item) => (
             <Link
               key={item.to}
               to={item.to}
-              className="rounded-full px-3 py-1.5 font-medium text-[14px] text-subtle hover:bg-sunken hover:text-foreground"
+              className="flex h-11 items-center rounded-full px-2 font-medium text-[14px] text-subtle sm:px-3 hover:bg-sunken hover:text-foreground"
             >
               {item.label}
             </Link>
@@ -58,7 +58,7 @@ function SiteHeader() {
           <ExternalLink
             href={GITHUB_URL}
             aria-label="adaptv on GitHub"
-            className="ml-1 grid size-9 place-items-center rounded-full text-subtle hover:bg-sunken hover:text-foreground"
+            className="grid size-11 sm:ml-1 place-items-center rounded-full text-subtle hover:bg-sunken hover:text-foreground"
           >
             <Github className="size-[18px]" />
           </ExternalLink>
@@ -69,7 +69,7 @@ function SiteHeader() {
             type="button"
             onClick={toggleTheme}
             aria-label="Toggle light and dark"
-            className="grid size-9 cursor-pointer place-items-center rounded-full text-subtle hover:bg-sunken hover:text-foreground"
+            className="grid size-11 cursor-pointer place-items-center rounded-full text-subtle hover:bg-sunken hover:text-foreground"
           >
             <Sun className="hidden size-[18px] dark:block" />
             <Moon className="size-[18px] dark:hidden" />

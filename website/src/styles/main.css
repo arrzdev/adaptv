@@ -20,6 +20,9 @@
   --border: #ececee;
   --border-strong: #dcdce0;
   --brand: #5563d6;
+  /* the framework's focus ring (outline: var(--adaptv-ring, currentColor)); currentColor on
+     the filled Get started button is the page colour, so nothing showed (TUD-1625) */
+  --adaptv-ring: var(--brand);
   --brand-strong: #4451c4;
   --brand-soft: #eef0fd;
   --brand-foreground: #ffffff;
