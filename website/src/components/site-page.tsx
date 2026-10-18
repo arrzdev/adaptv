@@ -26,7 +26,7 @@ export function SitePage({
   return (
     <ScrollView showsVerticalScrollIndicator className="bg-background">
       <SiteHeader />
-      <View className={cn("w-full", className)}>{children}</View>
+      <main className={cn("flex w-full flex-col", className)}>{children}</main>
       <SiteFooter />
     </ScrollView>
   )
