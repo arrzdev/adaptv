@@ -1251,6 +1251,37 @@ describe("checking for an update", () => {
     )
   })
 
+  it("re-stages the very build that set the floor after a store release", async () => {
+    //`reset()` leaves the device on the embedded bundle while the channel still
+    //advertises the build it ran yesterday. Same tag, same bytes: not older
+    //than anything it ran, so the floor must not strand it on the embedded one.
+    localStorage.setItem(
+      KEY,
+      JSON.stringify([
+        {
+          buildTag: "newbuild00000000",
+          createdAt: 2_000_000_000_000,
+          state: "known-good",
+          provenOn: APP,
+        },
+      ]),
+    )
+    knownBinary(APP)
+    h.plugin = fakePlugin({
+      getCurrentBundle: vi.fn(async () => ({ bundleId: null })),
+      getDownloadedBundles: vi.fn(async () => ({
+        bundleIds: ["newbuild00000000"],
+      })),
+    })
+    const { startOtaUpdates } = await load()
+    startOtaUpdates(unsigned)
+    await vi.waitFor(() =>
+      expect(h.plugin?.setNextBundle).toHaveBeenCalledWith({
+        bundleId: "newbuild00000000",
+      }),
+    )
+  })
+
   it("checks again on resume, not only at launch", async () => {
     //A mobile app is backgrounded far more often than it is cold-started, so a
     //launch-only check leaves people on a stale bundle for days.
