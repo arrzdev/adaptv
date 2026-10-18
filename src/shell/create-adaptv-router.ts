@@ -9,6 +9,9 @@ import { standaloneMemoryHistory } from "#adaptv/shell/standalone-history"
 //an alias would still show the engine's names in every hover and type error.
 //→ docs/decisions/facade-and-opacity.md §1
 
+/** The page's own scroller: the root ScrollView, the screen frame's only child. */
+const PAGE_SCROLLER = "[data-adaptv-screen] > [data-scroll-view]"
+
 /** Any generated route tree. */
 export interface AdaptvRouteTree extends AnyRoute {}
 
@@ -69,6 +72,18 @@ export function createAdaptvRouter<TRouteTree extends AdaptvRouteTree>({
       ? {}
       : { notFoundMode: "root" }) as object),
     ...options,
+    //A navigation starts the next page at the top. The engine resets `window` by
+    //default, and adaptv has no document scroll: a page scrolls in its root
+    //ScrollView, the only child of the screen frame (styles/screen.css). A fresh page
+    //mounts at 0 anyway; this is for the scroller that SURVIVES a navigation (a layout
+    //over several routes, a param or search change), which kept its offset. The child
+    //combinator leaves nested scrollers alone. An app's own targets are added, not
+    //swapped in, and `resetScroll: false` on a navigation still opts out.
+    scrollToTopSelectors: [
+      "window",
+      PAGE_SCROLLER,
+      ...((options.scrollToTopSelectors as unknown[] | undefined) ?? []),
+    ],
     //The option bag is config-shaped (a plain record from adaptv.config.ts), so
     //it cannot be statically matched against createRouter's deeply-generic
     //constructor type.

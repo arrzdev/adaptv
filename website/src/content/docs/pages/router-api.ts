@@ -206,6 +206,11 @@ function physical(pathPrefix: string, directory: string): PhysicalRouteNode`,
       type: "p",
       text: "adaptv builds the router from the route tree and the `router` block of [adaptv.config.ts](/docs/config). It passes every key that is not a build path to the router. Only plain values survive. A function or component is dropped without a warning.",
     },
+    { type: "h2", text: "Scroll on navigation" },
+    {
+      type: "p",
+      text: "A navigation starts the next page at the top. A page scrolls in its root `ScrollView`, not the document, so the router resets that `ScrollView` as well as `window`. This matters when the scroller survives the navigation: a layout over several routes, or a change of param or search. Pass `resetScroll={false}` to a `Link`, or `resetScroll: false` to `navigate`, to keep the offset. Back and forward do not restore an offset.",
+    },
     { type: "h2", text: "Eject" },
     {
       type: "p",

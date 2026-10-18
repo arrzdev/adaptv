@@ -49,4 +49,34 @@ describe("createAdaptvRouter", () => {
     expect(router.state.location.pathname).toBe("/elsewhere")
     expect(error).not.toHaveBeenCalled()
   })
+
+  //adaptv has no document scroll: a page scrolls in its root ScrollView, the only
+  //child of the screen frame. The router's default reset target is `window` alone,
+  //which never moves, so a scroller that survived a navigation kept its offset.
+  //playground/e2e/scroll-reset.spec.ts drives it in a browser.
+  describe("scroll to top on navigation", () => {
+    const routeTree = createRootRoute().addChildren([])
+
+    it("resets the page scroller as well as the window", () => {
+      const router = createAdaptvRouter({ routeTree })
+      expect(router.options.scrollToTopSelectors).toEqual([
+        "window",
+        "[data-adaptv-screen] > [data-scroll-view]",
+      ])
+    })
+
+    it("adds an app's own targets after the page scroller", () => {
+      const pane = () => null
+      const router = createAdaptvRouter({
+        routeTree,
+        options: { scrollToTopSelectors: ["#side", pane] },
+      })
+      expect(router.options.scrollToTopSelectors).toEqual([
+        "window",
+        "[data-adaptv-screen] > [data-scroll-view]",
+        "#side",
+        pane,
+      ])
+    })
+  })
 })
