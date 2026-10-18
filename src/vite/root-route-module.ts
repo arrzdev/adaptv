@@ -139,6 +139,7 @@ export function renderRootRouteModule(
     `themeColorLight: ${JSON.stringify(theme.light)}`,
     `themeColorDark: ${JSON.stringify(theme.dark)}`,
     `title: ${JSON.stringify(config.title ?? config.name)}`,
+    `notFoundTitle: ${JSON.stringify(`Page not found · ${config.name}`)}`,
   ]
   if (config.description) {
     fields.push(`description: ${JSON.stringify(config.description)}`)

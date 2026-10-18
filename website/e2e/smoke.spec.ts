@@ -84,6 +84,10 @@ for (const viewport of VIEWPORTS) {
 
         const response = await tab.goto(path)
         expect(response?.status()).toBe(404)
+        //its own title, and nothing a search engine would index as a copy of the home page
+        await expect(tab).toHaveTitle("Page not found · adaptv")
+        await expect(tab.locator('meta[name="description"]')).toHaveCount(0)
+        await expect(tab.locator('meta[name="robots"]')).toHaveAttribute("content", "noindex")
         await expect(tab.locator("h1").first()).toBeVisible()
         await expect(tab.locator("header").getByRole("link", { name: "adaptv on GitHub" })).toBeVisible()
         await tab.waitForLoadState("networkidle")
