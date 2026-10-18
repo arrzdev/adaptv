@@ -152,7 +152,7 @@ test.describe("the app's own drawers", () => {
     test(`${drawer.name}: ${
       drawer.autoFocuses
         ? "focuses its field, inside the panel"
-        : "takes no focus on open"
+        : "puts no field in focus on open"
     }`, async ({ page }) => {
       await tapLabButton(page, drawer.button)
       await page.locator(PANEL).waitFor({ state: "attached" })
@@ -165,7 +165,10 @@ test.describe("the app's own drawers", () => {
         expect(sheet.focusIsInside).toBe(true)
         expect(sheet.focusTag).toBe("input")
       } else {
-        expect(sheet.focusIsInside).toBe(false)
+        //focus does move in (the dialog owes that to a keyboard user), but onto the panel: a
+        //field that takes focus unasked puts the keyboard up
+        expect(sheet.focusIsInside).toBe(true)
+        expect(sheet.focusTag).not.toMatch(/^(input|textarea)$/)
       }
     })
 

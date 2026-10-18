@@ -94,6 +94,37 @@ describe("Drawer focus management", () => {
     )
   })
 
+  it("focuses the panel, not a first text field nobody marked [data-autofocus]", async () => {
+    //focusing the field would put the phone keyboard up on a sheet that never asked for it
+    function FormSheet() {
+      const [open, setOpen] = useState(false)
+      return (
+        <>
+          <button type="button" onClick={() => setOpen(true)}>
+            Open
+          </button>
+          <Drawer open={open} onOpenChange={setOpen}>
+            <Drawer.Portal>
+              <Drawer.Content>
+                <textarea aria-label="Task" />
+                <Drawer.Close>Cancel</Drawer.Close>
+              </Drawer.Content>
+            </Drawer.Portal>
+          </Drawer>
+        </>
+      )
+    }
+    render(<FormSheet />)
+    await openFromTrigger()
+
+    await vi.waitFor(() => expect(document.activeElement).toBe(panel()))
+    //the focused panel is still inside the trap: Shift+Tab from it wraps to the last stop
+    press("Tab", { shiftKey: true })
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "Cancel", hidden: true }),
+    )
+  })
+
   it("wraps Tab from the last tabbable to the first, and Shift+Tab back", async () => {
     render(<Sheet />)
     await openFromTrigger()
