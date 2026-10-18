@@ -283,7 +283,7 @@ const [open, setOpen] = useState(false)
     { type: "h2", text: "Accessibility" },
     {
       type: "p",
-      text: 'The panel has `role="dialog"` and `aria-modal="true"`. Pass `aria-labelledby` and `aria-describedby` to `Drawer.Content` yourself. For keyboard users, focus moves into the sheet when it opens (the `data-autofocus` field, else the first focusable element), Tab and Shift+Tab stay inside it, Escape closes the top drawer, and focus goes back to what opened it.',
+      text: 'The panel has `role="dialog"` and `aria-modal="true"`. Pass `aria-labelledby` and `aria-describedby` to `Drawer.Content` yourself. For keyboard users, focus moves into the sheet when it opens (the `data-autofocus` element, else the first focusable element unless it is a text field, else the panel), Tab and Shift+Tab stay inside it, Escape closes the top drawer, and focus goes back to what opened it.',
     },
     { type: "h2", text: "Where it works" },
     {
