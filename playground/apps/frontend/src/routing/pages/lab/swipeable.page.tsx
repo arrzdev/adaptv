@@ -121,8 +121,8 @@ function LabSwipeablePage() {
       >
         <div data-lab-rounded="card">
           <AppSwipeable className="rounded-2xl bg-surface">
-            {/* the padding is on an element inside the slot: a slot drops its own
-                props, and so does a wrapper named after it (Swipeable docs, Slots) */}
+            {/* the padding is on an element inside the slot, as the docs show it: Swipeable's
+                own slots drop their props (Swipeable docs, Slots) */}
             <AppSwipeable.Content>
               <div className="px-4 py-4 text-foreground text-sm">
                 a rounded card — drag me left

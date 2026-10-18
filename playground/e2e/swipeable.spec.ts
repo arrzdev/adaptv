@@ -483,3 +483,28 @@ test.describe("Swipeable rows under real touch", () => {
     ).not.toMatch(/opened/)
   })
 })
+
+//Swipeable reads each slot's children without rendering the slot, so an app wrapper
+//named after a slot (the playground's AppSwipeable.Content) never rendered: its className
+//was dropped and the lab rows lost their padding. The app's root renders its wrappers.
+test("the app's Swipeable wrappers keep their className", async ({
+  page,
+}) => {
+  await page.goto("/lab/swipeable")
+  await awaitClientHandover(page)
+  const row = page.locator(ROOT).first()
+  const text = row.getByText("the first row — drag me left or right")
+  await expect(text).toBeVisible()
+  //AppSwipeable.Content className="px-4 py-4"
+  const padding = await text.evaluate((el) => getComputedStyle(el).padding)
+  expect.soft(padding).toBe("16px")
+  //AppSwipeable.RightActions lays its actions out in a full-height row
+  const actions = row
+    .locator(
+      '[data-swipeable-actions="right"] > :not([data-swipeable-fill])',
+    )
+    .first()
+  expect
+    .soft(await actions.evaluate((el) => getComputedStyle(el).display))
+    .toBe("flex")
+})
