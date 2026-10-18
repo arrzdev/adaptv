@@ -41,6 +41,12 @@ export interface LinkProps
    * the back target (deep-link / hard reload). @default false
    */
   smartBack?: boolean
+  /**
+   * `false` keeps the page where it is scrolled. A navigation otherwise starts the
+   * next page at the top: the router resets the page's root `ScrollView` as well as
+   * `window` (create-adaptv-router.ts). Passed to the router's own link. @default true
+   */
+  resetScroll?: boolean
 }
 
 //The look — left-aligned, gray-950, no underline, a pointer cursor (`not-allowed` when
@@ -107,6 +113,7 @@ export const Link = forwardRef<HTMLAnchorElement, LinkProps>(function Link(
     children,
     disabled = false,
     smartBack = false,
+    resetScroll,
     "aria-disabled": ariaDisabled,
     style,
     ...rest
@@ -202,6 +209,7 @@ export const Link = forwardRef<HTMLAnchorElement, LinkProps>(function Link(
       to={to}
       params={params}
       search={search}
+      resetScroll={resetScroll}
       draggable={false}
       {...gestureEngineHandlers}
       onClick={handleClick}
