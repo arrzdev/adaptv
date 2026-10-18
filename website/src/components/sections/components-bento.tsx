@@ -121,7 +121,7 @@ function SwipeRows() {
           Bring them back
         </Pressable>
       ) : (
-        <span className="pt-2 text-center font-mono text-[11px] text-muted">
+        <span className="pt-2 text-center font-mono text-[12px] text-muted">
           drag a row left or right
         </span>
       )}

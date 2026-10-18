@@ -133,7 +133,7 @@ function DocsNav({ current }: { current: string }) {
           </View>
           {DOCS.filter((group) => group.section === section).map((group) => (
             <View key={group.title} className="gap-2">
-              <span className="font-mono text-[11px] text-muted uppercase tracking-[0.14em]">
+              <span className="font-mono text-[12px] text-muted uppercase tracking-[0.08em]">
                 {group.title}
               </span>
               <View className="border-border border-l">
@@ -201,7 +201,7 @@ function OnThisPage({ page }: { page: DocPage }) {
   if (headings.length < 2) return null
   return (
     <View className="gap-2.5">
-      <span className="pb-1 font-mono text-[11px] text-muted uppercase tracking-[0.14em]">
+      <span className="pb-1 font-mono text-[12px] text-muted uppercase tracking-[0.08em]">
         On this page
       </span>
       {headings.map((heading) => (
@@ -274,11 +274,13 @@ export function Pager({ page }: { page: DocPage }) {
   )
 }
 
+//The hue sits on the border and the dot; the label is --foreground, so every pill reads
+//at 4.5:1 or better in both themes (TUD-1626).
 const PLATFORM_TONE = {
-  Web: "border-[#e0a23a]/40 bg-[#e0a23a]/10 text-[#e0a23a]",
-  PWA: "border-brand/40 bg-brand-soft text-brand",
-  iOS: "border-[#38b6ff]/40 bg-[#38b6ff]/10 text-[#38b6ff]",
-  Android: "border-success/40 bg-success-soft text-success",
+  Web: { pill: "border-[#e0a23a]/50 bg-[#e0a23a]/10", dot: "bg-[#e0a23a]" },
+  PWA: { pill: "border-brand/50 bg-brand-soft", dot: "bg-brand" },
+  iOS: { pill: "border-[#38b6ff]/50 bg-[#38b6ff]/10", dot: "bg-[#38b6ff]" },
+  Android: { pill: "border-success/50 bg-success-soft", dot: "bg-success" },
 } as const
 
 function PageMeta({ page }: { page: DocPage }) {
@@ -289,11 +291,18 @@ function PageMeta({ page }: { page: DocPage }) {
         {page.platforms?.map((platform) => (
           <span
             key={platform}
+            data-platform={platform}
             className={cn(
-              "rounded-full border px-2.5 py-0.5 font-medium text-[12px]",
-              PLATFORM_TONE[platform],
+              "flex flex-row items-center gap-1.5 rounded-full border px-2.5 py-0.5 font-medium text-[12px] text-foreground",
+              PLATFORM_TONE[platform].pill,
             )}
           >
+            <span
+              className={cn(
+                "size-1.5 rounded-full",
+                PLATFORM_TONE[platform].dot,
+              )}
+            />
             {platform}
           </span>
         ))}
@@ -367,7 +376,7 @@ export function DocsLayout({ page }: { page: DocPage }) {
     >
       <View className="gap-4 pb-8">
         {group ? (
-          <span className="font-mono text-[11.5px] text-brand uppercase tracking-[0.14em]">
+          <span className="font-mono text-[12px] text-brand uppercase tracking-[0.08em]">
             {group.title}
           </span>
         ) : null}

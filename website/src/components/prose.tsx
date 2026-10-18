@@ -148,7 +148,7 @@ function HeadRow({ cells }: { cells: string[] }) {
         {cells.map((cell) => (
           <th
             key={cell}
-            className="whitespace-nowrap px-4 py-2.5 font-medium font-mono text-[11.5px] text-muted uppercase tracking-[0.1em]"
+            className="whitespace-nowrap px-4 py-2.5 font-medium font-mono text-[12px] text-muted uppercase tracking-[0.07em]"
           >
             {cell}
           </th>
@@ -382,7 +382,7 @@ function ProseBlock({ block, id }: { block: Block; id?: string }) {
           ) : null}
           {block.returns ? (
             <p className="text-[15px] text-subtle leading-relaxed">
-              <span className="mr-2 font-mono text-[11.5px] text-muted uppercase tracking-[0.1em]">
+              <span className="mr-2 font-mono text-[12px] text-muted uppercase tracking-[0.07em]">
                 Returns
               </span>
               <Inline text={block.returns} />
