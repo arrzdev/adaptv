@@ -861,17 +861,34 @@ a prompt look necessary was *when* the old code applied the update, not *that* i
 `skipWaiting` + `clientsClaim` means a new SW takes control of pages **loaded by the old SW**. Those
 pages hold module graphs referencing the old build's hashed chunks, and precache activation deletes
 them — so the next lazy `import()` in that open tab 404s at both cache and origin. Auto-reloading on
-top of that also drops unsaved form state. So the whole decision reduces to one question: **when is a
-reload free?**
+top of that also drops unsaved form state. So the whole decision reduces to one question: **when can
+the worker change under a page for free?**
 
 **Only at a cold launch.** A worker sitting in `waiting` finished installing in an *earlier* session,
-so its precache is already complete on disk — applying it costs one reload and zero downloads. And the
-document was created moments ago: no typed-in form, no open modal, no in-flight upload to destroy.
+so its precache is already complete on disk — applying it costs zero downloads. And the document was
+created moments ago: no typed-in form, no open modal, no in-flight upload to destroy.
 
 ```
 boot → registration.waiting && navigator.serviceWorker.controller
-     → postMessage({ type: "SKIP_WAITING" }) → controllerchange → location.reload()
+     → postMessage({ type: "SKIP_WAITING" })          (no reload)
 ```
+
+**The launch-apply never reloads the page.** It runs when the shell mounts, after the first paint, so a
+reload there is the app loading twice in front of the user and replaying every entry animation. An
+earlier version did reload, 48–62 ms after commit (282–372 ms with the CPU throttled); a hero
+animation played, then played again. The page keeps the build it launched with, and the *next*
+navigation gets the new worker's — stale-while-revalidate, the same shape native has. That is safe both
+ways the document can have arrived:
+
+- **`ssr`, online:** navigations are network-only (§3.2), so the document already *is* the new build;
+  only the worker under it changes.
+- **`spa`, or the `ssr` offline fallback:** the document is the previous build's shell, and activation
+  prunes its chunks from the precache. A lazy `import()` later in that session reaches the origin,
+  which still serves them under the no-`--delete` rule below. Where it cannot (offline, or a host that
+  dropped them), the `vite:preloadError` net reloads onto the new build once, at the navigation that
+  needed the chunk — not at launch, and only in that case.
+
+`update.spec.ts` asserts the launch that applies the worker commits exactly one document.
 
 A worker that finishes installing **during** a session is deliberately left alone; the branch above
 applies it at the next launch. Running one build behind for one session is survivable. Losing what

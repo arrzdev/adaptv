@@ -83,7 +83,7 @@ function Product({ id }: { id: string }) {
     { type: "h2", text: "Update the app" },
     {
       type: "p",
-      text: 'A new deploy installs a new worker in the background. adaptv applies it at the next cold launch, with one reload. Set `serviceWorkerUpdate: "prompt"` in `adaptv.config.ts` to choose the moment yourself.',
+      text: 'A new deploy installs a new worker in the background. adaptv applies it at the next cold launch without reloading the page: that launch keeps the version it opened with, and the next navigation gets the new one. Set `serviceWorkerUpdate: "prompt"` in `adaptv.config.ts` to choose the moment yourself.',
     },
     {
       type: "code",

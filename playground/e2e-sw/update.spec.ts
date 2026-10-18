@@ -82,10 +82,17 @@ test.describe(`update flow (render: ${RENDER})`, () => {
     ).toContain(STALE)
 
     /* 3 — applied at the next launch ----------------------------------------- */
-    //`commit`, not `load`: adaptv applies the waiting worker and then reloads the
-    //page ITSELF, so waiting for load here races that second navigation and
-    //surfaces as "interrupted by another navigation" — a false failure that reads
-    //exactly like a regression. Everything real is asserted by the poll below.
+    //Every document the main frame commits from here on. The launch must be ONE:
+    //a second one is the page loading again in front of the user, replaying
+    //whatever its first paint was already animating.
+    let documentLoads = 0
+    page.on("framenavigated", (frame) => {
+      if (frame === page.mainFrame()) documentLoads++
+    })
+
+    //`commit`, not `load`: if adaptv ever reloads the page itself again, waiting
+    //for load here races that second navigation and fails as "interrupted by
+    //another navigation" instead of on the count below, which says what broke.
     await page.reload({ waitUntil: "commit" })
 
     //One poll for all four facts, because they are only meaningful TOGETHER: a
@@ -175,5 +182,15 @@ test.describe(`update flow (render: ${RENDER})`, () => {
         { cause: failure },
       )
     }
+
+    //The worker is applied and swept, and the page that was launched is still the
+    //page on screen. Read after `load` and one more round trip into the page, so a
+    //reload fired by the apply has had time to commit and be counted.
+    await page.waitForLoadState("load")
+    await page.evaluate(() => navigator.serviceWorker.ready)
+    expect(
+      documentLoads,
+      "the launch that applied the waiting worker loaded the page twice — the update reloaded the page in front of the user",
+    ).toBe(1)
   })
 })
