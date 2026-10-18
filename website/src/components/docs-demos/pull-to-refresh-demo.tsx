@@ -1,5 +1,6 @@
 import { PullToRefresh, ScrollView, View } from "adaptv/components"
 import { useRef, useState } from "react"
+import { scrollRegion } from "../scroll-region"
 
 const ROWS = Array.from({ length: 12 }, (_, i) => `Message ${i + 1}`)
 
@@ -19,7 +20,11 @@ export function PullToRefreshDemo() {
         scrollContainerRef={scrollRef}
         className="overflow-hidden rounded-xl border border-border bg-sunken [&_svg]:text-foreground"
       >
-        <ScrollView ref={scrollRef} className="h-64 gap-2 bg-raised p-3">
+        <ScrollView
+          ref={scrollRef}
+          {...scrollRegion("Pull to refresh demo list")}
+          className="h-64 gap-2 bg-raised p-3"
+        >
           {ROWS.map((row) => (
             <span
               key={row}

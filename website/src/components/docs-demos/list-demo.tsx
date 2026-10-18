@@ -1,5 +1,6 @@
 import { List, View } from "adaptv/components"
 import { useEffect, useRef, useState } from "react"
+import { scrollRegion } from "../scroll-region"
 
 type Row = { id: string; index: number }
 
@@ -16,6 +17,13 @@ export function ListDemo() {
   useEffect(() => {
     const host = hostRef.current
     if (!host) return
+    //List does not forward DOM props, so the scroller it renders is named from here
+    const scroller = host.firstElementChild
+    for (const [name, value] of Object.entries(scrollRegion("List demo")))
+      scroller?.setAttribute(
+        name === "tabIndex" ? "tabindex" : name,
+        String(value),
+      )
     const count = () =>
       setMounted(host.querySelectorAll("[data-demo-row]").length)
     count()

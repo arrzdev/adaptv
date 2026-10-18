@@ -4,6 +4,7 @@ import { useInView } from "motion/react"
 import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react"
 import { type Frame, parseAnsi, replayFrames } from "@/components/ansi"
 import { cn } from "@/utils/cn"
+import { scrollRegion } from "./scroll-region"
 
 const COLOURS = [
   "black",
@@ -100,7 +101,11 @@ export function Terminal({
         <span className="size-2.5 rounded-full bg-white/15" />
       </View>
       {/* long output scrolls inside the window, never the page, and never wraps */}
-      <pre ref={ref} className="max-h-[440px] overflow-auto p-5">
+      <pre
+        ref={ref}
+        {...scrollRegion("Terminal output")}
+        className="max-h-[440px] overflow-auto p-5"
+      >
         <span className="opacity-60">$ </span>
         {command}
         {"\n"}

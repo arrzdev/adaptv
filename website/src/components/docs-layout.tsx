@@ -15,6 +15,7 @@ import { SitePage } from "@/components/site-page"
 import { ALL_DOCS, DOCS, type DocPage } from "@/content/docs"
 import { GITHUB_URL } from "@/content/site"
 import { cn } from "@/utils/cn"
+import { scrollRegion } from "./scroll-region"
 
 function matches(page: DocPage, query: string) {
   const haystack = [
@@ -317,7 +318,10 @@ function PageMeta({ page }: { page: DocPage }) {
         ) : null}
       </View>
       {page.importLine ? (
-        <pre className="selectable overflow-x-auto rounded-xl border border-border bg-sunken px-4 py-3 font-mono text-[13px] text-subtle">
+        <pre
+          {...scrollRegion("Import")}
+          className="selectable overflow-x-auto rounded-xl border border-border bg-sunken px-4 py-3 font-mono text-[13px] text-subtle"
+        >
           {page.importLine}
         </pre>
       ) : null}
