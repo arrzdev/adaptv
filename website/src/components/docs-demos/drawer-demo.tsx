@@ -12,9 +12,9 @@ export function DrawerDemo() {
         </Drawer.Trigger>
         <Drawer.Portal>
           <Drawer.Overlay className="bg-black/60" />
-          <Drawer.Content className="mx-auto max-w-xl rounded-t-[28px] border-border border-t bg-surface text-foreground">
+          <Drawer.Content className="rounded-t-[28px] border-border border-t bg-surface text-foreground">
             <Drawer.Handle className="mt-2.5 bg-border-strong" />
-            <Drawer.Shell className="gap-3 px-7 pt-4">
+            <Drawer.Shell className="mx-auto w-full max-w-xl gap-3 px-7 pt-4">
               <Drawer.Title className="font-semibold text-[20px] tracking-tight">
                 Drag me down
               </Drawer.Title>
@@ -32,7 +32,7 @@ export function DrawerDemo() {
                 disableDrag
               </label>
             </Drawer.Shell>
-            <Drawer.Footer className="px-7 pt-4 pb-7">
+            <Drawer.Footer className="mx-auto w-full max-w-xl px-7 pt-4 pb-7">
               <Drawer.Close className="h-12 cursor-pointer rounded-full bg-sunken font-medium text-[15px] text-foreground">
                 Close
               </Drawer.Close>

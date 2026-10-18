@@ -262,9 +262,12 @@ function SheetTrigger() {
       <Drawer open={open} onOpenChange={setOpen}>
         <Drawer.Portal>
           <Drawer.Overlay className="bg-black/60" />
-          <Drawer.Content className="mx-auto max-w-xl rounded-t-[28px] border-border border-t bg-surface text-foreground">
+          {/* edge to edge at every width, as a sheet is on a phone; only the copy keeps
+              a readable measure. The panel is full width by default (the framework pins
+              it `left: 0; right: 0`), so nothing here may cap the panel itself */}
+          <Drawer.Content className="rounded-t-[28px] border-border border-t bg-surface text-foreground">
             <Drawer.Handle className="mt-2.5 bg-border-strong" />
-            <Drawer.Shell className="gap-4 px-7 pt-5 pb-8">
+            <Drawer.Shell className="mx-auto w-full max-w-xl gap-4 px-7 pt-5 pb-8">
               <Drawer.Title className="font-semibold text-[22px] tracking-tight">
                 This is a real sheet.
               </Drawer.Title>
