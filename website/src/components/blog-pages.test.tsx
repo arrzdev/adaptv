@@ -76,6 +76,14 @@ describe("blog index", () => {
     ])
   })
 
+  it("leads with the newest post on its own, then the rest in two columns from md", () => {
+    const html = renderToStaticMarkup(<Index />)
+    const grid = html.indexOf("md:grid-cols-2")
+    expect(grid).toBeGreaterThan(-1)
+    expect(html.indexOf("title newest")).toBeLessThan(grid)
+    expect(html.indexOf("title same-day-first")).toBeGreaterThan(grid)
+  })
+
   it("paints the Release kind word in the brand colour, and only that one", () => {
     const html = renderToStaticMarkup(<Index />)
     expect(html).toMatch(

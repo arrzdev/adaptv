@@ -1,23 +1,19 @@
-import { View } from "adaptv/components"
-import { Check } from "lucide-react"
 import type { SVGProps } from "react"
-import { Reveal } from "@/components/reveal"
-import { Section } from "@/components/section"
 
 /*
- * Platform marks from simple-icons, in one colour. The iOS mark is Apple's
- * wordmark, never the Apple logo; the Android robot is CC BY 3.0 and credited in the
- * footer. Each viewBox is cropped to its glyph so heights line up by eye.
+ * Platform marks from simple-icons, in one colour. The iOS mark is Apple's wordmark,
+ * never the Apple logo; the Android robot is CC BY 3.0 and credited in the footer. Each
+ * viewBox is cropped to its glyph so heights line up by eye.
  */
 type Mark = (props: SVGProps<SVGSVGElement>) => React.JSX.Element
 
-const IosMark: Mark = (props) => (
+export const IosMark: Mark = (props) => (
   <svg viewBox="0 6 24 12" fill="currentColor" aria-hidden="true" {...props}>
     <path d="M1.1 6.05C.486 6.05 0 6.53 0 7.13A1.08 1.08 0 0 0 1.1 8.21C1.72 8.21 2.21 7.73 2.21 7.13C2.21 6.53 1.72 6.05 1.1 6.05M8.71 6.07C5.35 6.07 3.25 8.36 3.25 12C3.25 15.67 5.35 17.95 8.71 17.95C12.05 17.95 14.16 15.67 14.16 12C14.16 8.36 12.05 6.07 8.71 6.07M19.55 6.07C17.05 6.07 15.27 7.45 15.27 9.5C15.27 11.13 16.28 12.15 18.4 12.64L19.89 13C21.34 13.33 21.93 13.81 21.93 14.64C21.93 15.6 20.96 16.28 19.58 16.28C18.17 16.28 17.11 15.59 17 14.53H15C15.08 16.65 16.82 17.95 19.46 17.95C22.25 17.95 24 16.58 24 14.4C24 12.69 23 11.72 20.68 11.19L19.35 10.89C17.94 10.55 17.36 10.1 17.36 9.34C17.36 8.38 18.24 7.74 19.54 7.74C20.85 7.74 21.75 8.39 21.85 9.46H23.81C23.76 7.44 22.09 6.07 19.55 6.07M8.71 7.82C10.75 7.82 12.06 9.45 12.06 12C12.06 14.57 10.75 16.2 8.71 16.2C6.65 16.2 5.35 14.57 5.35 12C5.35 9.45 6.65 7.82 8.71 7.82M.111 9.31V17.76H2.1V9.31H.11Z" />
   </svg>
 )
 
-const AndroidMark: Mark = (props) => (
+export const AndroidMark: Mark = (props) => (
   <svg
     viewBox="0 5.3 24 13.7"
     fill="currentColor"
@@ -40,94 +36,34 @@ const CapacitorMark: Mark = (props) => (
   </svg>
 )
 
-const PLATFORMS: { name: string; mark: Mark | null; size: string }[] = [
+const PLATFORMS: { name: string; mark: Mark; size: string }[] = [
   { name: "iOS", mark: IosMark, size: "h-[15px] md:h-[18px]" },
   { name: "Android", mark: AndroidMark, size: "h-5 md:h-6" },
   { name: "PWA", mark: PwaMark, size: "h-[15px] md:h-[18px]" },
   { name: "Capacitor", mark: CapacitorMark, size: "h-[21px] md:h-6" },
 ]
 
-const WAYS: { title: string; lines: string[] }[] = [
-  {
-    title: "In a browser tab",
-    lines: [
-      "Inputs don't zoom the page when they get focus.",
-      "Scrolling a list doesn't drag the page behind it.",
-    ],
-  },
-  {
-    title: "Installed from the browser",
-    lines: [
-      "Installs from the browser, no store.",
-      "Works offline.",
-      "Fixes reach users without a store review.",
-    ],
-  },
-  {
-    title: "In the App Store and Google Play",
-    lines: [
-      "Real iOS and Android builds through Capacitor.",
-      "Safe areas and the keyboard are handled.",
-      "Android's Back button closes the open sheet first.",
-    ],
-  },
-]
-
 /**
- * Where an adaptv app runs: the four platform marks, then the three ways the same code
- * reaches people and what adaptv fixes in each. Every line is true on `main`; one that
- * stops being true is dropped, not reworded. Each mark carries its name as hidden text,
- * so assistive tech reads a plain list of four.
+ * Where an adaptv app runs, as one still row of marks: no motion, no captions. Each mark
+ * carries its name as hidden text, so assistive tech reads a plain list of four. One
+ * centred row at every width: a 3-column grid left Capacitor alone on a second row on a
+ * phone (TUD-836). It sits in the hero, under the device stage, on the aurora's orange foot.
  */
-export function WhereItRuns() {
+export function Targets() {
   return (
-    <Section
-      title="Where it runs"
-      lede="The same code reaches people three ways. adaptv handles what each one gets wrong by default."
-    >
-      <Reveal className="flex flex-col gap-12">
-        <ul className="flex items-center gap-10">
-          {PLATFORMS.map(({ name, mark: Mark, size }) => (
-            <li
-              key={name}
-              className="flex h-7 items-center text-foreground opacity-50 transition-opacity duration-200 ease-out hover:opacity-80"
-            >
-              {Mark ? (
-                <>
-                  <Mark className={`w-auto ${size}`} />
-                  <span className="sr-only">{name}</span>
-                </>
-              ) : (
-                <span
-                  className={`font-semibold leading-none tracking-[-0.03em] ${size}`}
-                >
-                  {name}
-                </span>
-              )}
-            </li>
-          ))}
-        </ul>
-        <div className="grid gap-10 md:grid-cols-3 md:gap-8">
-          {WAYS.map((way) => (
-            <View key={way.title} className="gap-4">
-              <h3 className="font-semibold text-[18px] tracking-[-0.02em]">
-                {way.title}
-              </h3>
-              <ul className="flex flex-col gap-2.5 text-[14.5px] text-muted">
-                {way.lines.map((line) => (
-                  <li key={line} className="flex items-start gap-2">
-                    <Check
-                      className="mt-[3px] size-4 shrink-0 text-success"
-                      strokeWidth={2.5}
-                    />
-                    {line}
-                  </li>
-                ))}
-              </ul>
-            </View>
-          ))}
-        </div>
-      </Reveal>
-    </Section>
+    <div className="relative mt-16 flex w-full flex-col items-center gap-7">
+      <p className="text-[14px] text-muted">One app. Every platform.</p>
+      <ul className="flex items-center justify-center gap-[clamp(22px,6vw,40px)] md:gap-12">
+        {PLATFORMS.map(({ name, mark: Mark, size }) => (
+          <li
+            key={name}
+            className="flex h-7 items-center text-foreground opacity-50 transition-opacity duration-200 ease-out hover:opacity-80"
+          >
+            <Mark className={`w-auto ${size}`} />
+            <span className="sr-only">{name}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }

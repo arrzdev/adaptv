@@ -1,9 +1,10 @@
 import { createFileRoute } from "adaptv/router"
 import { FinalCta } from "@/components/sections/closing"
 import { ComponentsBento } from "@/components/sections/components-bento"
+import { FourWays } from "@/components/sections/four-ways"
+import { HardParts } from "@/components/sections/hard-parts"
 import { Hero } from "@/components/sections/hero"
-import { IdeaToInstalled } from "@/components/sections/idea-to-installed"
-import { WhereItRuns } from "@/components/sections/where-it-runs"
+import { Stats } from "@/components/sections/stats"
 import { SitePage } from "@/components/site-page"
 import {
   SITE_DESCRIPTION,
@@ -27,9 +28,10 @@ function HomePage() {
   return (
     <SitePage>
       <Hero />
-      <WhereItRuns />
+      <Stats />
       <ComponentsBento />
-      <IdeaToInstalled />
+      <HardParts />
+      <FourWays />
       <FinalCta />
     </SitePage>
   )

@@ -17,31 +17,38 @@ export const page: DocPage = {
       component: SwipeableDemo,
       code: `import { Pressable, Swipeable, View } from "adaptv/components"
 
-<Swipeable.Group>
-  {notes.map((note) => (
-    <Swipeable key={note.id} className="rounded-xl">
-      <Swipeable.Content>
-        <View className="bg-white px-4 py-3.5">{note.title}</View>
-      </Swipeable.Content>
-      <Swipeable.LeftActions>
-        <Pressable
-          onPress={() => pin(note.id)}
-          className="flex h-full w-20 items-center justify-center bg-blue-500 text-white"
-        >
-          Pin
-        </Pressable>
-      </Swipeable.LeftActions>
-      <Swipeable.RightActions>
-        <Pressable
-          onPress={() => remove(note.id)}
-          className="flex h-full w-20 items-center justify-center bg-red-500 text-white"
-        >
-          Delete
-        </Pressable>
-      </Swipeable.RightActions>
-    </Swipeable>
-  ))}
-</Swipeable.Group>`,
+//one rounded card clips the rows, so an action sits flush against its edge
+<View className="overflow-hidden rounded-xl border bg-white">
+  <Swipeable.Group>
+    {notes.map((note, index) => (
+      <Swipeable key={note.id}>
+        <Swipeable.Content>
+          <View className="bg-white pl-4">
+            <View className={index > 0 ? "border-t py-3.5 pr-4" : "py-3.5 pr-4"}>
+              <span>{note.title}</span>
+            </View>
+          </View>
+        </Swipeable.Content>
+        <Swipeable.LeftActions>
+          <Pressable
+            onPress={() => pin(note.id)}
+            className="flex h-full w-20 items-center justify-center bg-blue-500 text-white"
+          >
+            Pin
+          </Pressable>
+        </Swipeable.LeftActions>
+        <Swipeable.RightActions>
+          <Pressable
+            onPress={() => remove(note.id)}
+            className="flex h-full w-20 items-center justify-center bg-red-500 text-white"
+          >
+            Delete
+          </Pressable>
+        </Swipeable.RightActions>
+      </Swipeable>
+    ))}
+  </Swipeable.Group>
+</View>`,
     },
     { type: "h2", text: "Usage" },
     {
