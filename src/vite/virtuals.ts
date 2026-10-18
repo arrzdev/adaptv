@@ -97,14 +97,15 @@ export function registerSW(onWaiting) {
     return
   }
 
-  //Set only when WE applied a waiting worker. The FIRST install also fires
-  //controllerchange (clientsClaim takes over an uncontrolled page) and reloading
-  //there would restart every first visit for no reason.
-  let applied = false
+  //Set only when the APP applied a waiting worker (\`prompt\`). The FIRST install
+  //also fires controllerchange (clientsClaim takes over an uncontrolled page) and
+  //reloading there would restart every first visit for no reason. A launch-apply
+  //under \`auto\` never sets it: that one must not reload at all, below.
+  let reloadOnTakeover = false
   let reloading = false
 
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (!applied || reloading) return
+    if (!reloadOnTakeover || reloading) return
     reloading = true
     window.location.reload()
   })
@@ -124,11 +125,12 @@ export function registerSW(onWaiting) {
         updateViaCache: "none",
       })
 
-      //Apply the waiting worker: SKIP_WAITING, then the controllerchange handler
-      //above reloads. Shared by both policies — what differs is WHO calls it.
-      const apply = (worker) => {
+      //Apply the waiting worker. Shared by both policies — what differs is WHO
+      //calls it, and whether the page reloads onto the new build or keeps running
+      //the one it launched with.
+      const apply = (worker, reload) => {
         if (!worker) return
-        applied = true
+        if (reload) reloadOnTakeover = true
         worker.postMessage({ type: "SKIP_WAITING" })
       }
 
@@ -139,7 +141,8 @@ export function registerSW(onWaiting) {
       if (PROMPT) {
         const offer = () => {
           if (registration.waiting && navigator.serviceWorker.controller) {
-            onWaiting?.(() => apply(registration.waiting))
+            //the user asked for the new version now, mid-session: reload onto it
+            onWaiting?.(() => apply(registration.waiting, true))
           }
         }
         offer()
@@ -153,17 +156,30 @@ export function registerSW(onWaiting) {
         return
       }
 
-      //\`auto\` — COLD LAUNCH IS THE ONLY MOMENT AN UPDATE IS APPLIED.
+      //\`auto\` — COLD LAUNCH IS THE ONLY MOMENT AN UPDATE IS APPLIED, AND IT
+      //NEVER RELOADS THE PAGE.
       //
       //A worker sitting in \`waiting\` finished installing in an EARLIER session,
-      //so its precache is already complete on disk — applying it costs one reload
-      //and zero downloads. And this document was created moments ago: there is no
-      //typed-in form, no open modal, no in-flight upload to destroy.
+      //so its precache is already complete on disk. This document was created
+      //moments ago, so nothing in it is lost when the worker under it changes.
+      //
+      //No reload: by the time this runs the page has painted, and a reload here
+      //is the app loading twice in front of the user, replaying every entry
+      //animation (measured ~50 ms after commit). The page keeps the build it
+      //launched with and the NEXT navigation gets the new worker's. That is safe
+      //both ways the document can have arrived: under \`ssr\` online it came from
+      //the network and already IS the new build; otherwise it is the previous
+      //build's shell, whose chunks the activation prunes from the precache — a
+      //later lazy import then reaches the origin, which still serves them under
+      //the no-\`--delete\` deploy rule, and where it cannot (offline, or a host
+      //that dropped them) the \`vite:preloadError\` net reloads onto the new
+      //build, once, at the navigation that needed the chunk.
+      //→ docs/design/rendering.md §3.4
       //
       //The controller check keeps the first-ever visit out of this branch: with no
       //controller there is no old worker to replace.
       if (registration.waiting && navigator.serviceWorker.controller) {
-        apply(registration.waiting)
+        apply(registration.waiting, false)
       }
 
       //A worker that finishes installing DURING this session is deliberately left
@@ -179,8 +195,8 @@ export function registerSW(onWaiting) {
     }
   }
 
-  //Immediately, not on \`load\`: the sooner a pending update is applied, the more
-  //of the reload hides behind the splash screen.
+  //Immediately, not on \`load\`: the sooner a pending update is applied, the
+  //fewer of this launch's requests the old worker answers.
   register()
 }
 `

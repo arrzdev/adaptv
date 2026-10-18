@@ -275,9 +275,11 @@ export type AdaptvAppConfig = {
    * framework's half waits: the whole worker activates, or none of it does.
    *
    * `"auto"` is the default and is what most apps want. The waiting worker
-   * finished installing in an *earlier* session, so applying it costs one reload
-   * and zero downloads, and a document created moments ago has no typed-in form
-   * or in-flight upload to destroy. Nothing is ever applied mid-session.
+   * finished installing in an *earlier* session, so applying it costs zero
+   * downloads, and a document created moments ago has no typed-in form or
+   * in-flight upload to destroy. It never reloads the page: the launch keeps the
+   * build it opened with and the next navigation gets the new one. Nothing is
+   * ever applied mid-session.
    *
    * Choose `"prompt"` when a session can hold state that outlives a reload and
    * the app would rather ask — an editor, a long form, a call. Then:
