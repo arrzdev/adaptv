@@ -14,6 +14,7 @@ import { Inline } from "@/components/inline"
 import { OnThisPage } from "@/components/on-this-page"
 import { Prose } from "@/components/prose"
 import { SitePage } from "@/components/site-page"
+import { WholeTokens } from "@/components/whole-tokens"
 import { ALL_DOCS, DOCS, type DocPage } from "@/content/docs"
 import { GITHUB_URL } from "@/content/site"
 import { cn } from "@/utils/cn"
@@ -348,8 +349,8 @@ export function DocsLayout({ page }: { page: DocPage }) {
             {group.title}
           </span>
         ) : null}
-        <h1 className="font-semibold text-[clamp(2rem,4vw,2.75rem)] text-foreground leading-[1.05] tracking-[-0.035em]">
-          {page.title}
+        <h1 className="text-balance font-semibold text-[clamp(2rem,4vw,2.75rem)] text-foreground leading-[1.05] tracking-[-0.035em]">
+          <WholeTokens text={page.title} />
         </h1>
         <p className="max-w-2xl text-[18px] text-muted leading-relaxed">
           <Inline text={page.summary} />

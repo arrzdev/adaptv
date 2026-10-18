@@ -78,10 +78,10 @@ export function DocsHome() {
           <span className="font-mono text-[12px] text-brand uppercase tracking-[0.08em]">
             Documentation
           </span>
-          <h1 className="font-semibold text-[clamp(2.2rem,4.5vw,3.25rem)] text-foreground leading-[1.02] tracking-[-0.04em]">
-            Every component, hook,
-            <br />
-            <span className="text-muted">config key and command.</span>
+          <h1 className="text-balance font-semibold text-[clamp(2.2rem,4.5vw,3.25rem)] text-foreground leading-[1.02] tracking-[-0.04em]">
+            {/* blocks, not a <br>: Chrome does not balance across a forced break */}
+            <span className="block">Every component, hook,</span>
+            <span className="block text-muted">config key and command.</span>
           </h1>
           <p className="max-w-2xl text-[18px] text-muted leading-relaxed">
             {DOCS_DESCRIPTION}
