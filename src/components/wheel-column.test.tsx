@@ -650,6 +650,139 @@ describe("WheelColumn — tapping a row", () => {
   })
 })
 
+/*
+ * A mouse drags the drum the way a finger does. A mouse wheel and a trackpad already
+ * scroll the column natively; a press-and-drag did nothing, because a native scroller
+ * does not pan under a mouse. Touch keeps the native path (the pointer handlers ignore
+ * every pointer that is not a mouse), so a finger's momentum stays the engine's own.
+ * happy-dom does not scroll, so the drag's own `scrollTop` writes are read back, and a
+ * `scroll` event is fired where the engine would fire one.
+ */
+describe("WheelColumn — dragging with a mouse", () => {
+  const mouse = { pointerType: "mouse", button: 0, pointerId: 1 }
+
+  function press(target: Element, clientY: number) {
+    fireEvent.pointerDown(target, { ...mouse, clientY })
+  }
+  function drag(clientY: number, ms = 16) {
+    advance(ms)
+    fireEvent.pointerMove(wheel(), { ...mouse, clientY })
+    fireEvent.scroll(wheel())
+  }
+  function release(clientY: number) {
+    fireEvent.pointerUp(wheel(), { ...mouse, clientY })
+  }
+
+  it("moves the drum with the pointer, and the value follows live", () => {
+    const onChange = vi.fn()
+    render(<Controlled initial={9} onChange={onChange} />)
+    press(wheel(), 300)
+    drag(290)
+    expect(wheel().scrollTop).toBe(9 * H + 10)
+    drag(260)
+    //dragging up spins later rows into the centre, as a finger does
+    expect(wheel().scrollTop).toBe(9 * H + 40)
+    expect(onChange.mock.calls).toEqual([[10]])
+  })
+
+  it("holds the settle while the button is down, and snaps to a row after a slow release", () => {
+    render(<Controlled initial={9} onChange={() => {}} />)
+    press(wheel(), 300)
+    drag(290)
+    drag(262)
+    advance(2000)
+    expect(smoothRolls()).toEqual([])
+
+    release(262)
+    advance(120)
+    expect(smoothRolls()).toEqual([10 * H])
+  })
+
+  it("coasts on after a fast release, then snaps to a whole row", () => {
+    render(<Controlled initial={9} onChange={() => {}} />)
+    press(wheel(), 400)
+    drag(370)
+    drag(340)
+    drag(310)
+    release(310)
+    const released = wheel().scrollTop
+    expect(released).toBe(9 * H + 90)
+
+    advance(64)
+    expect(wheel().scrollTop).toBeGreaterThan(released)
+    advance(3000)
+    const rolls = smoothRolls()
+    expect(rolls.length).toBeGreaterThan(0)
+    const rest = rolls.at(-1) as number
+    expect(rest % H).toBe(0)
+    expect(rest).toBeGreaterThan(released)
+  })
+
+  it("stops the coast when the wheel is pressed again", () => {
+    render(<Controlled initial={9} onChange={() => {}} />)
+    press(wheel(), 400)
+    drag(370)
+    drag(340)
+    release(340)
+    advance(32)
+    press(wheel(), 340)
+    const held = wheel().scrollTop
+    advance(500)
+    expect(wheel().scrollTop).toBe(held)
+  })
+
+  it("leaves a click that did not move to select its row", () => {
+    render(<Controlled initial={9} onChange={() => {}} />)
+    const row = screen.getByRole("button", { name: "11" })
+    press(row, 300)
+    drag(302)
+    fireEvent.pointerUp(row, { ...mouse, clientY: 302 })
+    fireEvent.click(row)
+    expect(smoothRolls()).toEqual([11 * H])
+  })
+
+  it("does not take the click that ends a drag as a tap on the row under the pointer", () => {
+    render(<Controlled initial={9} onChange={() => {}} />)
+    const row = screen.getByRole("button", { name: "11" })
+    press(row, 300)
+    drag(280)
+    release(280)
+    fireEvent.click(row)
+    expect(smoothRolls()).not.toContain(11 * H)
+  })
+
+  it("leaves touch and pen to the native scroll", () => {
+    render(<Controlled initial={9} onChange={() => {}} />)
+    for (const pointerType of ["touch", "pen"]) {
+      fireEvent.pointerDown(wheel(), {
+        pointerType,
+        pointerId: 2,
+        clientY: 300,
+      })
+      advance(16)
+      fireEvent.pointerMove(wheel(), {
+        pointerType,
+        pointerId: 2,
+        clientY: 250,
+      })
+      fireEvent.pointerUp(wheel(), {
+        pointerType,
+        pointerId: 2,
+        clientY: 250,
+      })
+      expect(wheel().scrollTop).toBe(9 * H)
+    }
+  })
+
+  it("ignores a button other than the main one", () => {
+    render(<Controlled initial={9} onChange={() => {}} />)
+    fireEvent.pointerDown(wheel(), { ...mouse, button: 2, clientY: 300 })
+    advance(16)
+    fireEvent.pointerMove(wheel(), { ...mouse, button: 2, clientY: 250 })
+    expect(wheel().scrollTop).toBe(9 * H)
+  })
+})
+
 describe("WheelColumn — the keyboard", () => {
   //the rows stay out of the tab order on purpose, so the column itself is the one
   //keyboard stop — without it a keyboard user cannot reach the value at all
@@ -896,6 +1029,11 @@ describe("WheelColumn — default rules in the layer, locks inline (styling.md �
     expect(column.style.overscrollBehaviorY).toBe("contain")
     expect(column.style.touchAction).toBe("pan-x pan-y pinch-zoom")
     expect(column.style.height).toBe(`${5 * H}px`)
+    //no scrollbar beside the drum on any engine (the WebKit/Blink half is a rule in
+    //styles/wheel-column.css: a pseudo-element has no inline style)
+    expect(column.style.scrollbarWidth).toBe("none")
+    //a mouse drag spins the drum; it must not select the labels it passes over
+    expect(column.style.userSelect).toBe("none")
     const row = column.querySelector("button") as HTMLElement
     expect(row.style.touchAction).toBe("pan-x pan-y pinch-zoom")
     expect(row.style.height).toBe("100%")

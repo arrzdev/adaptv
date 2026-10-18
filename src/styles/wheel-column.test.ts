@@ -23,3 +23,21 @@ describe("WheelColumn focus indicator", () => {
     )
   })
 })
+
+/*
+ * The scrollbar. The column is a native scroller, so Chrome on a desktop drew a classic
+ * scrollbar beside the drum, where Safari on macOS draws an overlay that hides at rest.
+ * `scrollbar-width: none` is inline (wheel-column.test.tsx); a pseudo-element has no
+ * inline style, so the WebKit/Blink half is this rule, the way ScrollView does it.
+ */
+describe("WheelColumn scrollbar", () => {
+  it("hides the WebKit/Blink scrollbar of the column", async () => {
+    const css = await compileAdaptvStyles([])
+    expect(
+      ruleFor(
+        css,
+        ':where([data-adaptv="wheel-column"])::-webkit-scrollbar',
+      ),
+    ).toBe("display: none;")
+  })
+})

@@ -224,6 +224,79 @@ test.describe("WheelColumn as a native scroller", () => {
       "overscroll-contain must keep the page still while the wheel bottoms out",
     ).toBeLessThanOrEqual(4)
   })
+
+  /*
+   * A mouse drags the drum the way a finger does. A native scroller does not pan
+   * under a mouse, so on a desktop the drag did nothing and only the wheel moved it.
+   * The drag follows the pointer, a slow release settles where it is, a fast one
+   * coasts first, and neither selects the labels it passes over.
+   */
+  test("a mouse drag spins the drum, and a slow release settles on a whole row", async ({
+    page,
+  }) => {
+    await setup(page)
+    await page.mouse.down()
+    await page.mouse.move(cx, cy - ITEM_H * 2 - 10, { steps: 8 })
+    //hold still before letting go, so the release has no speed to coast on
+    await page.waitForTimeout(250)
+    expect(await hourScrollTop(page)).toBe(
+      START * ITEM_H + ITEM_H * 2 + 10,
+    )
+    await page.mouse.up()
+    await settle(page)
+    expect(await hourScrollTop(page)).toBe((START + 2) * ITEM_H)
+    expect(await activeHour(page)).toBe(label(START + 2))
+    expect(
+      await page.evaluate(() => window.getSelection()?.toString() ?? ""),
+      "a drag must not select the row labels",
+    ).toBe("")
+  })
+
+  //The fling is played inside the page, one move a frame and the release on the
+  //next: Playwright's mouse is a round trip per call, and on a loaded machine its
+  //release lands ~100ms after the last move, which reads as a drag that stopped
+  //before letting go (and rightly does not coast).
+  test("a fast mouse fling coasts past where the pointer let go", async ({
+    page,
+  }) => {
+    await setup(page)
+    await page.evaluate(
+      async ([selector, x, y, rowHeight]) => {
+        const wheel = document.querySelector(selector as string)
+        if (!wheel) throw new Error("no hour wheel")
+        const fire = (type: string, clientY: number) =>
+          wheel.dispatchEvent(
+            new PointerEvent(type, {
+              bubbles: true,
+              cancelable: true,
+              pointerType: "mouse",
+              pointerId: 1,
+              button: 0,
+              buttons: type === "pointerup" ? 0 : 1,
+              clientX: x as number,
+              clientY,
+            }),
+          )
+        const frame = () =>
+          new Promise((resolve) => setTimeout(resolve, 16))
+        fire("pointerdown", y as number)
+        for (let step = 1; step <= 4; step++) {
+          await frame()
+          fire(
+            "pointermove",
+            (y as number) - (step * (rowHeight as number)) / 2,
+          )
+        }
+        await frame()
+        fire("pointerup", (y as number) - 2 * (rowHeight as number))
+      },
+      [HOUR, cx, cy, ITEM_H] as const,
+    )
+    await settle(page)
+    const top = await hourScrollTop(page)
+    expect(top).toBeGreaterThan((START + 2) * ITEM_H)
+    expect(await activeHour(page)).toBe(expectedLabel(top))
+  })
 })
 
 /*

@@ -61,7 +61,7 @@ const [minute, setMinute] = useState(30)
     { type: "h2", text: "Usage" },
     {
       type: "p",
-      text: "`WheelColumn` takes a list of `{ value, label }` items and reports the centred one. It is controlled. Hold the value in state and update it in `onChange`. Put several columns side by side to make a picker. Draw the selection band yourself, one `WHEEL_ITEM_HEIGHT` tall, behind the columns. The wheel glides with free momentum. About 120ms after it stops, it rolls to the nearest row. A tap on a row rolls it to the centre.",
+      text: "`WheelColumn` takes a list of `{ value, label }` items and reports the centred one. It is controlled. Hold the value in state and update it in `onChange`. Put several columns side by side to make a picker. Draw the selection band yourself, one `WHEEL_ITEM_HEIGHT` tall, behind the columns. The wheel glides with free momentum. About 120ms after it stops, it rolls to the nearest row. A tap on a row rolls it to the centre. On a desktop, the mouse wheel scrolls it, and a mouse drag spins it like a finger: a fast release coasts, then rolls to a row. It draws no scrollbar in any browser.",
     },
     { type: "h2", text: "Props" },
     {

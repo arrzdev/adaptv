@@ -1,4 +1,4 @@
-import type { CSSProperties, KeyboardEvent } from "react"
+import type { CSSProperties, KeyboardEvent, PointerEvent } from "react"
 import {
   useEffect,
   useLayoutEffect,
@@ -26,6 +26,19 @@ export { WHEEL_HEIGHT, WHEEL_ITEM_HEIGHT }
 
 //rows a PageUp/PageDown moves: one visible column's worth, as a native picker pages
 const WHEEL_PAGE_ROWS = WHEEL_HEIGHT / WHEEL_ITEM_HEIGHT
+
+//A mouse drags the drum the way a finger does (a native scroller does not pan under a
+//mouse). Travel under the slop is still a click on a row.
+const MOUSE_DRAG_SLOP = 4
+//the release speed is read over the pointer's last stretch of travel, so a drag that
+//stopped before the button came up does not coast
+const MOUSE_VELOCITY_WINDOW_MS = 80
+//px/ms: a slower release settles where it is
+const MOUSE_COAST_MIN_SPEED = 0.15
+//the coast keeps this fraction of its speed per ms (iOS's "fast" scroll deceleration
+//is 0.99 per frame), and ends below the floor
+const MOUSE_COAST_DECAY_PER_MS = 0.995
+const MOUSE_COAST_END_SPEED = 0.02
 
 // fade the rows above/below the centered selection
 const WHEEL_MASK =
@@ -55,6 +68,13 @@ const WHEEL_FIELDSET_LOCKED_STYLE: CSSProperties = Object.freeze({
   overscrollBehaviorY: "contain",
   ...TOUCH_PASSTHROUGH_STYLE,
   height: WHEEL_HEIGHT,
+  //no scrollbar beside the drum: Chrome on a desktop drew a classic one where Safari
+  //on macOS draws an overlay that hides at rest. The WebKit/Blink half is a rule in
+  //styles/wheel-column.css, as a pseudo-element has no inline style
+  scrollbarWidth: "none",
+  //a mouse drag spins the drum; it must not select the labels it passes over
+  userSelect: "none",
+  WebkitUserSelect: "none",
   maskImage: WHEEL_MASK,
   WebkitMaskImage: WHEEL_MASK,
 })
@@ -168,6 +188,20 @@ export function WheelColumn({
   //what clears it: a consumer that does not store still hears the row every frame
   const reportedRef = useRef<number | null>(null)
   const [, forceCommit] = useReducer((count: number) => count + 1, 0)
+  //the mouse press driving the drum: where it started, whether it has passed the slop,
+  //whether it caught a coast, and its recent travel for the release speed
+  const mouseRef = useRef<{
+    id: number
+    startY: number
+    startTop: number
+    moved: boolean
+    held: boolean
+    samples: { t: number; top: number }[]
+  } | null>(null)
+  //the coast after a mouse release (a rAF id, 0 when still)
+  const coastRef = useRef(0)
+  //the click a drag ends with lands on whichever row is under the pointer: not a tap
+  const swallowClickRef = useRef(false)
   //a layout effect, not a passive one: passive effects can run after the next frame's
   //scroll event, which would find the ref still set and swallow the row a consumer
   //that does not store is owed
@@ -230,6 +264,7 @@ export function WheelColumn({
   useEffect(() => {
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current)
+      if (coastRef.current) cancelAnimationFrame(coastRef.current)
       window.clearTimeout(commitTimer.current)
     }
   }, [])
@@ -298,9 +333,154 @@ export function WheelColumn({
     commitTimer.current = window.setTimeout(() => commitRef.current(), 120)
   }
 
+  function armSettle() {
+    window.clearTimeout(commitTimer.current)
+    commitTimer.current = window.setTimeout(() => commitRef.current(), 120)
+  }
+
+  //a press, a touch, a mouse wheel or a key takes the drum back from a coast. True
+  //when there was one: the wheel is between rows and something has to settle it
+  function stopCoast() {
+    if (coastRef.current === 0) return false
+    cancelAnimationFrame(coastRef.current)
+    coastRef.current = 0
+    draggingRef.current = false
+    return true
+  }
+
+  //Momentum after a mouse release, then the settle snap. `draggingRef` stays set for
+  //the glide: it holds the settle (scroll events would arm it every frame) and keeps an
+  //echoed value from yanking the drum, as it does under a finger.
+  function coast(speed: number) {
+    const el = scrollRef.current
+    if (!el) return
+    let velocity = speed
+    let last = performance.now()
+    const step = () => {
+      const now = performance.now()
+      const dt = now - last
+      last = now
+      velocity *= MOUSE_COAST_DECAY_PER_MS ** dt
+      const before = el.scrollTop
+      el.scrollTop = before + velocity * dt
+      //an end of the list stops it as surely as friction does
+      if (
+        Math.abs(velocity) < MOUSE_COAST_END_SPEED ||
+        el.scrollTop === before
+      ) {
+        coastRef.current = 0
+        draggingRef.current = false
+        armSettle()
+        return
+      }
+      coastRef.current = requestAnimationFrame(step)
+    }
+    coastRef.current = requestAnimationFrame(step)
+  }
+
+  //Mouse only: a finger and a pen keep the native scroll and its momentum, and touch
+  //is read off touch events below. The drag waits for the slop so a click on a row is
+  //still a tap, and captures the pointer only then, as an earlier capture would aim
+  //that click at the column instead of the row.
+  function handlePointerDown(e: PointerEvent<HTMLFieldSetElement>) {
+    const held = stopCoast()
+    swallowClickRef.current = false
+    const el = scrollRef.current
+    if (e.pointerType !== "mouse" || e.button !== 0 || !el) {
+      if (held) armSettle()
+      return
+    }
+    if (held) {
+      draggingRef.current = true
+      window.clearTimeout(commitTimer.current)
+    }
+    mouseRef.current = {
+      id: e.pointerId,
+      startY: e.clientY,
+      startTop: el.scrollTop,
+      moved: false,
+      held,
+      samples: [{ t: performance.now(), top: el.scrollTop }],
+    }
+  }
+
+  function handlePointerMove(e: PointerEvent<HTMLFieldSetElement>) {
+    const drag = mouseRef.current
+    const el = scrollRef.current
+    if (!drag || e.pointerId !== drag.id || !el) return
+    const dy = e.clientY - drag.startY
+    if (!drag.moved) {
+      if (Math.abs(dy) < MOUSE_DRAG_SLOP) return
+      drag.moved = true
+      draggingRef.current = true
+      keyTargetRef.current = null
+      window.clearTimeout(commitTimer.current)
+      try {
+        el.setPointerCapture?.(e.pointerId)
+      } catch {
+        //the pointer is already gone; the drag still ends on its pointerup
+      }
+      ensurePaintLoop()
+    }
+    //the content follows the pointer: dragging up spins later rows into the centre
+    el.scrollTop = drag.startTop - dy
+    const now = performance.now()
+    drag.samples.push({ t: now, top: el.scrollTop })
+    while (
+      drag.samples.length > 2 &&
+      now - (drag.samples[0] as { t: number }).t > MOUSE_VELOCITY_WINDOW_MS
+    ) {
+      drag.samples.shift()
+    }
+  }
+
+  function handlePointerUp(e: PointerEvent<HTMLFieldSetElement>) {
+    const drag = mouseRef.current
+    if (!drag || e.pointerId !== drag.id) return
+    mouseRef.current = null
+    if (!drag.moved) {
+      //a click: the row takes it. A press that only caught a coast settles here
+      if (drag.held) {
+        draggingRef.current = false
+        armSettle()
+      }
+      return
+    }
+    swallowClickRef.current = true
+    const now = performance.now()
+    const recent = drag.samples.filter(
+      (sample) => now - sample.t <= MOUSE_VELOCITY_WINDOW_MS,
+    )
+    const first = recent[0]
+    const last = recent.at(-1)
+    const speed =
+      first && last && last.t > first.t
+        ? (last.top - first.top) / (last.t - first.t)
+        : 0
+    if (Math.abs(speed) >= MOUSE_COAST_MIN_SPEED) {
+      coast(speed)
+      return
+    }
+    draggingRef.current = false
+    armSettle()
+  }
+
+  function handleClickCapture(e: React.MouseEvent) {
+    if (!swallowClickRef.current) return
+    swallowClickRef.current = false
+    e.stopPropagation()
+    e.preventDefault()
+  }
+
+  //a mouse wheel takes over from a coast; its own scroll events settle it
+  function handleWheel() {
+    stopCoast()
+  }
+
   // touch (not pointer) events: iOS fires pointercancel mid-scroll, which would
   // wrongly look like a release; touchend only fires on the real finger-lift
   function handleTouchStart(e: React.TouchEvent) {
+    stopCoast()
     if (draggingRef.current) return
     draggingRef.current = true
     fingerIdRef.current = e.changedTouches?.[0]?.identifier ?? null
@@ -340,6 +520,7 @@ export function WheelColumn({
     //jumps, screen-reader commands) — a picker that eats them breaks those
     if (event.altKey || event.metaKey || event.ctrlKey) return
     if (items.length === 0) return
+    stopCoast()
     const from = keyTargetRef.current ?? nearestIndex()
     const last = items.length - 1
     const to = {
@@ -365,6 +546,12 @@ export function WheelColumn({
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
       onTouchCancel={handleTouchEnd}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+      onClickCapture={handleClickCapture}
+      onWheel={handleWheel}
       onKeyDown={handleKeyDown}
       //the column's only keyboard stop (its rows are tabIndex -1). It stays a named
       //group rather than taking `spinbutton`, the ARIA pattern these keys come from:

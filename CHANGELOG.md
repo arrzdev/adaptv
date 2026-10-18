@@ -43,6 +43,12 @@ API.
 
 ### Fixed
 
+- **A mouse drags a `WheelColumn`.** On a desktop only the mouse wheel moved it; a press and drag
+  did nothing, because a native scroller does not pan under a mouse. A drag now spins the drum with
+  the pointer, a fast release coasts, and the wheel then rolls to a row. A click without movement
+  still picks its row, and touch keeps the native scroll.
+- **A `WheelColumn` draws no scrollbar.** Chrome on a desktop drew a classic scrollbar beside the
+  drum; it is now hidden on every engine, as Safari on macOS already showed it.
 - **Tapping a link while its route is still preloading no longer logs a `TypeError`.** The tap
   navigated mid-preload; the navigation evicted the preloaded route from the cache, and the preload
   then read the evicted entry (`match._nonReactive`). The navigation itself always worked.
