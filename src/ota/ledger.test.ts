@@ -9,6 +9,7 @@ import {
   readLedger,
   recordStaged,
   rememberBinary,
+  replayFloor,
 } from "#adaptv/ota/ledger"
 
 const KEY = "adaptv.ota.bundles"
@@ -98,6 +99,105 @@ describe("the replay defence's memory", () => {
     localStorage.clear()
     localStorage.setItem(KEY, carried as string)
     expect(createdAtOf("v1")).toBe(4242)
+  })
+})
+
+describe("the newest build this device has run", () => {
+  const FLOOR_KEY = "adaptv.ota.floor"
+
+  const booted = (buildTag: string, createdAt: number) => {
+    recordStaged({ buildTag, createdAt })
+    markState(buildTag, "known-good", APP)
+  }
+
+  it("is the newest known-good, whatever is running now", () => {
+    //The embedded bundle never has an entry, and the device is back on it after
+    //every store release. The floor cannot come from the running build alone.
+    booted("old", 1000)
+    booted("new", 3000)
+    booted("mid", 2000)
+    expect(replayFloor("\u0000embedded")).toEqual({
+      buildTag: "new",
+      createdAt: 3000,
+    })
+  })
+
+  it("includes the running build, even before it has proved itself", () => {
+    recordStaged(staged({ buildTag: "running", createdAt: 5000 }))
+    expect(replayFloor("running")).toEqual({
+      buildTag: "running",
+      createdAt: 5000,
+    })
+  })
+
+  it("is not raised by a bundle that was staged but never booted, or failed", () => {
+    //"Promote the previous deploy" advertises a build older than the bad one; a
+    //device that only downloaded the bad one, or rolled back from it, must
+    //still take it.
+    booted("good", 1000)
+    recordStaged(staged({ buildTag: "staged", createdAt: 2000 }))
+    recordStaged(staged({ buildTag: "bad", createdAt: 3000 }))
+    markState("bad", "failed")
+    expect(replayFloor("\u0000embedded")?.createdAt).toBe(1000)
+  })
+
+  it("survives the entry that set it being forgotten", () => {
+    //A prune deletes bundles that are gone from disk. If the floor went with
+    //them, the next prune would reopen the replay.
+    booted("new", 3000)
+    booted("old", 1000)
+    forget(["new"])
+    expect(readLedger().map((b) => b.buildTag)).toEqual(["old"])
+    expect(replayFloor("\u0000embedded")).toEqual({
+      buildTag: "new",
+      createdAt: 3000,
+    })
+  })
+
+  it("survives a forget on a ledger written before the mark existed", () => {
+    //An app updating from an adaptv without the mark has entries and no key.
+    localStorage.setItem(
+      KEY,
+      JSON.stringify([
+        { buildTag: "seen", createdAt: 3000, state: "known-good" },
+      ]),
+    )
+    expect(replayFloor("\u0000embedded")?.createdAt).toBe(3000)
+    forget(["seen"])
+    expect(replayFloor("\u0000embedded")?.createdAt).toBe(3000)
+  })
+
+  it("is never lowered", () => {
+    booted("new", 3000)
+    forget(["new"])
+    booted("older", 2000)
+    expect(replayFloor("\u0000embedded")?.createdAt).toBe(3000)
+  })
+
+  it.each([
+    ["not JSON", "{"],
+    ["a bare number", "3000"],
+    [
+      "a string createdAt",
+      JSON.stringify({ buildTag: "x", createdAt: "9e99" }),
+    ],
+    ["no build tag", JSON.stringify({ createdAt: 9000 })],
+    ["null", "null"],
+  ])("ignores a corrupt mark: %s", (_, raw) => {
+    localStorage.setItem(FLOOR_KEY, raw)
+    expect(replayFloor("\u0000embedded")).toBeUndefined()
+    booted("v1", 1000)
+    expect(replayFloor("\u0000embedded")?.createdAt).toBe(1000)
+    //and the next write replaces it with a real one
+    forget(["v1"])
+    expect(JSON.parse(localStorage.getItem(FLOOR_KEY) as string)).toEqual({
+      buildTag: "v1",
+      createdAt: 1000,
+    })
+  })
+
+  it("is undefined on a device that has run nothing", () => {
+    expect(replayFloor("\u0000embedded")).toBeUndefined()
   })
 })
 

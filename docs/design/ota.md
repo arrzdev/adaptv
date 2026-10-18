@@ -146,7 +146,7 @@ serves; it does not publish.
 "it's already up there" skip deletes the channel from the next one and every install starts 404ing.
 What an unchanged build does skip is the *announcement*: `createdAt` is carried over from the deployed
 manifest when the tags match, so a scheduled re-deploy of identical bytes is not read as a release by
-the replay defence (§5.4c).
+the replay defence (§5.4d).
 
 **Staleness is answered by the deployed manifest, not by a local cache.** The obvious move is to reuse
 `bin/lib/fingerprint.mjs` — the `run`/`build` accelerator — but it cannot answer this question:
@@ -571,6 +571,38 @@ vulnerability is already public.
 
 So adaptv signs a **canonical serialization of the manifest** with the zip's sha256 inside it. Then
 `createdAt` and `buildTag` are inside the signed envelope and the replay stops being expressible.
+
+#### 🔴 The floor is the newest build this device ran, not the build it runs now
+
+`decideUpdate` refuses a manifest whose `createdAt` is not newer than its `currentCreatedAt`, and that
+value comes from the device's own ledger (`src/ota/ledger.ts`), because the build tag is a content hash
+and cannot carry its own timestamp. It used to be the running build's entry and nothing else, which
+left two ordinary states with no floor at all:
+
+- **The embedded bundle.** It never has an entry, and every store release drops the device back onto
+  it (`returnToEmbedded`, §5.3). A genuine signed bundle older than anything the device had booted then
+  installed as an update.
+- **A pruned entry.** Pruning forgets bundles that are gone from disk, and with them their `createdAt`.
+
+So the floor (`replayFloor`) is the newest of: the running build's entry, every `known-good` entry
+still in the ledger, and a high-water mark under its own key (`adaptv.ota.floor`). Every ledger write
+raises the mark from the ledger as it was *and* as it is about to be, so a `forget` cannot lower it, and
+nothing else touches it. A corrupt mark reads as absent; reading the entries as well covers a device
+whose ledger predates the mark.
+
+Two choices in it are deliberate:
+
+- **Only `known-good` raises it.** A bundle that was staged and never booted, or that failed to start,
+  is not a build the device ran. "Promote the previous deploy" is the documented way out of a bad
+  release, and it advertises a build *older* than the bad one: a device that only downloaded the bad
+  build, or rolled back from it, must still take it.
+- **The build that set the floor is exempt from it.** After a store release the channel usually still
+  advertises the build the device ran yesterday. Same tag, same bytes — not older than anything it ran —
+  so it is re-staged (`currentCreatedAt` is left unset for that one tag) instead of stranding the device
+  on the embedded bundle.
+
+⏳ A device whose ledger is empty — a first install — still has no floor. Closing that needs a floor
+baked into the native build, which is a separate change.
 
 #### Where signature verification happens, and where it does not
 

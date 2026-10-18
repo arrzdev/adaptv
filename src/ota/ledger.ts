@@ -201,6 +201,91 @@ export function createdAtOf(buildTag: string): number | undefined {
   return readLedger().find((b) => b.buildTag === buildTag)?.createdAt
 }
 
+/** The newest build this device has seen boot, and when it was published. */
+export type ReplayFloor = { buildTag: string; createdAt: number }
+
+/**
+ * The newest build this device has evidence of running: no update published
+ * before it may install. → `docs/design/ota.md §5.4d`
+ *
+ * 🔴 The running build's own entry is not enough, and it used to be all there
+ * was. The embedded bundle never has one — and the device is back on it after
+ * every store release (`returnToEmbedded`) — and pruning deletes entries for
+ * bundles that booted here last month. Either way the floor vanished, and a
+ * genuine signed bundle older than anything this device had run installed as
+ * an update.
+ *
+ * So the floor is the newest of three things: the running build's entry, every
+ * `known-good` entry still in the ledger, and a high-water mark kept under its
+ * own key that every ledger write raises and nothing lowers — {@link forget}
+ * included. The mark is what outlives a prune; reading the entries as well is
+ * what covers a ledger written before the mark existed.
+ *
+ * Only `known-good` raises it, not a bundle that was merely staged or that
+ * failed to start. "Promote the previous deploy" is the documented way out of a
+ * bad release, and it advertises a build OLDER than the bad one. A device that
+ * downloaded the bad build, never ran it or rolled back from it, and has not yet
+ * seen the previous one must still take it — that is not a downgrade from
+ * anything that ran here.
+ */
+export function replayFloor(
+  runningBuildTag: string,
+): ReplayFloor | undefined {
+  const ledger = readLedger()
+  const running = ledger.find((b) => b.buildTag === runningBuildTag)
+  return newest([readFloor(), running, ...ledger.filter(ran)])
+}
+
+const FLOOR_KEY = "adaptv.ota.floor"
+
+const ran = (b: LedgerEntry) => b.state === "known-good"
+
+function newest(
+  candidates: readonly (ReplayFloor | null | undefined)[],
+): ReplayFloor | undefined {
+  let top: ReplayFloor | undefined
+  for (const c of candidates) {
+    if (c && (!top || c.createdAt > top.createdAt)) top = c
+  }
+  return top && { buildTag: top.buildTag, createdAt: top.createdAt }
+}
+
+function readFloor(): ReplayFloor | null {
+  try {
+    const raw = globalThis.localStorage?.getItem(FLOOR_KEY)
+    if (!raw) return null
+    const parsed: unknown = JSON.parse(raw)
+    if (typeof parsed !== "object" || parsed === null) return null
+    const floor = parsed as Record<string, unknown>
+    return typeof floor.buildTag === "string" &&
+      typeof floor.createdAt === "number" &&
+      Number.isFinite(floor.createdAt)
+      ? { buildTag: floor.buildTag, createdAt: floor.createdAt }
+      : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Raise the mark to the newest `known-good` in `entries`, never lower it.
+ *
+ * Called with the ledger as it was AND as it is about to be, so the entries a
+ * write drops still count: that is the whole difference between a prune and a
+ * replay.
+ */
+function raiseFloor(entries: readonly LedgerEntry[]): void {
+  const known = readFloor()
+  const next = newest([known, ...entries.filter(ran)])
+  if (!next || next.createdAt === known?.createdAt) return
+  try {
+    globalThis.localStorage?.setItem(FLOOR_KEY, JSON.stringify(next))
+  } catch {
+    //The entries still carry the floor until they are pruned; a store that
+    //refuses this write is refusing the ledger's too.
+  }
+}
+
 /**
  * Bundles that have booted on **this** binary — the ones this device has direct
  * evidence about.
@@ -228,6 +313,7 @@ export function proven(
 }
 
 function write(entries: LedgerEntry[]): void {
+  raiseFloor([...readLedger(), ...entries])
   try {
     globalThis.localStorage?.setItem(STORAGE_KEY, JSON.stringify(entries))
   } catch {

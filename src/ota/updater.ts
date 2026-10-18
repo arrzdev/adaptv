@@ -2,7 +2,6 @@ import { CapacitorHttp } from "@capacitor/core"
 import { onResume } from "#adaptv/capabilities/app-state"
 import {
   binaryFingerprint,
-  createdAtOf,
   forget,
   lastSeenBinary,
   markState,
@@ -10,6 +9,7 @@ import {
   readLedger,
   recordStaged,
   rememberBinary,
+  replayFloor,
 } from "#adaptv/ota/ledger"
 import { verifyManifestSignature } from "#adaptv/ota/manifest-signing"
 import type { NativeSkewPolicy, UpdateManifest } from "#adaptv/ota/policy"
@@ -585,6 +585,12 @@ export function startOtaUpdates(options: OtaOptions): () => void {
       const deviceFingerprint =
         binaryFingerprint() ?? options.nativeFingerprint
 
+      //The newest build this device has run, not only the one running now: the
+      //embedded bundle has no entry, and a pruned one has none left. The build
+      //that SET the floor is exempt — re-staging it after a store release is
+      //the same bytes coming back, not a step down. → `replayFloor`
+      const floor = replayFloor(currentBuildTag)
+
       const decision = decideUpdate({
         manifest,
         currentBuildTag,
@@ -593,9 +599,12 @@ export function startOtaUpdates(options: OtaOptions): () => void {
         requireSignature,
         blockedBuildTags: blocked,
         //Read from this device's own ledger rather than taken as an argument:
-        //nothing else knows when the running bundle was published, and a value
-        //the caller had to supply is one that would silently be left undefined.
-        currentCreatedAt: createdAtOf(currentBuildTag),
+        //nothing else knows what this device has run, and a value the caller
+        //had to supply is one that would silently be left undefined.
+        currentCreatedAt:
+          floor && floor.buildTag !== manifest.buildTag
+            ? floor.createdAt
+            : undefined,
       })
 
       const plan = decideFirstLaunch({

@@ -1173,6 +1173,115 @@ describe("checking for an update", () => {
     expect(h.plugin?.downloadBundle).not.toHaveBeenCalled()
   })
 
+  it("refuses a build older than one it already ran, when the running build has no entry", async () => {
+    //🔴 The replay defence used to read only the running build's own entry. After
+    //a store release `reset()` the device runs the embedded bundle, which never
+    //has one, so the floor vanished: a genuine signed bundle older than anything
+    //this device ever booted was accepted as an update.
+    localStorage.setItem(
+      KEY,
+      JSON.stringify([
+        {
+          buildTag: "seen",
+          createdAt: 3_000_000_000_000,
+          state: "known-good",
+          provenOn: APP,
+        },
+      ]),
+    )
+    knownBinary(APP)
+    h.plugin = fakePlugin({
+      getCurrentBundle: vi.fn(async () => ({ bundleId: null })),
+    })
+    const { startOtaUpdates } = await load()
+    startOtaUpdates(unsigned)
+    await settled()
+    expect(h.plugin?.getCurrentBundle).toHaveBeenCalled()
+    expect(h.plugin?.downloadBundle).not.toHaveBeenCalled()
+    expect(h.plugin?.setNextBundle).not.toHaveBeenCalled()
+  })
+
+  it("keeps the floor after the entry that set it is pruned", async () => {
+    //Pruning forgets bundles that are gone from disk. The newest `createdAt` the
+    //device booted must outlive them, or the next prune reopens the replay.
+    localStorage.setItem(
+      KEY,
+      JSON.stringify([
+        {
+          buildTag: "seen",
+          createdAt: 3_000_000_000_000,
+          state: "known-good",
+          provenOn: APP,
+        },
+      ]),
+    )
+    knownBinary(APP)
+    //`seen` booted here, then a prune deleted it from disk and the ledger.
+    const { forget } = await import("#adaptv/ota/ledger")
+    forget(["seen"])
+
+    h.plugin = fakePlugin({
+      getCurrentBundle: vi.fn(async () => ({ bundleId: null })),
+    })
+    const { startOtaUpdates } = await load()
+    startOtaUpdates(unsigned)
+    await settled()
+    expect(h.plugin?.downloadBundle).not.toHaveBeenCalled()
+  })
+
+  it("still installs a build newer than every one it ran", async () => {
+    localStorage.setItem(
+      KEY,
+      JSON.stringify([
+        {
+          buildTag: "seen",
+          createdAt: 1_000_000_000_000,
+          state: "known-good",
+          provenOn: APP,
+        },
+      ]),
+    )
+    knownBinary(APP)
+    const { startOtaUpdates } = await load()
+    startOtaUpdates(unsigned)
+    await vi.waitFor(() =>
+      expect(h.plugin?.setNextBundle).toHaveBeenCalledWith({
+        bundleId: "newbuild00000000",
+      }),
+    )
+  })
+
+  it("re-stages the very build that set the floor after a store release", async () => {
+    //`reset()` leaves the device on the embedded bundle while the channel still
+    //advertises the build it ran yesterday. Same tag, same bytes: not older
+    //than anything it ran, so the floor must not strand it on the embedded one.
+    localStorage.setItem(
+      KEY,
+      JSON.stringify([
+        {
+          buildTag: "newbuild00000000",
+          createdAt: 2_000_000_000_000,
+          state: "known-good",
+          provenOn: APP,
+        },
+      ]),
+    )
+    knownBinary(APP)
+    h.plugin = fakePlugin({
+      getCurrentBundle: vi.fn(async () => ({ bundleId: null })),
+      getDownloadedBundles: vi.fn(async () => ({
+        bundleIds: ["newbuild00000000"],
+      })),
+    })
+    const { startOtaUpdates } = await load()
+    startOtaUpdates(unsigned)
+    await vi.waitFor(() =>
+      expect(h.plugin?.setNextBundle).toHaveBeenCalledWith({
+        bundleId: "newbuild00000000",
+      }),
+    )
+  })
+
   it("checks again on resume, not only at launch", async () => {
     //A mobile app is backgrounded far more often than it is cold-started, so a
     //launch-only check leaves people on a stale bundle for days.
