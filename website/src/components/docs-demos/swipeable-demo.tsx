@@ -1,5 +1,6 @@
 import { Pressable, Swipeable, View } from "adaptv/components"
 import { useState } from "react"
+import { cn } from "@/utils/cn"
 
 const NOTES = ["Groceries", "Call the landlord", "Book flights"]
 
@@ -8,40 +9,52 @@ export function SwipeableDemo() {
   const [last, setLast] = useState("nothing yet")
   return (
     <View className="w-full max-w-sm gap-2">
-      <Swipeable.Group>
-        {rows.map((row) => (
-          <Swipeable
-            key={row}
-            className="rounded-xl"
-            onOpen={(side) => setLast(`"${NOTES[row]}" opened ${side}`)}
-            onClose={() => setLast(`"${NOTES[row]}" closed`)}
-          >
-            <Swipeable.Content>
-              <View className="bg-raised px-4 py-3.5 text-[14px] text-foreground">
-                {NOTES[row]}
-              </View>
-            </Swipeable.Content>
-            <Swipeable.LeftActions>
-              <Pressable
-                onPress={() => setLast(`"${NOTES[row]}" pinned`)}
-                className="flex h-full w-20 items-center justify-center bg-brand font-medium text-[13px] text-white"
+      {/* one rounded card clips the rows: a row slides under its edge and the action
+          sits flush against it, with no radius or gap of its own */}
+      {rows.length > 0 ? (
+        <View className="overflow-hidden rounded-xl border border-border-strong bg-raised">
+          <Swipeable.Group>
+            {rows.map((row, index) => (
+              <Swipeable
+                key={row}
+                onOpen={(side) => setLast(`"${NOTES[row]}" opened ${side}`)}
+                onClose={() => setLast(`"${NOTES[row]}" closed`)}
               >
-                Pin
-              </Pressable>
-            </Swipeable.LeftActions>
-            <Swipeable.RightActions>
-              <Pressable
-                onPress={() =>
-                  setRows((list) => list.filter((item) => item !== row))
-                }
-                className="flex h-full w-20 items-center justify-center bg-danger font-medium text-[13px] text-white"
-              >
-                Delete
-              </Pressable>
-            </Swipeable.RightActions>
-          </Swipeable>
-        ))}
-      </Swipeable.Group>
+                <Swipeable.Content>
+                  <View className="bg-raised pl-4 text-[14px] text-foreground">
+                    <View
+                      className={cn(
+                        "py-3.5 pr-4",
+                        index > 0 && "border-border-strong border-t",
+                      )}
+                    >
+                      <span>{NOTES[row]}</span>
+                    </View>
+                  </View>
+                </Swipeable.Content>
+                <Swipeable.LeftActions>
+                  <Pressable
+                    onPress={() => setLast(`"${NOTES[row]}" pinned`)}
+                    className="flex h-full w-20 items-center justify-center bg-brand font-medium text-[13px] text-white"
+                  >
+                    Pin
+                  </Pressable>
+                </Swipeable.LeftActions>
+                <Swipeable.RightActions>
+                  <Pressable
+                    onPress={() =>
+                      setRows((list) => list.filter((item) => item !== row))
+                    }
+                    className="flex h-full w-20 items-center justify-center bg-danger font-medium text-[13px] text-white"
+                  >
+                    Delete
+                  </Pressable>
+                </Swipeable.RightActions>
+              </Swipeable>
+            ))}
+          </Swipeable.Group>
+        </View>
+      ) : null}
       {rows.length === 0 ? (
         <Pressable
           onPress={() => setRows([0, 1, 2])}

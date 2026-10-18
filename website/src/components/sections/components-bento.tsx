@@ -60,59 +60,32 @@ function SwipeRows() {
   const [pinned, setPinned] = useState<number[]>([])
   return (
     <View className="w-full max-w-md gap-2">
-      <Swipeable.Group>
-        {rows.map((row) => (
-          <Swipeable key={row} className="overflow-hidden rounded-2xl">
-            <Swipeable.Content>
-              <View
-                row
-                className="items-center gap-3 rounded-2xl border border-border-strong bg-raised px-4 py-3.5"
-              >
-                <span
-                  className={cn(
-                    "size-2 shrink-0 rounded-full bg-border-strong",
-                    pinned.includes(row) && "bg-brand",
-                  )}
-                />
-                <View className="min-w-0 gap-0.5">
-                  <span className="truncate font-medium text-[14px]">
-                    {NOTES[row][0]}
-                  </span>
-                  <span className="text-[12px] text-muted">
-                    {NOTES[row][1]}
-                  </span>
-                </View>
-              </View>
-            </Swipeable.Content>
-            <Swipeable.LeftActions>
-              <Pressable
-                aria-label="Pin"
-                onPress={() =>
+      {/* an inset grouped list: one rounded card clips every row, so a row slides under
+          the card's edge and its action sits flush against it, square, with no gap */}
+      {rows.length > 0 ? (
+        <View className="overflow-hidden rounded-2xl border border-border-strong bg-raised">
+          <Swipeable.Group>
+            {rows.map((row, index) => (
+              <SwipeRow
+                key={row}
+                row={row}
+                first={index === 0}
+                pinned={pinned.includes(row)}
+                onPin={() =>
                   setPinned((list) =>
                     list.includes(row)
                       ? list.filter((item) => item !== row)
                       : [...list, row],
                   )
                 }
-                className="flex h-full w-20 items-center justify-center bg-brand text-brand-foreground"
-              >
-                <Pin className="size-5" />
-              </Pressable>
-            </Swipeable.LeftActions>
-            <Swipeable.RightActions>
-              <Pressable
-                aria-label="Delete"
-                onPress={() =>
+                onDelete={() =>
                   setRows((list) => list.filter((item) => item !== row))
                 }
-                className="flex h-full w-20 items-center justify-center bg-danger text-white"
-              >
-                <Trash2 className="size-5" />
-              </Pressable>
-            </Swipeable.RightActions>
-          </Swipeable>
-        ))}
-      </Swipeable.Group>
+              />
+            ))}
+          </Swipeable.Group>
+        </View>
+      ) : null}
       {rows.length === 0 ? (
         <Pressable
           onPress={() => setRows([0, 1, 2])}
@@ -126,6 +99,66 @@ function SwipeRows() {
         </span>
       )}
     </View>
+  )
+}
+
+function SwipeRow({
+  row,
+  first,
+  pinned,
+  onPin,
+  onDelete,
+}: {
+  row: number
+  first: boolean
+  pinned: boolean
+  onPin: () => void
+  onDelete: () => void
+}) {
+  return (
+    <Swipeable>
+      {/* opaque, so the actions parked behind it never show through; the separator is
+          part of the row and inset to the text, as in an iOS list */}
+      <Swipeable.Content>
+        <View row className="items-stretch gap-3 bg-raised pl-4">
+          <span
+            className={cn(
+              "size-2 shrink-0 self-center rounded-full bg-border-strong",
+              pinned && "bg-brand",
+            )}
+          />
+          <View
+            className={cn(
+              "min-w-0 flex-1 gap-0.5 py-3.5 pr-4",
+              !first && "border-border-strong border-t",
+            )}
+          >
+            <span className="truncate font-medium text-[14px]">
+              {NOTES[row][0]}
+            </span>
+            <span className="text-[12px] text-muted">{NOTES[row][1]}</span>
+          </View>
+        </View>
+      </Swipeable.Content>
+      <Swipeable.LeftActions>
+        <Pressable
+          aria-label="Pin"
+          onPress={onPin}
+          className="flex h-full w-20 items-center justify-center bg-brand text-brand-foreground"
+        >
+          <Pin className="size-5" />
+        </Pressable>
+      </Swipeable.LeftActions>
+      <Swipeable.RightActions>
+        <Pressable
+          aria-label="Delete"
+          onPress={onDelete}
+          className="flex h-full w-20 items-center justify-center bg-danger text-white"
+        >
+          <Trash2 className="size-5" />
+        </Pressable>
+      </Swipeable.RightActions>
+    </Swipeable>
   )
 }
 
