@@ -30,7 +30,7 @@ export function WheelColumnDemo() {
           items={HOURS}
           value={hour}
           onChange={setHour}
-          className="relative flex-1"
+          className="relative flex-1 scrollbar-hidden"
           itemClassName={ITEM_CLASS}
         />
         <WheelColumn
@@ -38,7 +38,7 @@ export function WheelColumnDemo() {
           items={MINUTES}
           value={minute}
           onChange={setMinute}
-          className="relative flex-1"
+          className="relative flex-1 scrollbar-hidden"
           itemClassName={ITEM_CLASS}
         />
       </View>
