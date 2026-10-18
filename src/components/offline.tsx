@@ -17,6 +17,11 @@ export type OfflineProps = {
   /** The failure, when there was one. Never rendered by default — see below. */
   error?: unknown
   title?: string
+  /**
+   * Heading level of the title. Defaults to `1`, right for the full-screen boot case;
+   * pass `2` or more when the screen renders inside a page that already has an `h1`.
+   */
+  titleLevel?: 1 | 2 | 3 | 4 | 5 | 6
   description?: string
   retryLabel?: string
   className?: string
@@ -49,10 +54,12 @@ export function Offline({
   onRetry,
   error,
   title = "You're offline",
+  titleLevel = 1,
   description = "Check your connection and try again.",
   retryLabel = "Try again",
   className,
 }: OfflineProps) {
+  const Title = `h${titleLevel}` as const
   const handleRetry = () => {
     if (onRetry) {
       onRetry()
@@ -82,9 +89,9 @@ export function Offline({
       //View locks it inline, so there is nothing left here for a className to break.
       className={className}
     >
-      <h1 data-adaptv="offline-title" data-part="title">
+      <Title data-adaptv="offline-title" data-part="title">
         {title}
-      </h1>
+      </Title>
       <p data-adaptv="offline-description" data-part="description">
         {description}
       </p>

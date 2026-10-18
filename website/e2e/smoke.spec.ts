@@ -151,3 +151,20 @@ test.describe("scrollable regions are keyboard-reachable and named, phone 390x84
     })
   }
 })
+
+//Docs structure a screen reader navigates by: one h1 per page, no table header without a name.
+test.describe("docs structure", () => {
+  test("/docs/deploying has no empty table header", async ({ page: tab }) => {
+    await tab.goto("/docs/deploying")
+    const empty = await tab.locator("thead th").evaluateAll((cells) =>
+      cells.filter((cell) => !(cell.textContent ?? "").trim()).length,
+    )
+    expect(empty).toBe(0)
+  })
+
+  test("/docs/offline-boundary has one h1", async ({ page: tab }) => {
+    await tab.goto("/docs/offline-boundary")
+    await tab.waitForLoadState("networkidle")
+    await expect(tab.locator("h1")).toHaveCount(1)
+  })
+})

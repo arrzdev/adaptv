@@ -147,12 +147,13 @@ function HeadRow({ cells }: { cells: string[] }) {
   return (
     <thead>
       <tr className="bg-sunken">
-        {cells.map((cell) => (
+        {cells.map((cell, index) => (
           <th
-            key={cell}
+            key={cell || index}
             className="whitespace-nowrap px-4 py-2.5 font-medium font-mono text-[12px] text-muted uppercase tracking-[0.07em]"
           >
-            {cell}
+            {/* an empty corner cell still gets a name for screen readers */}
+            {cell || <span className="sr-only">Topic</span>}
           </th>
         ))}
       </tr>
