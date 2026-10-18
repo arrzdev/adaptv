@@ -1087,6 +1087,72 @@ describe("Swipeable · how an open row is dismissed", () => {
     expect(tx(content)).toBe(0)
   })
 
+  /** A list scrolled to its end, with the scroll geometry jsdom does not lay out. */
+  function scrolledToEnd(list: HTMLElement, height: number) {
+    let top = height - 200
+    let scrollHeight = height
+    Object.defineProperties(list, {
+      clientHeight: { configurable: true, get: () => 200 },
+      scrollHeight: { configurable: true, get: () => scrollHeight },
+      scrollTop: {
+        configurable: true,
+        get: () => top,
+        set: (value: number) => {
+          top = value
+        },
+      },
+    })
+    //the scroll that got the list there, as the browser reports it
+    list.dispatchEvent(new Event("scroll"))
+    return {
+      //what the browser does when the content below the row gets shorter
+      shrinkBy(px: number) {
+        scrollHeight -= px
+        top = Math.min(top, scrollHeight - 200)
+        list.dispatchEvent(new Event("scroll"))
+      },
+      scrollBy(px: number) {
+        top += px
+        list.dispatchEvent(new Event("scroll"))
+      },
+    }
+  }
+
+  it("a list that shrinks under the row at its end keeps the row open — nobody scrolled", () => {
+    const { container } = render(
+      <div data-testid="list" style={{ overflowY: "auto", height: 200 }}>
+        <Row />
+      </div>,
+    )
+    const list = container.querySelector(
+      "[data-testid=list]",
+    ) as HTMLElement
+    const scroller = scrolledToEnd(list, 1000)
+    const { content } = parts(container)
+    openRight(content)
+    //an onOpen that swaps an empty state for a smaller line below the row
+    act(() => scroller.shrinkBy(4))
+    settle()
+    expect(tx(content)).toBe(-W)
+  })
+
+  it("scrolling back up from the end of the list still closes the row", () => {
+    const { container } = render(
+      <div data-testid="list" style={{ overflowY: "auto", height: 200 }}>
+        <Row />
+      </div>,
+    )
+    const list = container.querySelector(
+      "[data-testid=list]",
+    ) as HTMLElement
+    const scroller = scrolledToEnd(list, 1000)
+    const { content } = parts(container)
+    openRight(content)
+    act(() => scroller.scrollBy(-4))
+    settle()
+    expect(tx(content)).toBe(0)
+  })
+
   it("in a Group, opening one row closes the one already open", () => {
     const onClose = vi.fn()
     const { container } = render(

@@ -286,6 +286,17 @@ function findScrollAncestor(el: HTMLElement): HTMLElement | null {
   return null
 }
 
+/** How one scroll axis went from `before` to `now`: it stayed, it was moved,
+ *  or the range shrank under it to `max` and the browser pulled it back onto
+ *  the new end. Sub-pixel slack for fractional positions. */
+function scrollMove(now: number, before: number, max: number) {
+  if (Math.abs(now - before) < 0.5) return "still"
+  if (before > max + 0.5 && Math.abs(now - Math.max(max, 0)) < 1) {
+    return "clamp"
+  }
+  return "moved"
+}
+
 export const SWIPEABLE_LEFT_ACTIONS_SLOT = Symbol.for(
   "adaptv:swipeable.left-actions",
 )
@@ -949,13 +960,46 @@ const SwipeableRoot = forwardRef<SwipeableHandle, SwipeableRootProps>(
 
     useEffect(() => stopSpring, [stopSpring])
 
-    //close on ancestor scroll
+    //close on ancestor scroll — one somebody made. A list that gets shorter
+    //while it sits at its end (an onOpen that swaps an empty state for a
+    //smaller line below the row) makes the browser pull the position back
+    //inside the new range and fire `scroll`: nobody scrolled, and closing
+    //there shuts the row the finger has just opened. That clamp lands on the
+    //new end from a position past it, which no scroll by hand, wheel, key or
+    //code can do, so it is the one scroll the row sits through
     useLayoutEffect(() => {
       const root = rootRef.current
       if (!root) return
       const scroller = findScrollAncestor(root)
       if (!scroller) return
-      const onScroll = () => closeRef.current()
+      let lastTop = scroller.scrollTop
+      let lastLeft = scroller.scrollLeft
+      const onScroll = (e: Event) => {
+        //a scroller nested inside the list reports here too (capture), and
+        //still closes the row as it always has
+        if (e.target !== scroller) {
+          closeRef.current()
+          return
+        }
+        const top = scroller.scrollTop
+        const left = scroller.scrollLeft
+        const y = scrollMove(
+          top,
+          lastTop,
+          scroller.scrollHeight - scroller.clientHeight,
+        )
+        const x = scrollMove(
+          left,
+          lastLeft,
+          scroller.scrollWidth - scroller.clientWidth,
+        )
+        const clampedOnly =
+          (y === "clamp" && x !== "moved") ||
+          (x === "clamp" && y !== "moved")
+        lastTop = top
+        lastLeft = left
+        if (!clampedOnly) closeRef.current()
+      }
       scroller.addEventListener("scroll", onScroll, {
         passive: true,
         capture: true,

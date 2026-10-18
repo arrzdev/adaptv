@@ -30,8 +30,8 @@ test.use({ hasTouch: true, viewport: { width: 390, height: 844 } })
 const ROOT = "[data-swipeable-root]"
 const CONTENT = "[data-swipeable-content]"
 const LOG = "[data-lab-log] li"
-//the group rows (first/second/third) then the standalone photo row
-const PHOTO_ROW = 3
+//the photo row is found by its text: rows added above it must not move the aim
+const PHOTO_TEXT = "start the drag ON the photo"
 const TOLERANCE_PX = 8
 
 async function touch(
@@ -66,6 +66,19 @@ function pageScroll(page: Page) {
     const el = document.querySelector("[data-scroll-view='y']")
     return el ? el.scrollTop : window.scrollY
   })
+}
+
+/** The index of the row whose content holds `text`, for the index-based helpers. */
+async function rowIndex(page: Page, text: string) {
+  const index = await page.evaluate(
+    ([sel, t]) =>
+      [...document.querySelectorAll(sel as string)].findIndex((el) =>
+        el.textContent?.includes(t as string),
+      ),
+    [CONTENT, text] as const,
+  )
+  if (index < 0) throw new Error(`no row reads "${text}"`)
+  return index
 }
 
 const logTexts = (page: Page) => page.locator(LOG).allInnerTexts()
@@ -159,7 +172,7 @@ test.describe("Swipeable rows under real touch", () => {
     await page.goto("/lab/swipeable")
     await awaitClientHandover(page)
     await page.locator(ROOT).first().waitFor()
-    await page.locator(CONTENT).nth(PHOTO_ROW).waitFor()
+    await page.locator(CONTENT).filter({ hasText: PHOTO_TEXT }).waitFor()
 
     /*
      * Warm up until a drag demonstrably moves a row, rather than sleeping a
@@ -417,12 +430,16 @@ test.describe("Swipeable rows under real touch", () => {
     page,
   }) => {
     // historically the browser's native <img> drag grabbed the pointer here and the
-    // row stopped tracking — the media user-select reset is what makes this pass
+    // row stopped tracking — the media user-select reset is what makes this pass.
+    // The photo row sits at the end of the page, and its first "opened" log line is
+    // shorter than the empty log, so the browser clamps the scroll as the row opens:
+    // the row must sit through that scroll nobody made
     const { cdp } = await setup(page)
-    await dragH(page, cdp, PHOTO_ROW, -50)
+    const photoRow = await rowIndex(page, PHOTO_TEXT)
+    await dragH(page, cdp, photoRow, -50)
 
     expect(
-      await contentX(page, PHOTO_ROW),
+      await contentX(page, photoRow),
       "the photo row must open exactly like the plain rows",
     ).toBeLessThan(-60)
     expect((await logTexts(page)).join("\n")).toMatch(/photo row opened/)
