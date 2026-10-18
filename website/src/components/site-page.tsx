@@ -40,6 +40,8 @@ export function SitePage({
 }
 
 const MAIN_ID = "main-content"
+/** Set on an element with `tabIndex={-1}` to make it the skip link's target instead of `main`. */
+const SKIP_TARGET_ATTR = "data-skip-target"
 
 /** First tab stop: hidden until focused, then moves focus into the content, past the header and the docs sidebar. */
 function SkipLink() {
@@ -48,9 +50,12 @@ function SkipLink() {
       href={`#${MAIN_ID}`}
       onClick={(event) => {
         event.preventDefault()
-        const main = document.getElementById(MAIN_ID)
-        main?.focus({ preventScroll: true })
-        main?.scrollIntoView({ block: "start" })
+        //a page with a rail beside its content (docs) marks where the content starts
+        const target =
+          document.querySelector<HTMLElement>(`[${SKIP_TARGET_ATTR}]`) ??
+          document.getElementById(MAIN_ID)
+        target?.focus({ preventScroll: true })
+        target?.scrollIntoView({ block: "start" })
       }}
       className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:rounded-full focus:bg-foreground focus:px-4 focus:py-2 focus:font-medium focus:text-[14px] focus:text-background"
     >

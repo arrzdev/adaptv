@@ -349,7 +349,11 @@ export function DocsShell({
           </ScrollView>
         </nav>
 
-        <article className="flex min-w-0 flex-1 flex-col">
+        <article
+          data-skip-target=""
+          tabIndex={-1}
+          className="flex min-w-0 flex-1 flex-col outline-none"
+        >
           <View className="pb-4 lg:hidden">
             <MobileNav current={current} label={label} />
           </View>
