@@ -1,6 +1,30 @@
-@import url("https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap");
 @import "tailwindcss";
 @import "adaptv/tailwind.css";
+
+/*
+ * Geist and Geist Mono, served by the site itself (OFL, `assets/fonts/OFL.txt`): one variable
+ * woff2 each, latin subset. The relative `url()` lets Vite fingerprint them into `/assets/`,
+ * which is cached as immutable; no request leaves for Google Fonts.
+ */
+@font-face {
+  font-family: "Geist";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("../assets/fonts/geist-latin-wght.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+    U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "Geist Mono";
+  font-style: normal;
+  font-weight: 400 500;
+  font-display: swap;
+  src: url("../assets/fonts/geist-mono-latin-wght.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+    U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
 
 /*
  * Geist arrives after the first paint on a slow connection. Until then the text is set in
@@ -77,7 +101,7 @@
   /* code */
   --code-bg: #0c0c0f;
   --code-fg: #e4e4ea;
-  --code-muted: #6d6d7a;
+  --code-muted: #85858f; /* AA: 5.35:1 on --code-bg */
   --code-keyword: #a5aefb;
   --code-string: #8fd6a8;
   --code-fn: #f2c78a;

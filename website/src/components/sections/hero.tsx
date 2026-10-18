@@ -2,7 +2,8 @@ import { ExternalLink, Link, View } from "adaptv/components"
 import { ArrowRight, Github } from "lucide-react"
 import { DeviceStage } from "@/components/sections/device-stage"
 import { Targets } from "@/components/sections/targets"
-import { GITHUB_URL } from "@/content/site"
+import { GITHUB_URL, ONE_COMMAND } from "@/content/site"
+import { scrollRegion } from "../scroll-region"
 
 export function Hero() {
   return (
@@ -64,6 +65,17 @@ export function Hero() {
             Star on GitHub
           </ExternalLink>
         </View>
+
+        {/* one line from a bare machine to a running app; nowrap keeps it one line, so a
+            phone scrolls it sideways */}
+        <pre
+          {...scrollRegion("Install command")}
+          className="rise mt-6 max-w-full overflow-x-auto rounded-xl border border-border bg-surface/60 px-4 py-2.5 text-left font-mono text-[13px] text-subtle"
+          style={{ animationDelay: "180ms" }}
+        >
+          <span className="select-none text-muted">$ </span>
+          <code>{ONE_COMMAND}</code>
+        </pre>
 
         <p
           className="rise mt-5 h-[2lh] w-full text-[14px] text-muted @min-[335px]:h-[1lh]"

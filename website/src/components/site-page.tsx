@@ -33,10 +33,42 @@ export function SitePage({
       showsVerticalScrollIndicator
       className="bg-background [scrollbar-gutter:stable]"
     >
+      <SkipLink />
       <SiteHeader />
-      <View className={cn("w-full", className)}>{children}</View>
+      <main
+        id={MAIN_ID}
+        tabIndex={-1}
+        className={cn("flex w-full flex-col outline-none", className)}
+      >
+        {children}
+      </main>
       <SiteFooter />
     </ScrollView>
+  )
+}
+
+const MAIN_ID = "main-content"
+/** Set on an element with `tabIndex={-1}` to make it the skip link's target instead of `main`. */
+const SKIP_TARGET_ATTR = "data-skip-target"
+
+/** First tab stop: hidden until focused, then moves focus into the content, past the header and the docs sidebar. */
+function SkipLink() {
+  return (
+    <a
+      href={`#${MAIN_ID}`}
+      onClick={(event) => {
+        event.preventDefault()
+        //a page with a rail beside its content (docs) marks where the content starts
+        const target =
+          document.querySelector<HTMLElement>(`[${SKIP_TARGET_ATTR}]`) ??
+          document.getElementById(MAIN_ID)
+        target?.focus({ preventScroll: true })
+        target?.scrollIntoView({ block: "start" })
+      }}
+      className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:rounded-full focus:bg-foreground focus:px-4 focus:py-2 focus:font-medium focus:text-[14px] focus:text-background"
+    >
+      Skip to content
+    </a>
   )
 }
 

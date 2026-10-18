@@ -76,7 +76,7 @@ export function BrowserFrame({
         </View>
         <View
           row
-          className="mx-auto h-6 w-full max-w-xs items-center gap-1.5 rounded-md px-2.5 bg-background font-mono text-[length:calc(11*var(--u))] text-muted"
+          className="mx-auto h-6 w-full max-w-xs items-center gap-1.5 rounded-md px-2.5 bg-background font-mono text-[length:calc(12*var(--u))] text-muted"
         >
           <Lock className="size-2.5" />
           {url}

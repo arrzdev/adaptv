@@ -101,7 +101,7 @@ function PostFacts({ post }: { post: Post }) {
     <dl className="flex flex-col gap-3 text-[13.5px]">
       {facts.map(([term, value]) => (
         <View key={term} className="gap-0.5">
-          <dt className="font-mono text-[11px] text-muted uppercase tracking-[0.14em]">
+          <dt className="font-mono text-[12px] text-muted uppercase tracking-[0.08em]">
             {term}
           </dt>
           <dd className="text-subtle">{value}</dd>

@@ -325,12 +325,13 @@ test.describe("Tally showcase", () => {
         return { text: lines.size * lineHeight, box: el.getBoundingClientRect().height }
       })
       expect(Math.abs(fit.text - fit.box)).toBeLessThan(1)
-      await page.route(/fonts\.(googleapis|gstatic)\.com/, (route) => route.abort())
+      //the site's own font files (`src/assets/fonts/`, fingerprinted into `/assets/`)
+      await page.route(/\/assets\/geist[^/]*\.woff2$/, (route) => route.abort())
       await open(page, width)
-      //no Geist face at all: the stylesheet that declares it never loaded
+      //no Geist face loaded: the faces are declared, but their files never arrived
       expect(
         await page.evaluate(() =>
-          [...document.fonts].some((f) => f.family.includes("Geist")),
+          [...document.fonts].some((f) => f.family.includes("Geist") && f.status === "loaded"),
         ),
       ).toBe(false)
       const fallback = await restingBox(showcase(page))

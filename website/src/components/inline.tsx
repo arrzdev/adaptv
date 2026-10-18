@@ -15,7 +15,7 @@ export function Inline({ text }: { text: string }): ReactNode {
       return (
         <code
           key={key}
-          className="rounded-md border border-border bg-sunken px-1.5 py-0.5 font-mono text-[0.86em] text-foreground"
+          className="rounded-md border border-border bg-sunken px-1.5 py-0.5 font-mono text-[0.86em] text-foreground [overflow-wrap:anywhere]"
         >
           {part.slice(1, -1)}
         </code>

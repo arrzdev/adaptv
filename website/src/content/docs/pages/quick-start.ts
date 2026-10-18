@@ -1,4 +1,5 @@
 import type { DocPage } from "@/content/docs/types"
+import { ONE_COMMAND } from "@/content/site"
 
 export const page: DocPage = {
   slug: "quick-start",
@@ -26,6 +27,12 @@ export const page: DocPage = {
       type: "p",
       text: "Web needs only Node and pnpm. Run `adaptv doctor` from an app root to check a machine. Its Android and JDK rows are required. They fail on a machine without them, even if you only build web. Set `ANDROID_HOME` and `JAVA_HOME` to fix this.",
     },
+    { type: "h2", text: "Run the example app" },
+    {
+      type: "p",
+      text: "One line clones the repository, builds and packs adaptv, and serves `examples/basic` on http://localhost:3000. The example installs the packed tarball, as an app will install the npm package.",
+    },
+    { type: "code", label: "Terminal", lang: "bash", code: ONE_COMMAND },
     { type: "h2", text: "Run the repository apps" },
     {
       type: "code",

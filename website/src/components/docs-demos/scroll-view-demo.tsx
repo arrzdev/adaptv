@@ -1,4 +1,5 @@
 import { ScrollView, View } from "adaptv/components"
+import { scrollRegion } from "../scroll-region"
 
 const ROWS = Array.from({ length: 14 }, (_, i) => `Row ${i + 1}`)
 const CHIPS = [
@@ -18,6 +19,7 @@ export function ScrollViewDemo() {
   return (
     <View className="w-full max-w-sm gap-4">
       <ScrollView
+        {...scrollRegion("Vertical scroll demo")}
         fade
         fadeSize="2.5rem"
         className="h-44 gap-2 rounded-xl border border-border bg-raised p-3"
@@ -31,7 +33,12 @@ export function ScrollViewDemo() {
           </span>
         ))}
       </ScrollView>
-      <ScrollView horizontal fade="end" className="gap-2">
+      <ScrollView
+        horizontal
+        fade="end"
+        {...scrollRegion("Horizontal scroll demo")}
+        className="gap-2"
+      >
         {CHIPS.map((chip) => (
           <span
             key={chip}

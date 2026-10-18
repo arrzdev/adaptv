@@ -75,7 +75,7 @@ export function DocsHome() {
     <DocsShell current="" label="Overview">
       <View className="w-full max-w-5xl">
         <View className="gap-4 pb-10">
-          <span className="font-mono text-[11.5px] text-brand uppercase tracking-[0.14em]">
+          <span className="font-mono text-[12px] text-brand uppercase tracking-[0.08em]">
             Documentation
           </span>
           <h1 className="font-semibold text-[clamp(2.2rem,4.5vw,3.25rem)] text-foreground leading-[1.02] tracking-[-0.04em]">
@@ -101,7 +101,7 @@ export function DocsHome() {
                 className="group relative flex min-w-0 flex-1 flex-col gap-2 overflow-hidden rounded-2xl border border-border bg-surface p-6 hover:border-border-strong"
               >
                 <span className="dots pointer-events-none absolute inset-0 opacity-40" />
-                <span className="relative font-mono text-[11px] text-muted uppercase tracking-[0.14em]">
+                <span className="relative font-mono text-[12px] text-muted uppercase tracking-[0.08em]">
                   {lead.kicker}
                 </span>
                 <span className="relative font-semibold text-[22px] text-foreground tracking-[-0.02em]">

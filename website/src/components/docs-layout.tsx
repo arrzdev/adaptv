@@ -16,6 +16,7 @@ import { SitePage } from "@/components/site-page"
 import { ALL_DOCS, DOCS, type DocPage } from "@/content/docs"
 import { GITHUB_URL } from "@/content/site"
 import { cn } from "@/utils/cn"
+import { scrollRegion } from "./scroll-region"
 
 function matches(page: DocPage, query: string) {
   const haystack = [
@@ -72,7 +73,10 @@ function DocsNav({ current }: { current: string }) {
 
   return (
     <View className="gap-6">
-      <label className="flex h-9 flex-row items-center gap-2 rounded-lg border border-border bg-surface px-3 text-muted focus-within:border-border-strong">
+      {/* the input drops its own ring (it would hug the text, not the field), so the
+          field draws the site's 2 px --adaptv-ring, inset: the scrolling sidebar clips
+          anything drawn outside the field's box */}
+      <label className="flex h-9 flex-row items-center gap-2 rounded-lg border border-border bg-surface px-3 text-muted focus-within:border-border-strong has-focus-visible:outline-2 has-focus-visible:-outline-offset-2 has-focus-visible:outline-(--adaptv-ring)">
         <Search className="size-3.5 shrink-0" />
         <input
           type="search"
@@ -134,7 +138,7 @@ function DocsNav({ current }: { current: string }) {
           </View>
           {DOCS.filter((group) => group.section === section).map((group) => (
             <View key={group.title} className="gap-2">
-              <span className="font-mono text-[11px] text-muted uppercase tracking-[0.14em]">
+              <span className="font-mono text-[12px] text-muted uppercase tracking-[0.08em]">
                 {group.title}
               </span>
               <View className="border-border border-l">
@@ -232,11 +236,13 @@ export function Pager({ page }: { page: DocPage }) {
   )
 }
 
+//The hue sits on the border and the dot; the label is --foreground, so every pill reads
+//at 4.5:1 or better in both themes (TUD-1626).
 const PLATFORM_TONE = {
-  Web: "border-[#e0a23a]/40 bg-[#e0a23a]/10 text-[#e0a23a]",
-  PWA: "border-brand/40 bg-brand-soft text-brand",
-  iOS: "border-[#38b6ff]/40 bg-[#38b6ff]/10 text-[#38b6ff]",
-  Android: "border-success/40 bg-success-soft text-success",
+  Web: { pill: "border-[#e0a23a]/50 bg-[#e0a23a]/10", dot: "bg-[#e0a23a]" },
+  PWA: { pill: "border-brand/50 bg-brand-soft", dot: "bg-brand" },
+  iOS: { pill: "border-[#38b6ff]/50 bg-[#38b6ff]/10", dot: "bg-[#38b6ff]" },
+  Android: { pill: "border-success/50 bg-success-soft", dot: "bg-success" },
 } as const
 
 function PageMeta({ page }: { page: DocPage }) {
@@ -247,11 +253,18 @@ function PageMeta({ page }: { page: DocPage }) {
         {page.platforms?.map((platform) => (
           <span
             key={platform}
+            data-platform={platform}
             className={cn(
-              "rounded-full border px-2.5 py-0.5 font-medium text-[12px]",
-              PLATFORM_TONE[platform],
+              "flex flex-row items-center gap-1.5 rounded-full border px-2.5 py-0.5 font-medium text-[12px] text-foreground",
+              PLATFORM_TONE[platform].pill,
             )}
           >
+            <span
+              className={cn(
+                "size-1.5 rounded-full",
+                PLATFORM_TONE[platform].dot,
+              )}
+            />
             {platform}
           </span>
         ))}
@@ -266,7 +279,10 @@ function PageMeta({ page }: { page: DocPage }) {
         ) : null}
       </View>
       {page.importLine ? (
-        <pre className="selectable overflow-x-auto rounded-xl border border-border bg-sunken px-4 py-3 font-mono text-[13px] text-subtle">
+        <pre
+          {...scrollRegion("Import")}
+          className="selectable overflow-x-auto rounded-xl border border-border bg-sunken px-4 py-3 font-mono text-[13px] text-subtle"
+        >
           {page.importLine}
         </pre>
       ) : null}
@@ -300,7 +316,11 @@ export function DocsShell({
           </ScrollView>
         </nav>
 
-        <article className="flex min-w-0 flex-1 flex-col">
+        <article
+          data-skip-target=""
+          tabIndex={-1}
+          className="flex min-w-0 flex-1 flex-col outline-none"
+        >
           <View className="pb-4 lg:hidden">
             <MobileNav current={current} label={label} />
           </View>
@@ -327,7 +347,7 @@ export function DocsLayout({ page }: { page: DocPage }) {
     >
       <View className="gap-4 pb-8">
         {group ? (
-          <span className="font-mono text-[11.5px] text-brand uppercase tracking-[0.14em]">
+          <span className="font-mono text-[12px] text-brand uppercase tracking-[0.08em]">
             {group.title}
           </span>
         ) : null}

@@ -7,3 +7,7 @@ packages:
   - "."
 allowBuilds:
   esbuild: true
+# Lift @tailwindcss/node's source-map-js off a version with a high advisory. The selector
+# touches only the vulnerable range; drop it once the parent ships the fix.
+overrides:
+  "source-map-js@<1.2.2": "^1.2.2"

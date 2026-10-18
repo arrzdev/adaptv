@@ -20,7 +20,7 @@ export function OnThisPage({ blocks }: { blocks: Block[] }) {
   if (headings.length < 2) return null
   return (
     <View className="gap-2.5">
-      <span className="pb-1 font-mono text-[11px] text-muted uppercase tracking-[0.14em]">
+      <span className="pb-1 font-mono text-[12px] text-muted uppercase tracking-[0.08em]">
         On this page
       </span>
       {headings.map((heading) => (

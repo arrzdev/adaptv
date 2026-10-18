@@ -100,3 +100,6 @@ Still owed: a real-device photo or capture for social cards.
 - The build writes `/llms.txt`, `/docs/<slug>.md`, `/sitemap.xml` and `/blog/rss.xml` from the
   docs and posts (`scripts/docs-markdown.ts`, `src/content/feeds.ts`): a new page or post is in
   them with no list to edit. `public/robots.txt` points crawlers at the sitemap.
+- The build also writes `/version.json` (`{"sha": "<commit>"}`, `scripts/build-sha-file.ts`), so
+  `curl https://adaptv.tudu.dev/version.json` tells which commit is live. The deploy's smoke
+  waits for it to report the commit it shipped.
