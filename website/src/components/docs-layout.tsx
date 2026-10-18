@@ -9,6 +9,7 @@ import {
 } from "lucide-react"
 import type { ReactNode } from "react"
 import { useEffect, useMemo, useState } from "react"
+import { CodeLine } from "@/components/code"
 import { Inline } from "@/components/inline"
 import { OnThisPage } from "@/components/on-this-page"
 import { Prose } from "@/components/prose"
@@ -16,7 +17,6 @@ import { SitePage } from "@/components/site-page"
 import { ALL_DOCS, DOCS, type DocPage } from "@/content/docs"
 import { GITHUB_URL } from "@/content/site"
 import { cn } from "@/utils/cn"
-import { scrollRegion } from "./scroll-region"
 
 function matches(page: DocPage, query: string) {
   const haystack = [
@@ -279,12 +279,9 @@ function PageMeta({ page }: { page: DocPage }) {
         ) : null}
       </View>
       {page.importLine ? (
-        <pre
-          {...scrollRegion("Import")}
-          className="selectable overflow-x-auto rounded-xl border border-border bg-sunken px-4 py-3 font-mono text-[13px] text-subtle"
-        >
+        <CodeLine label="Import" className="selectable">
           {page.importLine}
-        </pre>
+        </CodeLine>
       ) : null}
     </View>
   )
