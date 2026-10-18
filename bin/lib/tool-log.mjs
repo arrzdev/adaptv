@@ -323,6 +323,13 @@ const ERROR_LINE =
 // broke, and it was the whole ✖ line of a web build an adaptv plugin refused.
 const NOT_ERROR =
   /^\s*(?:\d+\s+errors?\s+generated|0\s+error|Build failed with \d+ errors?:)/i
+// The bundler's own diagnostic, by its code: `[UNRESOLVED_ENTRY] Cannot resolve entry module
+// index.html.`. rolldown 1.0 dropped the `Error:` that followed the code, and prints its
+// warnings the same way (`[EVAL] Use of direct eval…`), so the code alone says nothing. Below
+// the bundler's `Build failed with N errors:` count, which lists errors and nothing else, it
+// is the error.
+const BUNDLER_COUNT = /^\s*Build failed with \d+ errors?:/i
+export const BUNDLER_DIAGNOSTIC = /^\s*\[[A-Z][A-Z0-9_]*\]\s+/
 // Gradle states the cause on the lines AFTER this header, and those lines need not contain
 // "error"/"failed" themselves ("> Android resource linking failed" does; "Could not find
 // method compile()" does not). So a header drags its next few lines in with it.
@@ -450,7 +457,12 @@ export function serverBoundary(text) {
  */
 export function errorTail(lines, limit = 24) {
   const keep = new Set()
+  let underCount = false
   lines.forEach((l, i) => {
+    const plain = String(l).replace(ANSI_CODES, "")
+    if (BUNDLER_COUNT.test(plain)) underCount = true
+    else if (/^\s*at\s/.test(plain)) underCount = false
+    if (underCount && BUNDLER_DIAGNOSTIC.test(plain)) keep.add(i)
     if (ERROR_LINE.test(l) && !NOT_ERROR.test(l)) keep.add(i)
     if (!CAUSE_HEADER.test(l)) return
     // Keep the WHOLE section, not a fixed window. Gradle nests its causes and the useful

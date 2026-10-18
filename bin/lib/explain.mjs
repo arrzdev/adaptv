@@ -12,6 +12,7 @@ import { ADAPTV_DIR } from "./adaptv-dir.mjs"
 import { explainLaunchFailure } from "./native.mjs"
 import { namesPlumbing, withoutPlumbing } from "./opacity.mjs"
 import {
+  BUNDLER_DIAGNOSTIC,
   gradleCause,
   isDestinationEntry,
   portInUse,
@@ -152,8 +153,13 @@ export function explainFailure(label, appRoot = process.cwd()) {
       })
     // `exec` narrows the tail to error-ISH lines, but the ones that actually say `error:`
     // are what a dev reads; the rest are trailers ("The following build commands failed:").
+    // A bundler diagnostic (`[UNRESOLVED_ENTRY] Cannot resolve …`) says neither; `errorTail`
+    // kept it only from under the bundler's error count.
     const errors = lines.filter(
-      (l) => /\berror\s*:/i.test(l) || NAMED_ERROR.test(l),
+      (l) =>
+        /\berror\s*:/i.test(l) ||
+        NAMED_ERROR.test(l) ||
+        BUNDLER_DIAGNOSTIC.test(l),
     )
     const picked = errors.length ? errors : lines
     if (picked.length === 0)
@@ -216,7 +222,9 @@ export function toolErrorParts(raw) {
   const message = (
     NAMED_ERROR.test(raw)
       ? raw.replace(NAMED_ERROR, "")
-      : raw.replace(/^.*?\berror\s*:\s*/i, "")
+      : BUNDLER_DIAGNOSTIC.test(raw)
+        ? raw.replace(BUNDLER_DIAGNOSTIC, "")
+        : raw.replace(/^.*?\berror\s*:\s*/i, "")
   )
     .replace(/^\s*\[adaptv\]\s*/, "")
     .trim()

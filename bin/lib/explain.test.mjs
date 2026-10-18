@@ -215,6 +215,42 @@ describe("the server boundary's refusal of a web build", () => {
   })
 })
 
+/**
+ * The bundler's own diagnostic, captured 2026-10-17 from `vite build` 8.0.16 (rolldown 1.0.3) in
+ * a directory with no `index.html`. rolldown 1.0 prints `[UNRESOLVED_ENTRY] Cannot …` where it
+ * printed `[UNRESOLVED_ENTRY] Error: Cannot …`, so nothing said `error:` and the ✖ line was
+ * `✗ Build failed in 17ms`. A warning (`[EVAL] Use of direct eval…`) has the same shape.
+ */
+const ESC = String.fromCharCode(27)
+const VITE_UNRESOLVED_ENTRY = [
+  `${ESC}[33m[EVAL] ${ESC}[0mUse of direct \`eval\` function is strongly discouraged as it poses security risks and may cause issues with minification.`,
+  "✗ Build failed in 17ms",
+  "error during build:",
+  "Build failed with 1 error:",
+  "",
+  `${ESC}[31m[UNRESOLVED_ENTRY] ${ESC}[0mCannot resolve entry module index.html.`,
+  "",
+  "    at aggregateBindingErrorsIntoJsError (file:///w/my-app/node_modules/.pnpm/rolldown@1.0.3/node_modules/rolldown/dist/shared/error-BuvQYXuZ.mjs:48:18)",
+  "  errors: [Getter/Setter]",
+  "}",
+]
+
+describe("the bundler's own diagnostic names itself on the ✖ line", () => {
+  it("puts the diagnostic's sentence on the ✖, not the bundler's timing", () => {
+    const { reason } = explainFailure(
+      "web",
+      "/w/my-app",
+    )(buildFailure(VITE_UNRESOLVED_ENTRY))
+    expect(reason).toBe("Cannot resolve entry module index.html.")
+  })
+
+  it("never takes a warning in the same shape for the error", () => {
+    const tail = errorTail(VITE_UNRESOLVED_ENTRY)
+    expect(tail.join("\n")).not.toContain("[EVAL]")
+    expect(tail.join("\n")).toContain("[UNRESOLVED_ENTRY]")
+  })
+})
+
 describe("a crash inside the web build names itself on the ✖ line", () => {
   it("puts the TypeError's sentence on the ✖, not the trailer above it", () => {
     //Through `errorTail` deliberately: the line was lost twice, once by the tail filter

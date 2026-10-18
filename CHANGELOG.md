@@ -47,6 +47,15 @@ API.
   navigated mid-preload; the navigation evicted the preloaded route from the cache, and the preload
   then read the evicted entry (`match._nonReactive`). The navigation itself always worked.
 
+### Security
+
+- **No dependency adaptv pins has a known critical or high advisory.** TanStack Start moves to
+  1.168.60 (router 1.170.41, router core 1.171.34), past the reflected XSS in server-function
+  responses and the `seroval` advisories; Vite to 8.0.16 (peer and created apps), past the
+  `server.fs.deny` bypass on Windows paths; sharp to 0.35.5, past the libheif and librsvg
+  advisories. A web build the bundler refuses still names the bundler's sentence on its `✖` line
+  (`Cannot resolve entry module index.html.`), which Vite 8.0.16's bundler prints in a new shape.
+
 ## 0.1.0-alpha.1
 
 The first public alpha. Not published to npm yet: publishing waits on approval, and until then the
