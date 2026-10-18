@@ -42,6 +42,16 @@ describe("Inline", () => {
     )
   })
 
+  it("renders code inside a link as linked code, not backticks", () => {
+    expect(
+      render(
+        "Use [`useLocale`](/docs/hooks-system), see [`visualViewport` (MDN)](https://example.com).",
+      ),
+    ).toBe(
+      'Use <a href="/docs/hooks-system"><code>useLocale</code></a>, see <a href="https://example.com"><code>visualViewport</code> (MDN)</a>.',
+    )
+  })
+
   it("leaves a lone backtick as text", () => {
     expect(render("a ` b")).toBe("a ` b")
   })

@@ -41,6 +41,23 @@ describe("table block", () => {
     ).not.toContain("whitespace-nowrap")
   })
 
+  it("renders code in a head cell as code, not backticks", () => {
+    render(
+      <Prose
+        blocks={[
+          {
+            type: "table",
+            head: ["Target", "`render`"],
+            rows: [["Desktop web", "`ssr`"]],
+          },
+        ]}
+      />,
+    )
+    const head = screen.getAllByRole("columnheader")[1]
+    expect(head.textContent).toBe("render")
+    expect(head.querySelector("code")?.textContent).toBe("render")
+  })
+
   it("shows a fade at the right edge only while there is more to scroll", () => {
     layout({ scrollWidth: 900, clientWidth: 300 })
     render(

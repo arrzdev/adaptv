@@ -150,10 +150,15 @@ function HeadRow({ cells }: { cells: string[] }) {
         {cells.map((cell, index) => (
           <th
             key={cell || index}
-            className="whitespace-nowrap px-4 py-2.5 font-medium font-mono text-[12px] text-muted uppercase tracking-[0.07em]"
+            //code keeps the cell size and its own case: `className` is not CLASSNAME
+            className="whitespace-nowrap px-4 py-2.5 font-medium font-mono text-[12px] text-muted uppercase tracking-[0.07em] [&_code]:text-[1em] [&_code]:normal-case [&_code]:tracking-normal"
           >
             {/* an empty corner cell still gets a name for screen readers */}
-            {cell || <span className="sr-only">Topic</span>}
+            {cell ? (
+              <Inline text={cell} />
+            ) : (
+              <span className="sr-only">Topic</span>
+            )}
           </th>
         ))}
       </tr>
