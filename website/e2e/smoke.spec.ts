@@ -151,3 +151,14 @@ test.describe("scrollable regions are keyboard-reachable and named, phone 390x84
     })
   }
 })
+
+//Docs structure a screen reader navigates by: no table header without a name.
+test.describe("docs structure", () => {
+  test("/docs/deploying has no empty table header", async ({ page: tab }) => {
+    await tab.goto("/docs/deploying")
+    const empty = await tab.locator("thead th").evaluateAll((cells) =>
+      cells.filter((cell) => !(cell.textContent ?? "").trim()).length,
+    )
+    expect(empty).toBe(0)
+  })
+})
