@@ -61,6 +61,21 @@ adaptv keys ota                      # the signing pair for the update channel
 adaptv icons --input ./mark.png      # every icon your app needs
 ```
 
+## 🪤 Three bugs you already know
+
+The same three reports keep coming back from people who wrap a web app in Capacitor
+([keyboard](https://forum.ionicframework.com/t/ionic-8-there-is-no-scroll-on-page-after-keyboard-opens/247075),
+[notch](https://forum.ionicframework.com/t/ios-notch-safe-area-inconsistent-behavior/203053),
+[overscroll](https://forum.ionicframework.com/t/capacitor-overscroll-behaviour/239175)).
+adaptv handles each in the framework. These threads are about Ionic apps; we claim nothing beyond
+what adaptv does and where a test proves it.
+
+| Pitfall | What goes wrong | What adaptv does | Proof in the repo |
+|---|---|---|---|
+| **Keyboard covers the input** | The keyboard opens and the focused field stays hidden behind it. | `AvoidKeyboard` reserves room above the keyboard and scrolls the focused input into view. | [`avoid-keyboard.tsx`](src/components/avoid-keyboard/avoid-keyboard.tsx), [`avoid-keyboard.spec.ts`](playground/e2e/avoid-keyboard.spec.ts) (driven by a keyboard mock, not a real device keyboard) |
+| **iOS safe area** | Notch and home-indicator insets come out inconsistent. | One inset contract (`--adaptv-inset-top/right/bottom/left`, always defined) that `View`'s `safe` prop and the `useInsets()` hook read. | [`safe-area.css`](src/styles/safe-area.css), [`safe-area.test.ts`](src/styles/safe-area.test.ts), [`safe-area.spec.ts`](playground/e2e/safe-area.spec.ts) |
+| **Overscroll** | Dragging past the end of an inner scroller moves the page behind it. | `ScrollView` sets `overscroll-behavior-y: contain`: the page behind does not move. The scroller keeps its own rubber-band, as a native one does. | [`scroll-view.tsx`](src/components/scroll-view.tsx), [`overscroll.spec.ts`](playground/e2e/overscroll.spec.ts) (chromium, real touch drag) |
+
 ## ⚡ Quick start
 
 Nothing is published yet, so you install the package you pack. You need Node 22.15 or newer and
