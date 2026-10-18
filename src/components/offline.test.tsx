@@ -108,4 +108,19 @@ describe("Offline — one component, two call sites", () => {
         part,
       ).toHaveLength(1)
   })
+
+  it("titles the screen with an h1 by default and an h2 with titleLevel={2}", () => {
+    const { unmount } = render(<Offline />)
+    expect(screen.getAllByRole("heading").map((h) => h.tagName)).toEqual([
+      "H1",
+    ])
+    unmount()
+
+    render(<Offline titleLevel={2} />)
+    const heading = screen.getByRole("heading")
+    expect(heading.tagName).toBe("H2")
+    expect(heading.getAttribute("data-adaptv")).toBe("offline-title")
+    expect(heading.getAttribute("data-part")).toBe("title")
+    expect(document.querySelector("h1")).toBeNull()
+  })
 })

@@ -52,6 +52,13 @@ export const page: DocPage = {
           description: "The heading.",
         },
         {
+          name: "titleLevel",
+          type: "1 | 2 | 3 | 4 | 5 | 6",
+          default: "1",
+          description:
+            "The heading level of the title. Use `2` when the screen sits inside a page that already has an `h1`.",
+        },
+        {
           name: "description",
           type: "string",
           default: '"Check your connection and try again."',
