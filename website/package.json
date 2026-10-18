@@ -28,6 +28,7 @@
     "vite": "link:../node_modules/vite"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
     "@playwright/test": "1.61.1",
     "@types/node": "22.19.17",
     "@types/react": "19.2.7",
