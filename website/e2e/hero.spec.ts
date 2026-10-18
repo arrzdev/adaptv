@@ -15,10 +15,15 @@ for (const width of WIDTHS) {
     await page.evaluate(() => document.fonts.ready)
 
     const layout = await h1.evaluate((el: HTMLElement) => {
-      const range = document.createRange()
-      range.selectNodeContents(el)
-      //one rect per text fragment; fragments on the same line box share a top
-      const rects = [...range.getClientRects()].filter((r) => r.width > 0)
+      //one rect per text fragment; fragments on the same line box share a top. Text nodes
+      //only: a range over the whole h1 also returns the box of each element in it
+      const rects: DOMRect[] = []
+      const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT)
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        const range = document.createRange()
+        range.selectNodeContents(node)
+        rects.push(...[...range.getClientRects()].filter((r) => r.width > 0))
+      }
       const tops = [...new Set(rects.map((r) => Math.round(r.top)))]
       const box = el.getBoundingClientRect()
       return {

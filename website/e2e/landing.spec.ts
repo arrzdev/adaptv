@@ -337,6 +337,45 @@ test.describe("Tally showcase", () => {
       expect(fallback.top).toBe(geist.top)
     })
   }
+
+  //The title's two lines are centred. Centred text starts at half its width, and the fallback
+  //sets a line a few px wider or narrower than Geist (6 px at the start of line 2 at 390 px,
+  //hinting makes it vary by size), so the swap moved the text: a 0.00046 layout shift of the
+  //`<h1>` whenever Geist landed after the first paint, about 1 load in 4. Each line is a box
+  //as wide as Geist sets it, text from its left edge, so the text starts at the same x in
+  //any font.
+  /** Where each title line starts, and how far its text is from filling the line's box. */
+  function titleLines(page: Page) {
+    return page.locator("h1").evaluate((h1) =>
+      [...h1.childNodes]
+        .filter((line) => line.textContent?.trim())
+        .map((line) => {
+          const range = document.createRange()
+          range.selectNodeContents(line)
+          const text = range.getBoundingClientRect()
+          //a bare text node has no box of its own
+          const box = line instanceof Element ? line.getBoundingClientRect() : { width: 0 }
+          return { start: text.left, gap: Math.abs(box.width - text.width) }
+        }),
+    )
+  }
+
+  for (const width of [320, 390, 768, 1440]) {
+    test(`the web font swap moves no line of the title at ${width} px`, async ({ page }) => {
+      test.setTimeout(60_000)
+      await open(page, width)
+      await page.locator("h1").evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)))
+      const geist = await titleLines(page)
+      expect(geist).toHaveLength(2)
+      await page.route(/fonts\.(googleapis|gstatic)\.com/, (route) => route.abort())
+      await open(page, width)
+      await page.locator("h1").evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)))
+      const fallback = await titleLines(page)
+      expect(fallback.map((l) => l.start)).toEqual(geist.map((l) => l.start))
+      //each box is as wide as its line in Geist: a copy edit must change the box too
+      for (const line of geist) expect(line.gap).toBeLessThan(1)
+    })
+  }
 })
 
 const HERO_TITLE = "Write React once Feel native everywhere."

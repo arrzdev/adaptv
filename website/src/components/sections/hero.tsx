@@ -16,10 +16,16 @@ export function Hero() {
           className="rise h-[2lh] w-full max-w-5xl whitespace-nowrap font-semibold text-[clamp(1.5rem,8vw,5.75rem)] leading-[0.98] tracking-[-0.045em]"
           style={{ animationDelay: "60ms" }}
         >
-          {/* inline lines: a block span's own box would read as an extra line box */}
-          Write React once
+          {/* inline lines: a block span's own box would read as an extra line box. Centred text
+              starts at half its width, which the fallback sets a few px off Geist, so each line
+              is a box as wide as Geist sets it (in em), text from its left edge */}
+          <span className="inline-block w-[7.465em] text-left">
+            Write React once
+          </span>
           <br />
-          <span className="text-gradient">Feel native everywhere.</span>
+          <span className="text-gradient inline-block w-[10.226em] text-left">
+            Feel native everywhere.
+          </span>
         </h1>
 
         {/* Geist swaps in late and wraps this to 4 lines where the fallback font may take 3 or 5:
