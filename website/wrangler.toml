@@ -12,8 +12,17 @@ compatibility_flags = ["nodejs_compat"]
 upload_source_maps = false
 workers_dev = false
 
+# Workers Logs. Named envs do not inherit it reliably, so production repeats it.
+[observability]
+enabled = true
+head_sampling_rate = 1
+
 [env.production]
 name = "adaptv-website"
 # pinned: without it, every deploy would also publish a *.workers.dev address
 workers_dev = false
 routes = [{ pattern = "adaptv.tudu.dev", custom_domain = true }]
+
+[env.production.observability]
+enabled = true
+head_sampling_rate = 1
