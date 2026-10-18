@@ -14,6 +14,7 @@ import { basename, dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { type Plugin, runnerImport } from "vite"
 import type { MarkdownFile } from "../src/content/docs/markdown"
+import { staticHeaderRules } from "../src/utils/security-headers"
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..")
 const ENTRY = "virtual:docs-markdown"
@@ -84,11 +85,13 @@ function contentType(path: string) {
  * with no charset. A `_headers` file in the assets directory sets the types; Nitro keeps
  * it and appends its own rules (`/assets/*` caching). One rule per file, not a splat:
  * the file takes 100 rules, and a docs path pattern would also match the HTML pages.
+ * The security and page cache rules come first (`src/utils/security-headers.ts`).
  */
 function cloudflareHeaders(files: MarkdownFile[]) {
-  return files
+  const types = files
     .map((file) => `/${file.path}\n  Content-Type: ${contentType(file.path)}\n`)
     .join("")
+  return `${staticHeaderRules()}${types}`
 }
 
 export async function loadMarkdownFiles() {

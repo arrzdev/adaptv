@@ -26,6 +26,9 @@ export default defineApp({
   //an unknown URL keeps the site header, so a stale link is not a dead end
   notFoundScreen: () => import("@/components/not-found-screen"),
   router: {
+    //adaptv's handler with the security and cache headers on every response. The path
+    //is from src/, like the client entry: "./src/server.ts" is silently ignored
+    serverEntry: "./server",
     routesDirectory: "./routing",
     routerConfig: "./src/routing/config.ts",
     defaultPreload: "intent",
