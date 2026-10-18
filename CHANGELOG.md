@@ -46,6 +46,10 @@ API.
 - **Tapping a link while its route is still preloading no longer logs a `TypeError`.** The tap
   navigated mid-preload; the navigation evicted the preloaded route from the cache, and the preload
   then read the evicted entry (`match._nonReactive`). The navigation itself always worked.
+- **`WheelColumn` never shows a scrollbar.** It relied on the app-wide `ui.hideScrollbars` reset,
+  which is off in a browser tab under the `"app"` scope, so desktop Chrome drew a grey scrollbar
+  beside every column. The column now hides its own, in every engine, and still scrolls by mouse
+  wheel, touch and keyboard.
 
 ## 0.1.0-alpha.1
 

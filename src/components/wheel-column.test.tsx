@@ -7,6 +7,10 @@ import {
   WheelColumn,
 } from "#adaptv/components/wheel-column"
 import { wheelRowTransform } from "#adaptv/components/wheel-column-geometry"
+import {
+  compileAdaptvStyles,
+  ruleFor,
+} from "#adaptv/styles/compile.test-helper"
 
 /*
  * WheelColumn's scroll pipeline — what a consumer's `onChange` receives for a given
@@ -900,5 +904,25 @@ describe("WheelColumn — default rules in the layer, locks inline (styling.md �
     expect(row.style.touchAction).toBe("pan-x pan-y pinch-zoom")
     expect(row.style.height).toBe("100%")
     expect(row.style.width).toBe("100%")
+  })
+
+  it("hides its scrollbar inline, whatever ui.hideScrollbars says", () => {
+    //a picker drum never shows a scrollbar; the app-wide reset is off in a
+    //browser tab under the "app" scope, so the column hides its own
+    const column = mount()
+    expect(column.style.scrollbarWidth).toBe("none")
+    //still a scroller: hiding the bar must not cost wheel/touch/keyboard scrolling
+    expect(column.style.overflowY).toBe("auto")
+  })
+
+  it("ships the ::-webkit-scrollbar half as a layer rule on the column's attributes", async () => {
+    //a pseudo-element has no inline style, so this half cannot move to `style`
+    const css = await compileAdaptvStyles([])
+    expect(
+      ruleFor(
+        css,
+        ':where([data-adaptv="wheel-column"][data-part="root"])::-webkit-scrollbar',
+      ),
+    ).toBe("display: none;")
   })
 })

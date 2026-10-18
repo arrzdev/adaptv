@@ -46,6 +46,14 @@ const WHEEL_MASK =
  * the centre line moves off the selected row — the column keeps working and reports
  * the wrong value. The mask is what fades the unselected rows onto the drum.
  *
+ * The scrollbar is hidden here too, whatever `ui.hideScrollbars` says: a picker drum
+ * never shows one (a native iOS picker doesn't, macOS overlay scrollbars don't at
+ * rest), and the app-wide reset is off in a browser tab under the `"app"` scope, which
+ * left Chrome's grey bar beside every column. `scrollbar-width` is the inline half; a
+ * pseudo-element has no inline style, so `::-webkit-scrollbar` is the rule in
+ * styles/wheel-column.css (the same split as ScrollView). Hiding the bar leaves the box
+ * a scroller, so wheel, touch and keyboard scrolling are untouched.
+ *
  * The fieldset's UA margin/padding/border reset is a default, not a lock: it lives in
  * styles/wheel-column.css, and a consumer who wants a bordered column may say so.
  */
@@ -53,6 +61,7 @@ const WHEEL_FIELDSET_LOCKED_STYLE: CSSProperties = Object.freeze({
   overflowY: "auto",
   overflowX: "hidden",
   overscrollBehaviorY: "contain",
+  scrollbarWidth: "none",
   ...TOUCH_PASSTHROUGH_STYLE,
   height: WHEEL_HEIGHT,
   maskImage: WHEEL_MASK,

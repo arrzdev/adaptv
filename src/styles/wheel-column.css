@@ -7,8 +7,8 @@
  * `wheel-column`; the list and the rows have their own `wheel-column-list` /
  * `wheel-column-item` scopes, so `[data-adaptv="wheel-column"]` names the column alone.
  *
- * The scroll model, the touch pass-through, the column height, the drum mask and the
- * row's full-slot size are NOT here: they are locks, written inline by the component
+ * The scroll model, the touch pass-through, the column height, the drum mask, the hidden
+ * scrollbar's `scrollbar-width` and the row's full-slot size are NOT here: they are locks, written inline by the component
  * (§2.0), because a rule in a layer would lose to any unlayered consumer class.
  *
  * ## The keyboard focus indicator
@@ -41,6 +41,14 @@
     border-style: solid;
     padding: calc(var(--spacing, 0.25rem) * 0);
     border-width: 0;
+  }
+
+  /* the scrollbar, WebKit/Blink half: a drum never shows one. `scrollbar-width: none` is
+   * the inline half of the lock (components/wheel-column.tsx); a pseudo-element has no
+   * inline style, so this half is a rule — the engines that predate `scrollbar-width`
+   * (Safari before 18.2, Chrome before 121) read only this one. */
+  :where([data-adaptv="wheel-column"][data-part="root"])::-webkit-scrollbar {
+    display: none;
   }
 
   /* list: the UA list reset (the two-row top/bottom pad is inline, it centres index 0) */

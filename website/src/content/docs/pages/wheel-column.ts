@@ -139,7 +139,7 @@ const [minute, setMinute] = useState(30)
         [
           "Column (`fieldset`)",
           '`[data-adaptv="wheel-column"]`, `className`',
-          "Height, the fade mask, vertical scroll and overscroll.",
+          "Height, the fade mask, vertical scroll, overscroll and the hidden scrollbar.",
         ],
         [
           "Row (`button`)",
@@ -150,7 +150,7 @@ const [minute, setMinute] = useState(30)
     },
     {
       type: "p",
-      text: "Change only colours in `itemClassName`. Keep size and weight equal across rows. Do not add transform classes. The wheel sets a transform on each row while it moves. Inside a [Drawer](/docs/drawer), spinning the wheel never drags the sheet.",
+      text: "Change only colours in `itemClassName`. Keep size and weight equal across rows. Do not add transform classes. The wheel sets a transform on each row while it moves. Inside a [Drawer](/docs/drawer), spinning the wheel never drags the sheet. The column never shows a scrollbar, whatever `ui.hideScrollbars` says; the mouse wheel, touch and keys still scroll it.",
     },
     { type: "h2", text: "Accessibility" },
     {
