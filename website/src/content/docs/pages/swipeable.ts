@@ -193,7 +193,11 @@ export const page: DocPage = {
     { type: "h2", text: "Styling" },
     {
       type: "p",
-      text: "`className` and `style` go on the root. It is `position: relative` and `overflow: hidden`. Its radius clips the action panels, so buttons need no radius. Panels are off screen while the row is closed, so the content may be transparent. Past the panel width, the gap takes the colour of the nearest button. Content has `user-select: none`.",
+      text: "`className` and `style` go on the root. It is `position: relative` and `overflow: hidden`, and it clips the sliding content and the action panels to its own rounded box, so buttons need no radius. Panels are off screen while the row is closed, so the content may be transparent. Past the panel width, the gap takes the colour of the nearest button. Content has `user-select: none`.",
+    },
+    {
+      type: "p",
+      text: "The row's shape belongs on the root: put `rounded-*`, and a border or background if the row has one, in `className`, and keep the content square. If the row is a rounded card inside `Swipeable.Content` and the root has no radius, the root clips to the card's radius instead. While the row is open, the card's corners on the side of the action are square, so card and action meet at a straight seam, as in an iOS inset list; they come back when the row closes. The card must be the only element in `Swipeable.Content`. A border on the card slides with it, so put a border on the root to keep it around the whole row.",
     },
     {
       type: "table",

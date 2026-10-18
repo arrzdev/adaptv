@@ -59,6 +59,12 @@ API.
   `scrollToTopSelectors` are added to adaptv's.
 - **`Link` takes `resetScroll`.** `<Link resetScroll={false}>` keeps the page where it is scrolled;
   it was not a `Link` prop, so the opt-out above was a type error on adaptv's `Link`.
+- **A `Swipeable` row that is a rounded card reveals its action inside the card.** With the radius
+  on the card inside `Swipeable.Content`, the card slid with its own rounded corners, so the action
+  showed as a separate pill beside it, and on a square root the action kept square corners outside
+  the card. The row now clips to the card's radius when the root has none, and squares the card's
+  corners on the side the action shows from while the row is open, so card and action meet at a
+  straight seam.
 
 ### Security
 

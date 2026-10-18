@@ -77,18 +77,80 @@ const VELOCITY_WINDOW_MS = 60
  */
 const SETTLE_EPSILON_PX = 0.5
 
-/** Mirror the root's border-radius onto clip-path — overflow alone lets a
- *  transformed child bleed past rounded corners on iOS WebKit. */
-function syncRootClip(root: HTMLElement) {
-  const s = getComputedStyle(root)
-  const tl = s.borderTopLeftRadius
-  const tr = s.borderTopRightRadius
-  const br = s.borderBottomRightRadius
-  const bl = s.borderBottomLeftRadius
-  const flat = tl === "0px" && tr === "0px" && br === "0px" && bl === "0px"
-  root.style.clipPath = flat
-    ? ""
-    : `inset(0 round ${tl} ${tr} ${br} ${bl})`
+/** An element's four corner radii, `null` when all four are square. */
+function readRadii(el: HTMLElement): string[] | null {
+  const s = getComputedStyle(el)
+  const radii = [
+    s.borderTopLeftRadius,
+    s.borderTopRightRadius,
+    s.borderBottomRightRadius,
+    s.borderBottomLeftRadius,
+  ]
+  return radii.every((r) => r === "" || r === "0px") ? null : radii
+}
+
+/**
+ * The consumer's row surface: the one element `Swipeable.Content` renders,
+ * the card a consumer rounds when the row "is a rounded card". `null` when the
+ * content is several nodes, which is a row with no single surface to read.
+ */
+function rowSurface(content: HTMLElement | null): HTMLElement | null {
+  if (!content || content.childElementCount !== 1) return null
+  const el = content.firstElementChild
+  return el instanceof HTMLElement ? el : null
+}
+
+/**
+ * Clip the row to its own rounded box. The shape is the root's border-radius,
+ * or — when the root is square — the radius of the row surface inside the
+ * content, so a consumer who rounds the card alone gets a row whose actions
+ * and sliding content are clipped to the card's corners.
+ *
+ * clip-path, not overflow alone: overflow lets a transformed child bleed past
+ * rounded corners on iOS WebKit, and it can only follow the root's own radius.
+ */
+function syncRootClip(root: HTMLElement, content: HTMLElement | null) {
+  const surface = rowSurface(content)
+  const radii = readRadii(root) ?? (surface ? readRadii(surface) : null)
+  root.style.clipPath = radii ? `inset(0 round ${radii.join(" ")})` : ""
+}
+
+/** The corners on each side of the content, as inline-style longhands. */
+const SIDE_CORNERS = {
+  left: ["borderTopLeftRadius", "borderBottomLeftRadius"],
+  right: ["borderTopRightRadius", "borderBottomRightRadius"],
+} as const
+
+/**
+ * Square the row surface's corners on the side the actions are revealed from,
+ * while the row is off home; give them back when it is home.
+ *
+ * A rounded card that slides keeps its own rounded trailing corners, so the
+ * revealed action reads as a separate pill beside it, with the action's colour
+ * showing through the notches. iOS joins the two at a straight seam inside one
+ * rounded shape: the row's outer corners belong to the root clip, never to the
+ * sliding layer. Only the seam side is squared; the leading corners slide out
+ * under the root clip, which already rounds them. Inline, because the radius is
+ * the consumer's own class and a layered rule cannot outrank it; the inline
+ * values found there are kept and put back.
+ */
+function squareSeam(
+  surface: HTMLElement | null,
+  seam: Side | false,
+  saved: { el: HTMLElement; side: Side; values: string[] } | null,
+) {
+  if (saved && (saved.el !== surface || saved.side !== seam)) {
+    const { el, side, values } = saved
+    SIDE_CORNERS[side].forEach((key, i) => {
+      el.style[key] = values[i] ?? ""
+    })
+    saved = null
+  }
+  if (!surface || seam === false || saved) return saved
+  const keys = SIDE_CORNERS[seam]
+  const values = keys.map((key) => surface.style[key])
+  for (const key of keys) surface.style[key] = "0px"
+  return { el: surface, side: seam, values }
 }
 
 function isOpaque(color: string) {
@@ -416,6 +478,13 @@ type SwipeableRootProps = Partial<SwipeableConfig> & {
  * whatever sits behind the root (its own `bg-*`, or the page) shows through.
  * Action backgrounds are read once to colour the overshoot fill.
  *
+ * **A rounded card as the row** — when the root is square and the radius is on
+ * the one element inside `Swipeable.Content`, the root clips to that radius
+ * instead, and while the row is off home the card's corners on the action side
+ * are squared inline (restored at home), so card and action meet at a straight
+ * seam inside one rounded shape. A border on the card slides with it; put the
+ * border on the root to keep it around the whole row.
+ *
  * **Imperative handle** (`ref`) — `ref.current.open` (live side, readonly) and
  * `ref.current.close()`.
  */
@@ -491,6 +560,8 @@ const SwipeableRoot = forwardRef<SwipeableHandle, SwipeableRootProps>(
 
     //---- engine state (refs — never re-renders during a gesture) ------------
     const offsetRef = useRef(0)
+    /** The row surface's seam corners squared by `squareSeam`, to restore. */
+    const seamRef = useRef<ReturnType<typeof squareSeam>>(null)
     const velRef = useRef(0)
     const rafRef = useRef<number | null>(null)
     const openRef = useRef<OpenSide>(false)
@@ -582,6 +653,13 @@ const SwipeableRoot = forwardRef<SwipeableHandle, SwipeableRootProps>(
         if (content) {
           content.style.transform = settled ? "" : `translateX(${x}px)`
         }
+        //the side the actions show from: content moved left reveals the
+        //right tray, so the surface's right corners are the seam
+        seamRef.current = squareSeam(
+          rowSurface(content),
+          settled ? false : x < 0 ? "right" : "left",
+          seamRef.current,
+        )
 
         //panels slide in until their natural width, then park (the action button
         //stays pinned to the edge). a panel-width fill covers any rubber-band
@@ -825,16 +903,23 @@ const SwipeableRoot = forwardRef<SwipeableHandle, SwipeableRootProps>(
       return () => observer.disconnect()
     }, [measure])
 
-    //mirror border-radius → clip-path (iOS rounded-corner clip for the transform)
+    //mirror the row's border-radius → clip-path (the root's, else the row
+    //surface's). Re-read when either box resizes and on every render, since a
+    //re-render is how a consumer's radius class changes. Not while the seam is
+    //squared: the surface's radius then reads the engine's 0px, not the card's
+    const syncClip = useCallback(() => {
+      const root = rootRef.current
+      if (root && !seamRef.current) syncRootClip(root, contentRef.current)
+    }, [])
+    useLayoutEffect(syncClip)
     useLayoutEffect(() => {
       const root = rootRef.current
       if (!root) return
-      const sync = () => syncRootClip(root)
-      sync()
-      const observer = new ResizeObserver(sync)
+      const observer = new ResizeObserver(syncClip)
       observer.observe(root)
+      if (contentRef.current) observer.observe(contentRef.current)
       return () => observer.disconnect()
-    }, [])
+    }, [syncClip])
 
     /* ---- controlled open ------------------------------------------------- */
 
@@ -922,16 +1007,22 @@ const SwipeableRoot = forwardRef<SwipeableHandle, SwipeableRootProps>(
 
     /* ---- gesture core ---------------------------------------------------- */
 
-    const beginDrag = useCallback((clientX: number, clientY: number) => {
-      velRef.current = 0
-      lockRef.current = null
-      samplesRef.current = [{ x: clientX, t: performance.now() }]
-      downRef.current = {
-        x: clientX,
-        y: clientY,
-        start: offsetRef.current,
-      }
-    }, [])
+    const beginDrag = useCallback(
+      (clientX: number, clientY: number) => {
+        //a radius changed by a class with no re-render or resize (a theme
+        //switch, a media query) is picked up before the row moves
+        syncClip()
+        velRef.current = 0
+        lockRef.current = null
+        samplesRef.current = [{ x: clientX, t: performance.now() }]
+        downRef.current = {
+          x: clientX,
+          y: clientY,
+          start: offsetRef.current,
+        }
+      },
+      [syncClip],
+    )
 
     /** @returns true once locked horizontal (callers must preventDefault). */
     const dragMove = useCallback(
