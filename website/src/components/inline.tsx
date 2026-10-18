@@ -5,7 +5,8 @@ const INLINE = /(`[^`]+`|\*\*[^*]+\*\*|\[[^\]]+\]\([^)]+\))/g
 
 /**
  * The three inline marks content may use: `code`, **bold**, [label](href). Bold may
- * hold the other two: **`render` is static** is bold code.
+ * hold the other two: **`render` is static** is bold code. A label may hold code:
+ * [`useLocale`](/docs/hooks-system) is linked code.
  */
 export function Inline({ text }: { text: string }): ReactNode {
   return text.split(INLINE).map((part, index) => {
@@ -36,11 +37,11 @@ export function Inline({ text }: { text: string }): ReactNode {
         "font-medium text-foreground underline decoration-border-strong underline-offset-4 hover:decoration-brand"
       return href.startsWith("/") ? (
         <Link key={key} to={href} className={className}>
-          {label}
+          <Inline text={label} />
         </Link>
       ) : (
         <ExternalLink key={key} href={href} className={className}>
-          {label}
+          <Inline text={label} />
         </ExternalLink>
       )
     }
