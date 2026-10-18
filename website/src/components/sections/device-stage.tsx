@@ -1,14 +1,15 @@
 import { View } from "adaptv/components"
+import { SitePhone } from "@/components/showcase/site-phone"
 import { TallyDesktop } from "@/components/showcase/tally-desktop"
-import { TallyPhone } from "@/components/showcase/tally-phone"
 
 const LABEL =
-  "Tally, a budget app, in a desktop browser window and on a phone: the same app with a sidebar on desktop and a tab bar on the phone."
+  "Tally, a budget app, in a desktop browser window, beside a phone playing a recording of this site's own components."
 
 /**
  * The hero's picture: Tally, one budget app drawn in HTML and CSS, in a desktop browser
- * window with the phone overlapping its bottom-right corner. A still picture: one label for
- * assistive tech, nothing to focus, no pointer events.
+ * window, and a phone playing a muted loop of this site's own components (`SitePhone`) at
+ * its right edge. One label for assistive tech, nothing to focus, no pointer events; under
+ * reduced motion the phone shows the recording's first frame.
  *
  * Both views are drawn in units of their container's width (`.mock` in main.css), and every
  * box's height comes from an aspect ratio, so nothing is measured, nothing is scaled and
@@ -40,7 +41,7 @@ export function DeviceStage() {
           <TallyDesktop />
         </div>
         {/* level with the window: centred on its height. On a phone it covers the window's right edge; from 768 px it stands past it, clear of the Amount column */}
-        <TallyPhone className="absolute top-1/2 right-[3%] w-[24%] -translate-y-1/2 md:right-0 md:w-[var(--phone)]" />
+        <SitePhone className="absolute top-1/2 right-[3%] w-[24%] -translate-y-1/2 md:right-0 md:w-[var(--phone)]" />
       </View>
     </div>
   )

@@ -1,13 +1,14 @@
 import { expect, type Locator, type Page, test } from "@playwright/test"
 
 //The landing after landing-v4 (doc `landing-v4`): the hero shows "Tally", one budget app drawn
-//in HTML/CSS as a desktop browser window and as a phone, then come the platform marks strip,
+//in HTML/CSS in a desktop browser window, beside a phone playing a muted loop of this site's own
+//components, then come the platform marks strip,
 //the components grid, "The hard parts are already decided", "Four ways to ship one app" and
 //the closing quick start. Sections are centred heads over large flat cards.
 //Layout is read from the rendered boxes, not from class names.
 
 const SHOWCASE_LABEL =
-  "Tally, a budget app, in a desktop browser window and on a phone: the same app with a sidebar on desktop and a tab bar on the phone."
+  "Tally, a budget app, in a desktop browser window, beside a phone playing a recording of this site's own components."
 
 async function open(page: Page, width: number) {
   await page.setViewportSize({ width, height: 900 })
@@ -49,11 +50,10 @@ test.describe("Tally showcase", () => {
       await expect(hero.getByRole("img", { name: SHOWCASE_LABEL })).toHaveCount(1)
 
       const desktop = stage.getByTestId("tally-desktop")
-      const phone = stage.getByTestId("tally-phone")
+      const phone = stage.getByTestId("site-phone")
       const parts = {
         sidebar: stage.getByTestId("tally-sidebar"),
-        tabbar: stage.getByTestId("tally-tabbar"),
-        "large title": stage.getByTestId("tally-large-title"),
+        "phone screen": phone.locator("video"),
       }
       const heroBox = await box(hero)
       for (const [name, part] of Object.entries(parts)) {
@@ -66,7 +66,6 @@ test.describe("Tally showcase", () => {
         //the hero clips its overflow; a part below its bottom edge is cut off
         expect.soft(b.bottom, `${name} is not cut by the hero`).toBeLessThanOrEqual(heroBox.bottom)
       }
-      await expect(parts["large title"]).toHaveText("October")
 
       const d = await box(desktop)
       const p = await box(phone)
@@ -103,19 +102,13 @@ test.describe("Tally showcase", () => {
         expect.soft(p.width / s.width, "phone about a quarter of the width").toBeGreaterThanOrEqual(0.22)
         expect.soft(p.width / s.width, "phone about a quarter of the width").toBeLessThanOrEqual(0.3)
       }
-      //the phone screen is not empty: its large title is drawn inside the phone, at its scale
-      //the text's own box: the span is stretched to the screen's width
-      const title = await parts["large title"].evaluate((el) => {
-        const range = document.createRange()
-        range.selectNodeContents(el)
-        return range.getBoundingClientRect()
-      })
-      expect.soft(title.left, "title inside the phone").toBeGreaterThanOrEqual(p.left)
-      expect.soft(title.right, "title inside the phone").toBeLessThanOrEqual(p.right)
-      expect.soft(title.top, "title inside the phone").toBeGreaterThanOrEqual(p.top)
-      expect.soft(title.bottom, "title inside the phone").toBeLessThanOrEqual(p.bottom)
-      expect.soft(title.width / p.width, "title at the phone's scale").toBeGreaterThan(0.2)
-      expect.soft(title.width / p.width, "title at the phone's scale").toBeLessThan(0.6)
+      //the phone screen is the recording, inside the frame, under the status bar
+      const screen = await box(parts["phone screen"])
+      expect.soft(screen.left, "video inside the phone").toBeGreaterThanOrEqual(p.left)
+      expect.soft(screen.right, "video inside the phone").toBeLessThanOrEqual(p.right)
+      expect.soft(screen.top, "video under the status bar").toBeGreaterThan(p.top + p.height * 0.05)
+      expect.soft(screen.bottom, "video inside the phone").toBeLessThanOrEqual(p.bottom)
+      expect.soft(screen.width / p.width, "video fills the screen's width").toBeGreaterThan(0.9)
 
       const scroll = await page.evaluate(() => ({
         scrollWidth: document.documentElement.scrollWidth,
@@ -135,7 +128,7 @@ test.describe("Tally showcase", () => {
       const stage = showcase(page)
       await expect(stage).toBeVisible()
       const desktop = stage.getByTestId("tally-desktop")
-      const p = await box(stage.getByTestId("tally-phone"))
+      const p = await box(stage.getByTestId("site-phone"))
       const amounts = desktop.locator("table tr > :nth-child(4)")
       const income = desktop.locator("table tr", { hasText: "+$3,150.00" })
       //the header and the five transactions
@@ -159,11 +152,15 @@ test.describe("Tally showcase", () => {
     })
   }
 
-  test("is drawn in HTML and CSS: no image, canvas or video inside", async ({ page }) => {
+  test("the window is drawn in HTML and CSS; the only media is the phone's recording", async ({
+    page,
+  }) => {
     await open(page, 1440)
     const stage = showcase(page)
     await expect(stage).toBeVisible()
-    await expect(stage.locator("img, picture, canvas, video, iframe, svg image")).toHaveCount(0)
+    await expect(stage.locator("img, picture, canvas, iframe, svg image")).toHaveCount(0)
+    await expect(stage.locator("video")).toHaveCount(1)
+    await expect(stage.getByTestId("site-phone").locator("video")).toHaveCount(1)
     const backgrounds = await stage.evaluate((root) =>
       [root, ...root.querySelectorAll("*")]
         .map((el) => getComputedStyle(el).backgroundImage)
@@ -196,15 +193,13 @@ test.describe("Tally showcase", () => {
     })
   }
 
-  test("one data set feeds both views", async ({ page }) => {
+  test("the window draws Tally from its one data set", async ({ page }) => {
     await open(page, 1440)
     const stage = showcase(page)
     const desktop = (await stage.getByTestId("tally-desktop").textContent()) ?? ""
-    const phone = (await stage.getByTestId("tally-phone").textContent()) ?? ""
 
     for (const text of ["October", "$716", "$1,284", "$2,000"]) {
       expect.soft(desktop, `desktop shows ${text}`).toContain(text)
-      expect.soft(phone, `phone shows ${text}`).toContain(text)
     }
     for (const text of [
       "Tally",
@@ -228,22 +223,6 @@ test.describe("Tally showcase", () => {
       "+$3,150.00",
     ]) {
       expect.soft(desktop, `desktop shows ${text}`).toContain(text)
-    }
-    for (const text of [
-      "9:41",
-      "$1,284 of $2,000 spent",
-      "Groceries",
-      "Eating out",
-      "Transport",
-      "Whole Foods",
-      "Uber",
-      "Salary",
-      "Overview",
-      "Transactions",
-      "Budgets",
-      "Settings",
-    ]) {
-      expect.soft(phone, `phone shows ${text}`).toContain(text)
     }
     //14 days, Oct 1–14, as divs; the chart is not a library
     await expect(stage.getByTestId("tally-chart").getByTestId("tally-bar")).toHaveCount(14)
@@ -544,7 +523,9 @@ const HARD_CARDS = [
 ] as const
 
 test.describe("The hard parts are already decided", () => {
-  test("lede, five cards in order, each a title, a body and one diagram", async ({ page }) => {
+  test("lede, five cards in order, each a title, a body and one recording or diagram", async ({
+    page,
+  }) => {
     await open(page, 1440)
     const hard = section(page, HARD_TITLE)
     await expect(hard).toHaveCount(1)
@@ -555,10 +536,12 @@ test.describe("The hard parts are already decided", () => {
     for (const [i, [, body]] of HARD_CARDS.entries()) {
       const card = list.nth(i)
       await expect.soft(card, `card ${i}`).toContainText(body)
-      //the diagram is decoration: the card's text carries the meaning
-      const svg = card.locator("svg[viewBox]")
-      await expect.soft(svg.first(), `card ${i}: diagram hidden from assistive tech`).toHaveAttribute("aria-hidden", "true")
-      expect.soft(await card.locator("img, picture, canvas, video, iframe").count(), `card ${i}: no raster`).toBe(0)
+      expect.soft(await card.locator("img, picture, canvas, iframe").count(), `card ${i}: no image`).toBe(0)
+      //the visual is decoration: the card's text carries the meaning
+      const visual = card.locator(i < 2 ? "[aria-hidden]:has(> video)" : "svg[viewBox]")
+      await expect.soft(visual, `card ${i}: one ${i < 2 ? "recording" : "diagram"}`).toHaveCount(1)
+      await expect.soft(visual.first(), `card ${i}: hidden from assistive tech`).toHaveAttribute("aria-hidden", "true")
+      if (i < 2) await expect.soft(card.locator("svg[viewBox]"), `card ${i}: no diagram`).toHaveCount(0)
     }
     await expect(list.first().getByRole("link", { name: /See the targets/ })).toHaveAttribute(
       "href",
@@ -591,6 +574,101 @@ test.describe("The hard parts are already decided", () => {
       for (const b of boxes) expect.soft(b.left + b.width, "inside the viewport").toBeLessThanOrEqual(width)
     })
   }
+})
+
+//The screen recordings (hero phone, targets and gestures cards): muted loops that ship without
+//autoplay and load nothing until they play, which is only on screen and never under reduced
+//motion. Each has a poster, a still of the clip, so reduced motion still shows a picture.
+const RECORDINGS = ["site-phone", "targets-fanout", "gestures-sheet"] as const
+
+function recording(page: Page, name: string) {
+  return page.locator(`video[data-loop-video="${name}"]`)
+}
+
+function videoState(video: Locator) {
+  return video.evaluate((el: HTMLVideoElement) => ({
+    paused: el.paused,
+    muted: el.muted,
+    loop: el.loop,
+    autoplay: el.autoplay,
+    playsInline: el.playsInline,
+    controls: el.controls,
+    preload: el.preload,
+    poster: el.poster,
+    currentTime: el.currentTime,
+    sources: [...el.querySelectorAll("source")].map((s) => s.type),
+  }))
+}
+
+test.describe("screen recordings", () => {
+  test("each is a muted, inline, looping clip with a poster, a webm and an mp4", async ({ page }) => {
+    await open(page, 1440)
+    for (const name of RECORDINGS) {
+      const video = recording(page, name)
+      await expect(video, name).toHaveCount(1)
+      const v = await videoState(video)
+      expect.soft(v, name).toMatchObject({
+        muted: true,
+        loop: true,
+        autoplay: false,
+        playsInline: true,
+        controls: false,
+        preload: "none",
+        sources: ["video/webm", "video/mp4"],
+      })
+      expect.soft(v.poster, `${name} poster`).toMatch(new RegExp(`/media/${name}\\.webp$`))
+      const poster = await page.request.get(`/media/${name}.webp`)
+      expect.soft(poster.status(), `${name} poster is served`).toBe(200)
+    }
+  })
+
+  test("the hero's plays on load; a card's plays only once it is on screen", async ({ page }) => {
+    const fetched: string[] = []
+    page.on("request", (r) => {
+      if (/\/media\/.+\.(webm|mp4)$/.test(r.url())) fetched.push(new URL(r.url()).pathname)
+    })
+    await open(page, 1440)
+    const hero = recording(page, "site-phone")
+    await expect.poll(async () => (await videoState(hero)).currentTime, "hero plays").toBeGreaterThan(0.2)
+    const gestures = recording(page, "gestures-sheet")
+    expect((await videoState(gestures)).paused, "off-screen card is paused").toBe(true)
+    expect(fetched.filter((u) => u.includes("gestures-sheet")), "off-screen card loads nothing").toEqual([])
+    await gestures.scrollIntoViewIfNeeded()
+    await expect.poll(async () => (await videoState(gestures)).currentTime, "card plays on screen").toBeGreaterThan(0.2)
+    //scrolled away again: it stops
+    await hero.scrollIntoViewIfNeeded()
+    await expect.poll(async () => (await videoState(gestures)).paused, "card pauses off screen").toBe(true)
+  })
+
+  test("under reduced motion none plays and none loads: the poster stays", async ({ page }) => {
+    const fetched: string[] = []
+    page.on("request", (r) => {
+      if (/\/media\/.+\.(webm|mp4)$/.test(r.url())) fetched.push(new URL(r.url()).pathname)
+    })
+    await page.emulateMedia({ reducedMotion: "reduce" })
+    await open(page, 1440)
+    for (const name of RECORDINGS) {
+      const video = recording(page, name)
+      await video.scrollIntoViewIfNeeded()
+      //give a play() the time it would take
+      await page.waitForTimeout(500)
+      const v = await videoState(video)
+      expect.soft(v.paused, `${name} paused`).toBe(true)
+      expect.soft(v.currentTime, `${name} at its first frame`).toBe(0)
+    }
+    expect(fetched, "no clip fetched").toEqual([])
+  })
+
+  test("the clips weigh under 1 MB together, every format counted", async ({ page }) => {
+    let total = 0
+    for (const name of RECORDINGS)
+      for (const ext of ["webm", "mp4", "webp"]) {
+        const res = await page.request.get(`/media/${name}.${ext}`)
+        expect.soft(res.status(), `${name}.${ext}`).toBe(200)
+        total += (await res.body()).length
+      }
+    expect(total).toBeLessThan(1_000_000)
+  })
 })
 
 //landing-v4 §2.5, the rows from docs/research/landscape.md §1 (each one sourced there)

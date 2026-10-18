@@ -2,11 +2,10 @@ import { Link, View } from "adaptv/components"
 import { Card } from "@/components/card"
 import {
   BuildGuardDiagram,
-  GesturesDiagram,
   KeyboardDiagram,
   SafeAreasDiagram,
-  TargetsDiagram,
 } from "@/components/diagram/diagrams"
+import { LoopVideo } from "@/components/loop-video"
 import { Section } from "@/components/section"
 
 /*
@@ -17,6 +16,9 @@ import { Section } from "@/components/section"
  * - keyboard: docs/design/behaviors.md §4, src/hooks/use-freeze-viewport.ts
  * - safe areas: docs/VISION.md §1–2, src/shell/, src/components/scroll-view.tsx
  * - build guard: docs/design/server-boundary.md
+ * The targets and gestures cards show short muted loops (`public/media`); the gestures one is
+ * a recording of the real Drawer on a phone-sized page. The other three stay diagrams until
+ * a device capture exists (the keyboard needs a real on-screen keyboard).
  */
 export function HardParts() {
   return (
@@ -27,7 +29,11 @@ export function HardParts() {
       <View className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Card
           className="md:col-span-2"
-          visual={<TargetsDiagram />}
+          visual={
+            <div className="aspect-[1056/600] w-full max-w-[640px] overflow-hidden rounded-2xl">
+              <LoopVideo name="targets-fanout" />
+            </div>
+          }
           title="One React app on every screen"
           body="The same code deploys to the web, installs from the browser, and builds for iOS and Android."
           link={
@@ -42,7 +48,11 @@ export function HardParts() {
         />
         <Card
           small
-          visual={<GesturesDiagram />}
+          visual={
+            <div className="aspect-[390/420] w-full max-w-[214px] overflow-hidden rounded-2xl border border-border">
+              <LoopVideo name="gestures-sheet" />
+            </div>
+          }
           title="One gesture at a time"
           body="One controller decides who owns each touch: the sheet, the back swipe or pull-to-refresh."
         />
