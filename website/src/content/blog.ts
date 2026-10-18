@@ -17,6 +17,100 @@ export type Post = {
 
 export const POSTS: Post[] = [
   {
+    slug: "ionic-alternative-for-react",
+    title: "The closest Ionic alternative for React is adaptv, if you are web first",
+    date: "2026-10-18",
+    kind: "Field note",
+    author: "arrz.dev",
+    summary:
+      "The closest Ionic alternative for React is a framework that also runs your web code in a WebView, written for React only. adaptv is that, in pre-alpha. A sourced comparison table.",
+    seoTitle: "Ionic alternative for React: adaptv compared",
+    seoDescription:
+      "What is the closest Ionic alternative for React? adaptv runs one React app on web, as a PWA and in a native shell. A sourced table, and what is not ready.",
+    blocks: [
+      {
+        type: "note",
+        tone: "warn",
+        text: "adaptv is pre-alpha and not on npm yet. You run it from a checkout of the repository. This page describes what the `main` branch does today.",
+      },
+      {
+        type: "p",
+        text: "The closest Ionic alternative for React is a framework that, like Ionic, runs your web code inside a WebView on native, but is built for React only. adaptv is that. You write React and CSS, the same code ships as a website, an installed PWA and an iOS or Android app, and the framework decides scroll, safe areas, keyboard and gestures for you. It is pre-alpha, so try it before you bet on it.",
+      },
+      { type: "h2", text: "adaptv and Ionic side by side" },
+      {
+        type: "table",
+        head: ["", "adaptv", "Ionic", "Sources"],
+        rows: [
+          [
+            "Frameworks",
+            "React only",
+            "Angular, React or Vue",
+            "[adaptv README](https://github.com/arrzdev/adaptv#readme), [Ionic README](https://raw.githubusercontent.com/ionic-team/ionic-framework/main/README.md)",
+          ],
+          [
+            "Native shell",
+            "Capacitor, hidden behind the CLI",
+            "Capacitor",
+            "[Native builds](/docs/native-builds), [Capacitor docs](https://capacitorjs.com/docs)",
+          ],
+          [
+            "UI",
+            "Primitives that carry the platform differences",
+            "A component set whose styles adapt to iOS or Material mode, overridable",
+            "[Components](/docs/view), [Ionic platform styles](https://ionicframework.com/docs/theming/platform-styles)",
+          ],
+          [
+            "Scroll, keyboard, safe areas",
+            "Decided by the framework",
+            "Not compared by us",
+            "[The frame](/docs/the-frame), [Keyboard](/docs/keyboard), [Safe areas](/docs/safe-areas)",
+          ],
+          [
+            "Over-the-air updates",
+            "Self-hosted, signed channel",
+            "Appflow Live Updates, for web code only",
+            "[OTA updates](/docs/ota-updates), [Appflow](https://ionic.io/docs/appflow/deploy/intro)",
+          ],
+          [
+            "Web target",
+            "Website and installed PWA from the same code",
+            "A web app that Capacitor wraps",
+            "[The six targets](/docs/six-targets), [Capacitor docs](https://capacitorjs.com/docs)",
+          ],
+        ],
+      },
+      {
+        type: "p",
+        text: "Both are WebView frameworks, so both share the same ceiling: the app is a web page, not native views. If you need native views or heavy native code, neither is the right tool.",
+      },
+      { type: "h2", text: "When Ionic is the better pick" },
+      {
+        type: "ul",
+        items: [
+          "You use Angular or Vue. adaptv is React only.",
+          "You need a finished component kit today. adaptv has primitives, not a themed kit.",
+          "You need a published, versioned package. Ionic is released; adaptv is not on npm.",
+        ],
+      },
+      { type: "h2", text: "What is not ready" },
+      {
+        type: "ul",
+        items: [
+          "adaptv is not on npm. An app links a local checkout.",
+          "iOS builds need macOS, Xcode and CocoaPods, and `adaptv build ios` makes an unsigned `.ipa` ([Native builds](/docs/native-builds)).",
+          "adaptv has no server side. Server functions are a build failure on every target.",
+          "We did not compare Ionic's component-level keyboard and gesture handling line by line, so we make no claim that adaptv does it better.",
+        ],
+      },
+      { type: "h2", text: "Try it" },
+      {
+        type: "p",
+        text: "Follow [Quick start](/docs/quick-start) to run the playground in a browser or the iOS Simulator. For the longer version, read [One React codebase for web and iOS](/blog/one-react-codebase-web-and-ios). If this is your problem, [star adaptv on GitHub](https://github.com/arrzdev/adaptv) to follow it to the first release.",
+      },
+    ],
+  },
+  {
     slug: "one-react-codebase-web-and-ios",
     title: "One React codebase for web and iOS: what adaptv does today",
     date: "2026-10-15",
