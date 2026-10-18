@@ -1,7 +1,7 @@
 import { createFileRoute, notFound } from "adaptv/router"
 import { DocsLayout } from "@/components/docs-layout"
 import { ALL_DOCS } from "@/content/docs"
-import { socialHead } from "@/content/site"
+import { articleJsonLd, socialHead } from "@/content/site"
 
 export const Route = createFileRoute("/docs/$slug")({
   loader: ({ params }) => {
@@ -21,6 +21,12 @@ export const Route = createFileRoute("/docs/$slug")({
           tabTitle: loaderData.seoTitle ?? `${loaderData.title} — adaptv docs`,
           description: loaderData.description,
           path: `/docs/${loaderData.slug}`,
+          jsonLd: articleJsonLd({
+            title: loaderData.title,
+            description: loaderData.description,
+            path: `/docs/${loaderData.slug}`,
+            section: { name: "Docs", path: "/docs" },
+          }),
         })
       : { meta: [{ title: "Docs — adaptv docs" }] },
   component: DocRoute,
