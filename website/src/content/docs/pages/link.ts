@@ -76,6 +76,13 @@ export const page: DocPage = {
             "On a plain click, go back instead of pushing a new entry when the previous entry is `to`.",
         },
         {
+          name: "resetScroll",
+          type: "boolean",
+          default: "true",
+          description:
+            "`false` keeps the page where it is scrolled instead of opening the new page at the top. Suits a link that changes a filter or a tab on the same page.",
+        },
+        {
           name: "className",
           type: "string",
           description: "Lands on the `<a>`.",

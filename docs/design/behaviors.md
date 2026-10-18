@@ -514,6 +514,24 @@ Rule of thumb: `app:` styles apply to **installed** (standalone **or** native); 
   flip the emulation, pick Dark, flip again, reload — no hydration error. On device: pick System,
   change the OS appearance from Control Center / Quick Settings, and the app follows with no relaunch.
 
+### 14. Scroll on navigation — a new page starts at the top, back restores
+- **Problem:** the document never scrolls in an adaptv app (`styles/shell-layout.css`); a page scrolls
+  inside its `ScrollView`. The route engine resets only `window` on a navigation, so a link to another
+  page left the page scroller where it was and the next page opened mid-way down — always between two
+  pages of one route (`/blog/a` → `/blog/b`), where the scroller is the same element. Back opened the
+  previous page at the top, because scroll restoration was off.
+- **How:** `src/shell/create-adaptv-router.ts` defaults `scrollToTopSelectors` to
+  `PAGE_SCROLLER_SELECTOR` — the first vertical `ScrollView` in the screen frame, so a scroller nested in
+  the page (a sticky side nav) keeps its place — and turns `scrollRestoration` on in the browser. It is a
+  function that answers `false` on the server, because with `true` the server renders the engine's
+  restore `<script>` beside the page root inside the screen frame, which defeats the frame's only-child
+  stretch (`styles/screen.css`) until it runs, and for good without JavaScript. A hash link scrolls to
+  its anchor (the engine's own behaviour). Opt-outs: `resetScroll={false}` on a `Link`;
+  `router.scrollToTopSelectors` / `router.scrollRestoration` in `adaptv.config.ts`.
+- **Test:** `src/shell/scroll-reset.test.tsx` (unit, the real shell); `playground/e2e/scroll-reset.spec.ts`
+  on chromium: scroll `/lab`, open `/lab/text` (top), back (position restored), forward (restored), and
+  the server HTML carries no restore script.
+
 ---
 
 ## Status of this doc's items

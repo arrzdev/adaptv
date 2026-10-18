@@ -41,6 +41,13 @@ export interface LinkProps
    * the back target (deep-link / hard reload). @default false
    */
   smartBack?: boolean
+  /**
+   * Whether the page this link opens starts at the top. `false` keeps the page
+   * scroller where it is, for a link that changes a filter or a tab on the same page.
+   * The app-wide default is `router.scrollToTopSelectors` in `adaptv.config.ts`.
+   * @default true
+   */
+  resetScroll?: boolean
 }
 
 //The look — left-aligned, gray-950, no underline, a pointer cursor (`not-allowed` when
@@ -107,6 +114,7 @@ export const Link = forwardRef<HTMLAnchorElement, LinkProps>(function Link(
     children,
     disabled = false,
     smartBack = false,
+    resetScroll,
     "aria-disabled": ariaDisabled,
     style,
     ...rest
@@ -202,6 +210,7 @@ export const Link = forwardRef<HTMLAnchorElement, LinkProps>(function Link(
       to={to}
       params={params}
       search={search}
+      resetScroll={resetScroll}
       draggable={false}
       {...gestureEngineHandlers}
       onClick={handleClick}

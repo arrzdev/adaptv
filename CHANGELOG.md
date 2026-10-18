@@ -46,6 +46,12 @@ API.
 - **Tapping a link while its route is still preloading no longer logs a `TypeError`.** The tap
   navigated mid-preload; the navigation evicted the preloaded route from the cache, and the preload
   then read the evicted entry (`match._nonReactive`). The navigation itself always worked.
+- **A navigation to a new page starts at the top, and back brings back where you were.** A page
+  scrolls in its `ScrollView`, and the router reset only the window, so the next page opened
+  where the last one was scrolled (always between two pages of one route, such as `/blog/a` and
+  `/blog/b`), and back opened at the top. A link with a hash still scrolls to its anchor.
+  `Link` takes `resetScroll={false}` to keep the position, and `router.scrollToTopSelectors` /
+  `router.scrollRestoration` in `adaptv.config.ts` change the default.
 
 ## 0.1.0-alpha.1
 

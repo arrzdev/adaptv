@@ -126,6 +126,11 @@ export const Nav = () => (
       tone: "warn",
       text: "adaptv copies router options into generated source. Only plain values survive: strings, numbers, booleans, arrays, objects, `Infinity` and `NaN`. A function or component is dropped without a warning. So `defaultErrorComponent`, `defaultPendingComponent` and `context` do nothing here. Set `errorComponent` on a route, or eject the router.",
     },
+    { type: "h2", text: "Scroll on navigation" },
+    {
+      type: "p",
+      text: 'The document does not scroll in an adaptv app: a page scrolls in its `ScrollView`. A navigation to a new page scrolls that page to the top, even when the route stays the same (`/blog/a` to `/blog/b`). Back and forward bring back where the page was scrolled. A link with a hash scrolls to its anchor. adaptv resets the first vertical `ScrollView` in the screen, so a scroller nested in the page, such as a side nav, keeps its place. To keep the position on one link, pass `resetScroll={false}` to [Link](/docs/link). To change it for the app, set `scrollToTopSelectors` (CSS selectors, `[]` for none) or `scrollRestoration: false` in the `router` block.',
+    },
     { type: "h2", text: "Not found" },
     {
       type: "p",
