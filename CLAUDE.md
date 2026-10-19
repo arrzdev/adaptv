@@ -5,8 +5,11 @@ points at them and names the traps.
 
 ## What this is
 
-A React framework plus its CLI, published (eventually) as `adaptv`. It is a library: `main`
-deploys nothing. `playground/` is a dev app linked against the checkout, not an example, and nothing
+A React framework plus its CLI, published (eventually) as `adaptv`. It is a library. A merge to
+`main` deploys only the website (`adaptv.tudu.dev`, `website.yml`); the board allowed that site to
+deploy continuously from `main` with no staging. An npm publish (a `v*` tag, `publish.yml`) is a
+production release: it needs the board's OK for that release, asked by the CEO with the list of
+user-visible changes. `playground/` is a dev app linked against the checkout, not an example, and nothing
 in `playground/` or `scripts/` ships.
 
 ## Read first
