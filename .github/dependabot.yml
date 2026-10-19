@@ -1,8 +1,29 @@
 # Actions are pinned by commit SHA (a tag can be moved, and the deploy job holds
 # the Cloudflare token). Dependabot proposes the bumps.
+# Monthly, one grouped PR per ecosystem: Dependabot PRs get no Actions run, so
+# each one needs a local check, and one PR a month is one check.
 version: 2
 updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+  # npm: no version-update PRs (limit 0). The entry is here so security updates
+  # for vulnerable dependencies arrive as one grouped PR instead of one per package.
+  - package-ecosystem: npm
+    directories:
+      - "/"
+      - "/website"
+      - "/playground"
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 0
+    groups:
+      npm-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
