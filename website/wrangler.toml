@@ -17,3 +17,8 @@ name = "adaptv-website"
 # pinned: without it, every deploy would also publish a *.workers.dev address
 workers_dev = false
 routes = [{ pattern = "adaptv.tudu.dev", custom_domain = true }]
+
+# Workers Logs (free tier). Named envs do not inherit observability, so production sets it.
+[env.production.observability]
+enabled = true
+head_sampling_rate = 1
