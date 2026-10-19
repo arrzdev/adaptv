@@ -50,6 +50,13 @@ export type CreateRootRouteConfig = Omit<PwaHeadConfig, "manifestPath"> & {
   htmlAttrs?: Record<string, string>
   defaultThemePreference?: UiThemePreference
   notFoundHomeTo?: string
+  /**
+   * The tab title while the not-found screen shows. That page also drops the app's
+   * description and social tags and says `noindex`: the app's own title and summary on
+   * a URL that names nothing would be indexed as a copy of the home page. Defaults to
+   * `"Page not found"`; the generated root passes `"Page not found · <name>"`.
+   */
+  notFoundTitle?: string
   shellClassName?: string
   /**
    * Override the document shell. A custom document is responsible for its own
@@ -110,14 +117,29 @@ function buildRootRouteHead({
   headScripts,
   headConfig,
   headLinks,
+  notFoundTitle,
 }: {
   themeColorLight: string
   headScripts: RootHeadScript[]
   headConfig: Omit<PwaHeadConfig, "themeColorLight" | "links">
   headLinks: Array<Record<string, string>>
+  /** Set when the root renders the not-found screen: the page gets this title. */
+  notFoundTitle?: string
 }) {
   const head = pwaHead({
     ...headConfig,
+    ...(notFoundTitle === undefined
+      ? {}
+      : {
+          title: notFoundTitle,
+          description: undefined,
+          openGraph: undefined,
+          twitter: undefined,
+          meta: [
+            ...(headConfig.meta ?? []),
+            { name: "robots", content: "noindex" },
+          ],
+        }),
     themeColorLight,
     links: headLinks,
   })
@@ -168,6 +190,7 @@ export function createRootRoute(
     htmlAttrs,
     defaultThemePreference = "system",
     notFoundHomeTo = "/",
+    notFoundTitle = "Page not found",
     shellClassName,
     headScripts = [],
     patches,
@@ -258,12 +281,16 @@ export function createRootRoute(
   }
 
   return createTanStackRootRoute({
-    head: () =>
+    //`_notFound` marks the match that renders the not-found screen. With
+    //`notFoundMode: "root"` that is always this one, for a URL with no route and for a
+    //`notFound()` thrown from a loader alike; the router runs no child head after it.
+    head: ({ match }) =>
       buildRootRouteHead({
         themeColorLight,
         headScripts,
         headConfig: { ...headConfig, manifestPath },
         headLinks,
+        notFoundTitle: match._notFound ? notFoundTitle : undefined,
       }),
     notFoundComponent: NotFound,
     component: RootComponent,

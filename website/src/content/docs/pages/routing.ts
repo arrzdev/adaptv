@@ -129,7 +129,7 @@ export const Nav = () => (
     { type: "h2", text: "Not found" },
     {
       type: "p",
-      text: 'A URL with no route, and a `notFound()` from a loader, both replace the whole app with the not-found screen. Replace the default in the config. The default export is a component that takes `NotFoundScreenProps`. Write a literal `import("…")`: adaptv reads the path from the source. The screen skips every layout, so layout providers are not available in it.',
+      text: 'A URL with no route, and a `notFound()` from a loader, both replace the whole app with the not-found screen. Replace the default in the config. The default export is a component that takes `NotFoundScreenProps`. Write a literal `import("…")`: adaptv reads the path from the source. The screen skips every layout, so layout providers are not available in it. Its tab title is `Page not found · <name>`. It has no description or social tags, and it asks search engines not to index it (`noindex`).',
     },
     {
       type: "code",

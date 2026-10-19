@@ -241,7 +241,7 @@ function physical(pathPrefix: string, directory: string): PhysicalRouteNode`,
       signature:
         "function createRootRoute(config: CreateRootRouteConfig): AdaptvRootRoute",
       description:
-        "The root route for an ejected root file. It does not read `adaptv.config.ts`: you keep the values in step. Required: `title`, `themeColorLight`, `themeColorDark`. Also takes `description`, `lang`, `allowZoom`, `openGraph`, `twitter`, `meta`, `links`, `manifestPath`, `headScripts`, `stylesEntryPoint`, `htmlClassName`, `htmlAttrs`, `shellClassName`, `defaultThemePreference`, `notFoundHomeTo`, `splashScreenInBrowser`, `updateRequiredAfterDays`, `patches`, `ui`, and the screens `splashScreenComponent`, `orientationGuardComponent`, `notFoundComponent`, `offlineComponent`, `updateRequiredComponent` and `RootDocument`.",
+        "The root route for an ejected root file. It does not read `adaptv.config.ts`: you keep the values in step. Required: `title`, `themeColorLight`, `themeColorDark`. Also takes `description`, `lang`, `allowZoom`, `openGraph`, `twitter`, `meta`, `links`, `manifestPath`, `headScripts`, `stylesEntryPoint`, `htmlClassName`, `htmlAttrs`, `shellClassName`, `defaultThemePreference`, `notFoundHomeTo`, `notFoundTitle`, `splashScreenInBrowser`, `updateRequiredAfterDays`, `patches`, `ui`, and the screens `splashScreenComponent`, `orientationGuardComponent`, `notFoundComponent`, `offlineComponent`, `updateRequiredComponent` and `RootDocument`.",
     },
     {
       type: "api",
