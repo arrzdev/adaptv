@@ -504,7 +504,7 @@ test.describe("Swipeable rows under real touch", () => {
 //Swipeable reads each slot's children without rendering the slot, so an app wrapper
 //named after a slot (the playground's AppSwipeable.Content) never rendered: its className
 //was dropped and the lab rows lost their padding. The app's root renders its wrappers.
-test("the app's Swipeable wrappers keep their className", async ({
+test("the app's Swipeable wrappers keep their className @tailwind", async ({
   page,
 }) => {
   await page.goto("/lab/swipeable")
