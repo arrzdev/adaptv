@@ -154,11 +154,11 @@
     "@tanstack/virtual-file-routes": "1.162.0",
     "@vitejs/plugin-react": "5.2.0",
     "commander": "15.0.0",
-    "esbuild": "0.28.0",
+    "esbuild": "0.28.1",
     "ink": "6.4.0",
     "lightningcss": "1.32.0",
     "nitro": "3.0.260610-beta",
-    "postcss": "8.5.19",
+    "postcss": "8.5.23",
     "sharp": "0.35.5",
     "workbox-build": "7.4.1",
     "workbox-core": "7.4.1",
@@ -186,7 +186,7 @@
     "tsdown": "0.22.12",
     "typescript": "5.9.3",
     "vite": "8.0.16",
-    "vitest": "4.1.2"
+    "vitest": "5.0.5"
   },
   "files": [
     "dist",
