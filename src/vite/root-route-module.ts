@@ -1,3 +1,4 @@
+import path from "node:path"
 import type { Plugin } from "vite"
 import type { AdaptvAppConfig } from "#adaptv/config/app-config.ts"
 import {
@@ -54,9 +55,22 @@ export function adaptvRootRoutePlugin(
     configResolved(resolved) {
       base = resolved.base
     },
-    resolveId(id) {
+    async resolveId(id, importer, options) {
       if (id === ROOT_ROUTE_VIRTUAL_ID) return RESOLVED_ROOT_ROUTE_ID
       if (id === ROUTER_CONFIG_VIRTUAL_ID) return RESOLVED_ROUTER_CONFIG_ID
+      //Vite 8.1 resolves `resolve.tsconfigPaths` (`@/…`) against the importer's own tsconfig,
+      //and a virtual module has no file, so the app's alias found nothing. Resolve this
+      //module's imports as if the app's config file had written them.
+      if (importer === RESOLVED_ROOT_ROUTE_ID) {
+        return this.resolve(
+          id,
+          path.join(context.appRoot, "adaptv.config.ts"),
+          {
+            ...options,
+            skipSelf: true,
+          },
+        )
+      }
       return null
     },
     load(id) {
