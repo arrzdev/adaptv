@@ -9,6 +9,7 @@ import {
   holdToConfirm,
   pressChip,
   pressControlAndCarry,
+  releaseOver,
   TUTORIAL_DECK,
   taskCounts,
 } from "./support/tasks-app"
@@ -191,7 +192,10 @@ test.describe("settings and decks", () => {
     await page.mouse.down()
     await page.mouse.move(x, y - 10, { steps: 3 })
     await page.mouse.move(x, to.y + 5, { steps: 15 })
-    await page.mouse.up()
+    await releaseOver(
+      page,
+      page.getByRole("listitem").filter({ hasText: "Tutorial" }),
+    )
     await expect
       .poll(() => settingsDeckNames(page), {
         message:
