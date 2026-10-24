@@ -354,6 +354,12 @@
 .rise { animation: rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
 /* the hero's showcase rises once, after the buttons */
 .stage-in { animation: stage-in 0.3s ease-out 0.24s both; }
+/*
+ * Not on an installed launch: an app opens on its page, it does not fade it in. The head
+ * script stamps the platform before the first paint, so the launch screen lifts onto the
+ * hero in place instead of an empty page that fills in over 0.7 s.
+ */
+:root[data-adaptv-platform="standalone"] :is(.rise, .stage-in) { animation: none; }
 @keyframes caret { 50% { opacity: 0; } }
 .caret { animation: caret 1s steps(1) infinite; }
 
