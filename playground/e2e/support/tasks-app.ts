@@ -207,6 +207,33 @@ export async function dragCardOnto(
   await page.mouse.move(x, to.y + (to.y < from.y ? 5 : to.height - 5), {
     steps: 15,
   })
+  await releaseOver(
+    page,
+    page.getByRole("listitem").filter({ has: card(page, onto) }),
+  )
+}
+
+/*
+ * Drop a held drag once dnd-kit has made `row` its drop target, which shows as
+ * the row stepping aside (its sortable transform moves it off zero). dnd-kit
+ * takes the target in a React render after each pointermove, so an up sent
+ * straight after the last move can drop on the target of an earlier move: on
+ * WebKit a card carried onto the first row landed below it, over the second.
+ */
+export async function releaseOver(page: Page, row: Locator) {
+  await expect
+    .poll(
+      () =>
+        row.evaluate((li) => {
+          const [, y] =
+            li.style.transform.match(
+              /translate3d\([^,]*,\s*([-\d.]+)px/,
+            ) ?? []
+          return y !== undefined && Number(y) !== 0
+        }),
+      { message: "the row under the pointer makes room before the drop" },
+    )
+    .toBe(true)
   await page.mouse.up()
 }
 
