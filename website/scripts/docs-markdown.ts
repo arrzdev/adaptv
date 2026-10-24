@@ -94,6 +94,8 @@ function cloudflareHeaders(files: MarkdownFile[]) {
   return `${staticHeaderRules()}${types}`
 }
 
+const src = (path: string) => JSON.stringify(join(root, "src", path))
+
 export async function loadMarkdownFiles() {
   const { module } = await runnerImport<{ default: MarkdownFile[] }>(ENTRY, {
     root,
@@ -112,10 +114,12 @@ export async function loadMarkdownFiles() {
         load(id) {
           if (id === `\0${ENTRY}`)
             return [
-              `import { POSTS } from "@/content/blog"`,
-              `import { DOCS } from "@/content/docs"`,
-              `import { docsMarkdownFiles } from "@/content/docs/markdown"`,
-              `import { feedFiles } from "@/content/feeds"`,
+              //Absolute paths: from Vite 8.1 `@/` resolves against the importer's tsconfig,
+              //and this virtual module has no file to find one from
+              `import { POSTS } from ${src("content/blog")}`,
+              `import { DOCS } from ${src("content/docs")}`,
+              `import { docsMarkdownFiles } from ${src("content/docs/markdown")}`,
+              `import { feedFiles } from ${src("content/feeds")}`,
               "export default [...docsMarkdownFiles(DOCS), ...feedFiles(DOCS, POSTS)]",
             ].join("\n")
           //`switch-demo` → `export const SwitchDemo`, the one name its page imports

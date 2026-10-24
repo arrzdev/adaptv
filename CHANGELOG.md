@@ -68,6 +68,9 @@ API.
 
 ### Security
 
+- **Vite moves to 8.1.6 (peer and created apps)**, past the advisories that cover 8.0.0 to 8.1.5.
+  The app's `@/` alias, from `resolve.tsconfigPaths`, no longer reached the generated root route
+  from Vite 8.1; adaptv now resolves that module's imports itself.
 - **No dependency adaptv pins has a known critical or high advisory.** TanStack Start moves to
   1.168.60 (router 1.170.41, router core 1.171.34), past the reflected XSS in server-function
   responses and the `seroval` advisories; Vite to 8.0.16 (peer and created apps), past the

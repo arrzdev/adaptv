@@ -40,7 +40,7 @@ export const DEPENDENCIES = {
   react: "19.2.3",
   "react-dom": "19.2.3",
   tailwindcss: "4.2.4",
-  vite: "8.0.16",
+  vite: "8.1.6",
 }
 export const DEV_DEPENDENCIES = {
   "@types/react": "19.2.7",
