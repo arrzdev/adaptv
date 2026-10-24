@@ -50,7 +50,7 @@
     "tailwindcss": "4.2.4",
     "vite": "link:../../../node_modules/vite",
     "workbox-window": "7.4.1",
-    "zod": "4.3.6"
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@types/canvas-confetti": "1.9.0",
