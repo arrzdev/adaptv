@@ -186,7 +186,7 @@
     "tsdown": "0.22.12",
     "typescript": "5.9.3",
     "vite": "8.1.6",
-    "vitest": "4.1.2"
+    "vitest": "4.1.11"
   },
   "files": [
     "dist",
