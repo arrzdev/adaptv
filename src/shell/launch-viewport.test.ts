@@ -48,7 +48,9 @@ function launch(at: Reading, where: "ios" | "android" | "tab" = "ios") {
     configurable: true,
     get: () => reading.ih,
   })
-  const written = new WeakMap<CSSStyleDeclaration, string>()
+  //happy-dom's declaration is a Proxy and the setter runs on its target, so the probe's
+  //text is kept under a symbol, which the Proxy reads straight through to that target
+  const written = Symbol("written")
   const cssText = Object.getOwnPropertyDescriptor(
     CSSStyleDeclaration.prototype,
     "cssText",
@@ -61,7 +63,7 @@ function launch(at: Reading, where: "ios" | "android" | "tab" = "ios") {
     this: CSSStyleDeclaration,
     value: string,
   ) {
-    written.set(this, value)
+    Reflect.set(this, written, value)
     cssText?.set?.call(this, value)
   })
   vi.spyOn(
@@ -69,7 +71,7 @@ function launch(at: Reading, where: "ios" | "android" | "tab" = "ios") {
     "getBoundingClientRect",
   ).mockImplementation(function (this: HTMLElement) {
     return {
-      height: probeHeight(written.get(this.style) ?? ""),
+      height: probeHeight(Reflect.get(this.style, written) ?? ""),
     } as DOMRect
   })
   new Function(getLaunchViewportInitScript())()
