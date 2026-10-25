@@ -782,19 +782,15 @@ describe("TextArea autoResize — grow and shrink", () => {
     //a collapse to `auto` is a forced reflow per keystroke, which is why growth
     //skips it: record every height write on the way through
     const writes: string[] = []
+    //(happy-dom routes `style.height = …` through the declaration's own setProperty)
     const style = textarea().style
-    const { get, set } = Object.getOwnPropertyDescriptor(
-      Object.getPrototypeOf(style),
-      "height",
-    ) as PropertyDescriptor
-    Object.defineProperty(style, "height", {
+    const setProperty = style.setProperty
+    Object.defineProperty(style, "setProperty", {
       configurable: true,
-      get() {
-        return get?.call(style)
-      },
-      set(value: string) {
-        writes.push(value)
-        set?.call(style, value)
+      writable: true,
+      value(name: string, value: string, priority?: string) {
+        if (name === "height") writes.push(value)
+        setProperty.call(style, name, value, priority)
       },
     })
 

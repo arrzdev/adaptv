@@ -306,7 +306,7 @@ type PanelTransition = "open" | "close" | null
 /**
  * Whether a CSS transition on `height` is live on the panel. `getAnimations()`
  * flushes pending style, so a transition the height write just started is already
- * visible here; and where the method is missing (happy-dom) there is nothing to
+ * visible here; and where the method is missing there is nothing to
  * wait for, which is the honest answer rather than a timer.
  */
 function hasRunningHeightTransition(panel: HTMLElement): boolean {

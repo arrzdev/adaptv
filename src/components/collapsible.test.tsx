@@ -295,10 +295,10 @@ describe("Collapsible — hidden until found", () => {
 })
 
 describe("Collapsible — height transition", () => {
-  it("settles synchronously when no transition runs (happy-dom has no getAnimations)", () => {
+  it("settles synchronously when no transition runs (happy-dom reports no animations)", () => {
     const { container } = render(<Basic />)
     const { trigger, panel } = parts(container)
-    expect(typeof panel.getAnimations).toBe("undefined")
+    expect(panel.getAnimations?.() ?? []).toEqual([])
 
     fireEvent.click(trigger)
     expect(panel.hasAttribute("data-collapsible-open")).toBe(true)

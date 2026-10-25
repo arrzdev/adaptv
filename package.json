@@ -177,7 +177,7 @@
     "@types/react-dom": "19.2.3",
     "@vitest/coverage-v8": "4.1.12",
     "fake-indexeddb": "6.2.5",
-    "happy-dom": "20.11.2",
+    "happy-dom": "21.0.4",
     "motion": "12.35.0",
     "publint": "0.3.22",
     "react": "19.2.3",

@@ -450,10 +450,15 @@ describe("Icon scaleWithSystem", () => {
 
   it("writes NOTHING at factor 1 — not even the size it already has", () => {
     //a spy on the setters, not a read: at factor 1 a write of the built size back onto
-    //the element would read exactly like no write at all
-    const declaration = Object.getPrototypeOf(document.body.style)
-    const width = vi.spyOn(declaration, "width", "set")
-    const height = vi.spyOn(declaration, "height", "set")
+    //the element would read exactly like no write at all. happy-dom routes `style.width = …`
+    //through setProperty, which each declaration copies off the prototype when first touched,
+    //so the spy goes on before render creates the element
+    const setProperty = vi.spyOn(
+      CSSStyleDeclaration.prototype,
+      "setProperty",
+    )
+    const writes = (name: string) =>
+      setProperty.mock.calls.filter(([property]) => property === name)
     try {
       const { rerender } = render(
         <Icon render={<Glyph />} scaleWithSystem className="size-5" />,
@@ -462,11 +467,10 @@ describe("Icon scaleWithSystem", () => {
         <Icon render={<Glyph />} scaleWithSystem className="size-6" />,
       )
       expect(mockedScale).toHaveBeenCalled()
-      expect(width).not.toHaveBeenCalled()
-      expect(height).not.toHaveBeenCalled()
+      expect(writes("width")).toEqual([])
+      expect(writes("height")).toEqual([])
     } finally {
-      width.mockRestore()
-      height.mockRestore()
+      setProperty.mockRestore()
     }
   })
 
