@@ -7,9 +7,9 @@ export const page: DocPage = {
   platforms: ["Web", "PWA", "iOS", "Android"],
   importLine: 'import { defineApp } from "adaptv/config"',
   source: "src/config/app-config.ts",
-  seoTitle: "adaptv.config.ts: manifest, targets and app config",
+  seoTitle: "iOS Safari input zoom on focus: allowZoom in adaptv",
   seoDescription:
-    "Every key of defineApp with its type, default and effect. The one config file for the web and native build.",
+    "Stop iOS Safari zooming when an input is focused: allowZoom is false by default. Every defineApp key with its type, default and effect.",
   blocks: [
     {
       type: "p",
