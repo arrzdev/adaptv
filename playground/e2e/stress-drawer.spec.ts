@@ -1581,16 +1581,30 @@ test.describe("7 · the open under a 4x CPU throttle", () => {
         "the sheet rested at 0 inside the sampling budget",
       ).toBeLessThanOrEqual(0.5)
       expect(settledAt, "settled within 2s").toBeLessThanOrEqual(2000)
+      //a jump is judged on a frame of normal length only. The slide runs on the
+      //animation clock, so after a main-thread stall the next sample lands
+      //where the curve is by then: on a loaded runner one 283ms frame took the
+      //sheet 169→73.8 (56% of the travel) along an otherwise smooth curve. A
+      //snap with no slide still shows up in a normal-length frame.
+      const longFrame = 2 * median(intervals)
       const regressions: string[] = []
       const jumps: string[] = []
+      const stalls: string[] = []
       for (let i = 1; i < ys.length; i += 1) {
         const prev = ys[i - 1] ?? 0
         const next = ys[i] ?? 0
+        const dt = intervals[i - 1] ?? 0
         if (next > prev + 0.5)
           regressions.push(`${prev.toFixed(1)}→${next.toFixed(1)}`)
-        if (i >= 2 && prev - next > 0.4 * travel)
-          jumps.push(`${prev.toFixed(1)}→${next.toFixed(1)}`)
+        if (i < 2 || prev - next <= 0.4 * travel) continue
+        const step = `${prev.toFixed(1)}→${next.toFixed(1)} in ${dt.toFixed(1)}ms`
+        if (dt > longFrame) stalls.push(step)
+        else jumps.push(step)
       }
+      if (stalls.length > 0)
+        report(
+          `4x throttle open: steps over 40% across a stalled frame (not judged): ${stalls.join(", ")}`,
+        )
       expect(
         regressions,
         "frames where the sheet moved back DOWN",
