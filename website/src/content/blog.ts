@@ -234,14 +234,153 @@ export const POSTS: Post[] = [
     ],
   },
   {
+    slug: "ios-safari-input-zoom-on-focus",
+    title: "iOS Safari zooms the page when you focus an input",
+    date: "2026-10-26",
+    kind: "Field note",
+    author: "arrz.dev",
+    summary:
+      "Safari on iOS zooms in when a focused input has text smaller than 16px, and stays zoomed. The two ways to stop it, and what adaptv sets by default.",
+    seoTitle: "iOS Safari input zoom on focus: how to disable it",
+    seoDescription:
+      "iOS Safari zooms in when you focus an input under 16px. Fix it with font-size 16px or a viewport meta, and see what adaptv does by default.",
+    blocks: [
+      {
+        type: "p",
+        text: "You tap a text field on an iPhone and the page zooms in. After you leave the field it stays zoomed. Safari does this when the focused input has a computed font size under 16px. It is a legibility rule, not a bug in your layout.",
+      },
+      { type: "h2", text: "Fix 1: keep input text at 16px or larger" },
+      {
+        type: "p",
+        text: "This works without any library and keeps pinch-zoom for people who need it. Set the font size on every field, including `select` and `textarea`.",
+      },
+      {
+        type: "code",
+        label: "styles.css",
+        lang: "text",
+        code: `input,
+select,
+textarea {
+  font-size: 16px;
+}`,
+      },
+      { type: "h2", text: "Fix 2: block zoom in the viewport meta" },
+      {
+        type: "p",
+        text: "If the design needs smaller text in the field, the viewport meta can stop the zoom. The cost is that users can no longer pinch-zoom the page, which is an accessibility loss: WCAG 1.4.4 expects text to resize. Prefer fix 1 where you can.",
+      },
+      {
+        type: "code",
+        label: "index.html",
+        lang: "text",
+        code: `<meta
+  name="viewport"
+  content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no"
+>`,
+      },
+      { type: "h2", text: "What adaptv does" },
+      {
+        type: "p",
+        text: "adaptv is alpha and is not on npm yet; you use it from the GitHub repository. Its `allowZoom` key in `adaptv.config.ts` is `false` by default, and the generated viewport meta then carries `user-scalable=no,minimum-scale=1,maximum-scale=1` (`src/shell/head.ts`, checked in `src/shell/head.test.ts`). That is fix 2, and it stops the focus zoom. Set `allowZoom: true` to allow pinch-zoom again, and keep input text at 16px or larger.",
+      },
+      {
+        type: "code",
+        label: "adaptv.config.ts",
+        lang: "ts",
+        code: `import { defineApp } from "adaptv/config"
+
+export default defineApp({
+  // ...the other required keys
+  allowZoom: true, // pinch-zoom on; keep inputs at 16px+
+})`,
+      },
+      {
+        type: "p",
+        text: "See [adaptv.config.ts](/docs/config) for the key and [The software keyboard](/docs/keyboard) for the related keyboard behaviour. We have not recorded this on a device for this note; the viewport string is covered by a unit test.",
+      },
+      {
+        type: "p",
+        text: "adaptv is on GitHub: [Star on GitHub](https://github.com/arrzdev/adaptv).",
+      },
+    ],
+  },
+  {
+    slug: "disable-pull-to-refresh-overscroll-behavior",
+    title:
+      "Disable pull-to-refresh and scroll chaining with overscroll-behavior",
+    date: "2026-10-26",
+    kind: "Field note",
+    author: "arrz.dev",
+    summary:
+      "Scrolling past the end of an inner list drags the page, or reloads it in Chrome on Android. overscroll-behavior stops it. The CSS, and how adaptv applies it.",
+    seoTitle: "Disable pull to refresh with overscroll-behavior CSS",
+    seoDescription:
+      "Stop scroll chaining and Chrome's pull-to-refresh with overscroll-behavior: contain or none. The plain CSS, and what adaptv sets for you.",
+    blocks: [
+      {
+        type: "p",
+        text: "You scroll a list inside your page, hit the end, and the page behind it starts to move. That is scroll chaining. On Chrome for Android a pull down at the top of the page can also trigger the browser's pull-to-refresh. Both are controlled by one property.",
+      },
+      { type: "h2", text: "The CSS" },
+      {
+        type: "p",
+        text: "[`overscroll-behavior`](https://developer.mozilla.org/en-US/docs/Web/CSS/overscroll-behavior) decides what happens when a scroller reaches its end. `contain` keeps the scroll inside the element, so it does not chain to the parent. `none` does the same and also removes the browser's own overscroll effects, such as pull-to-refresh, when set on the root.",
+      },
+      {
+        type: "code",
+        label: "styles.css",
+        lang: "text",
+        code: `/* an inner list: no chaining to the page */
+.list {
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+
+/* the root: no browser pull-to-refresh */
+html,
+body {
+  overscroll-behavior: none;
+}`,
+      },
+      {
+        type: "p",
+        text: "Support differs by browser and version, and iOS Safari's rubber-band at the page edge behaves differently from Chrome's. Check the [MDN compatibility table](https://developer.mozilla.org/en-US/docs/Web/CSS/overscroll-behavior#browser_compatibility) for the versions you support.",
+      },
+      { type: "h2", text: "What adaptv does" },
+      {
+        type: "p",
+        text: "adaptv is alpha and is not on npm yet; you use it from the GitHub repository. Its document sets `overscroll-behavior: none` on `html` and `body` (`src/styles/shell-layout.css`), and `ScrollView` sets `overscroll-behavior-y: contain` on a vertical pane and `-x` on a horizontal one (`src/components/scroll-view.tsx`). Panes scroll, not the document, so a pane that reaches its end does not drag the page.",
+      },
+      {
+        type: "code",
+        label: "inbox.page.tsx",
+        lang: "tsx",
+        code: `import { ScrollView } from "adaptv/components"
+
+// overscroll-behavior-y: contain is applied for you
+<ScrollView fill className="px-4">
+  {rows}
+</ScrollView>`,
+      },
+      {
+        type: "p",
+        text: "If you want a pull-down refresh of your own once the browser one is off, `PullToRefresh` is a component for it; keep the scroller contained, as the page says. See [PullToRefresh](/docs/pull-to-refresh) and [ScrollView](/docs/scroll-view). We have not recorded the behaviour on a device for this note.",
+      },
+      {
+        type: "p",
+        text: "adaptv is on GitHub: [Star on GitHub](https://github.com/arrzdev/adaptv).",
+      },
+    ],
+  },
+  {
     slug: "ios-pwa-safe-area-insets-zero",
-    title: "Safe-area insets that read 0 in an iOS PWA, and what to check",
+    title: "env(safe-area-inset-bottom) is 0 on iOS: what to check",
     date: "2026-10-12",
     kind: "Field note",
     author: "arrz.dev",
     summary:
       "env(safe-area-inset-*) reads 0 in a Safari tab, is right in the installed app and can look wrong after a rotate. The viewport-fit=cover rule behind it, the timing trap, and how adaptv reads the insets.",
-    seoTitle: "iOS PWA safe-area insets read 0: causes and fixes",
+    seoTitle: "env(safe-area-inset-bottom) not working on iOS PWA",
     seoDescription:
       "env(safe-area-inset-*) reads 0 in a Safari tab and in a page without viewport-fit=cover. What decides the value, and how adaptv's insets handle it.",
     blocks: [
@@ -363,7 +502,7 @@ function usePeekSnapPoint() {
       },
       {
         type: "p",
-        text: "See also [Safe areas](/docs/safe-areas), [Device and display hooks](/docs/hooks-device) and [The frame](/docs/the-frame). To try adaptv, start with the [Quick start](/docs/quick-start).",
+        text: "See also [Safe areas](/docs/safe-areas), [Device and display hooks](/docs/hooks-device) and [The frame](/docs/the-frame). To try adaptv, start with the [Quick start](/docs/quick-start). adaptv is alpha and not on npm yet. [Star on GitHub](https://github.com/arrzdev/adaptv).",
       },
     ],
   },

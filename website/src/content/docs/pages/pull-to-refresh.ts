@@ -9,9 +9,9 @@ export const page: DocPage = {
   importLine:
     'import { PullToRefresh, usePullToRefresh } from "adaptv/components"',
   source: "src/components/pull-to-refresh.tsx",
-  seoTitle: "Pull to refresh in a React PWA, iOS included",
+  seoTitle: "Disable pull to refresh with overscroll-behavior: contain",
   seoDescription:
-    "Pull down from the top of a scroller to refresh, on web and native from the same component.",
+    "Stop the browser pull-to-refresh with overscroll-behavior: contain, then add your own pull-down refresh gesture on web and native with one component.",
   blocks: [
     {
       type: "demo",

@@ -2,12 +2,12 @@ import type { DocPage } from "@/content/docs/types"
 
 export const page: DocPage = {
   slug: "safe-areas",
-  title: "Safe areas",
+  title: "Safe areas: env(safe-area-inset-bottom) in an iOS PWA",
   summary:
     "Keep content clear of the notch, the status bar and the home indicator.",
-  seoTitle: "Safe area insets in a React PWA and native app",
+  seoTitle: "env(safe-area-inset-bottom) is 0 in an iOS PWA: fix",
   seoDescription:
-    "Keep content clear of the notch, status bar and home indicator with env() insets and Tailwind utilities, on web, installed PWA and native shells.",
+    "env(safe-area-inset-bottom) reads 0 on iOS? Pad the notch and home indicator with env() insets and adaptv utilities, in a tab, an installed PWA or native.",
   blocks: [
     {
       type: "p",
