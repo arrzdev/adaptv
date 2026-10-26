@@ -382,9 +382,10 @@ test.describe("Tally showcase", () => {
 const HERO_TITLE = "Write React once Feel native everywhere."
 const HARD_TITLE = "The hard parts are already decided"
 const COMPARE_TITLE = "Four ways to ship one app"
+const PROBLEMS_TITLE = "Common mobile web problems"
 
 test.describe("section order", () => {
-  test("hero, components, the hard parts, four ways, quick start", async ({
+  test("hero, problems, components, the hard parts, four ways, quick start", async ({
     page,
   }) => {
     await open(page, 1440)
@@ -396,6 +397,8 @@ test.describe("section order", () => {
     //the strip has no heading: it sits in the hero, under the showcase
     expect(headings).toEqual([
       HERO_TITLE,
+      //set in capitals by CSS, and innerText reads the rendered case
+      PROBLEMS_TITLE.toUpperCase(),
       "Try the components here",
       HARD_TITLE,
       COMPARE_TITLE,
@@ -458,7 +461,7 @@ test.describe("platform strip", () => {
     //the section after the hero opens with a heading: no headless strip section between
     await expect(
       page.locator("section:has(h1) + section").getByRole("heading", { level: 2 }).first(),
-    ).toHaveText("Try the components here")
+    ).toHaveText(PROBLEMS_TITLE)
   })
 
   //The glow behind the showcase was cut by the hero's clip: a straight line of colour across
@@ -824,6 +827,18 @@ test.describe("without JavaScript", () => {
     expect(await unrevealed(page)).toEqual([])
     for (const title of ["Try the components here", HARD_TITLE, COMPARE_TITLE, "Start with the quick start"])
       await expect.soft(page.getByRole("heading", { level: 2, name: title })).toBeVisible()
+  })
+
+  //the home page is the strongest URL: a crawler that runs no script reads these links
+  //in the served HTML and reaches the problem-first posts from it
+  test("the served HTML links the problem-first posts", async ({ request }) => {
+    const html = await (await request.get("/")).text()
+    for (const slug of [
+      "ios-safari-input-zoom-on-focus",
+      "ios-pwa-safe-area-insets-zero",
+      "disable-pull-to-refresh-overscroll-behavior",
+    ])
+      expect.soft(html).toContain(`href="/blog/${slug}"`)
   })
 })
 

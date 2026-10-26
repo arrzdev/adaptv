@@ -4,6 +4,7 @@ import { ComponentsBento } from "@/components/sections/components-bento"
 import { FourWays } from "@/components/sections/four-ways"
 import { HardParts } from "@/components/sections/hard-parts"
 import { Hero } from "@/components/sections/hero"
+import { Problems } from "@/components/sections/problems"
 import { Stats } from "@/components/sections/stats"
 import { SitePage } from "@/components/site-page"
 import {
@@ -28,6 +29,7 @@ function HomePage() {
   return (
     <SitePage>
       <Hero />
+      <Problems />
       <Stats />
       <ComponentsBento />
       <HardParts />
