@@ -1344,6 +1344,16 @@ const SwipeableRoot = forwardRef<SwipeableHandle, SwipeableRootProps>(
       endDrag()
     }
 
+    //`lostpointercapture` bubbles. A finger on the row's label is captured to
+    //the label, and the row's own setPointerCapture at the lock takes it away:
+    //the label's loss reaches here, but it is the row gaining the pointer, not
+    //losing it. Ending on it freed the arbiter mid-drag, so a later disable or
+    //pre-emption had nothing to cancel and the release still took a verdict
+    const onLostCapture = (e: React.PointerEvent<HTMLDivElement>) => {
+      if (e.target !== e.currentTarget) return
+      onPointerEnd(e)
+    }
+
     /* ---- render ---------------------------------------------------------- */
 
     const contextValue = useMemo<SwipeableContextValue>(
@@ -1405,7 +1415,7 @@ const SwipeableRoot = forwardRef<SwipeableHandle, SwipeableRootProps>(
             onPointerMove={onPointerMove}
             onPointerUp={onPointerEnd}
             onPointerCancel={onPointerEnd}
-            onLostPointerCapture={onPointerEnd}
+            onLostPointerCapture={onLostCapture}
           >
             {content}
           </div>

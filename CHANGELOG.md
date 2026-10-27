@@ -43,6 +43,10 @@ API.
 
 ### Fixed
 
+- **A `Swipeable` row swiped by its text keeps hold of the gesture.** A touch that began on the
+  row's content (its label, not the bare row) let go of the shared gesture arbiter as soon as the
+  row locked horizontal. The scroll was no longer held still under the swipe, and turning `enabled`
+  off mid-swipe left the row following the finger and opening on release instead of springing back.
 - **A mouse drags a `WheelColumn`.** On a desktop only the mouse wheel moved it; a press and drag
   did nothing, because a native scroller does not pan under a mouse. A drag now spins the drum with
   the pointer, a fast release coasts, and the wheel then rolls to a row. A click without movement
