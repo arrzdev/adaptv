@@ -1907,6 +1907,40 @@ describe("Swipeable · a drag taken away", () => {
     expect(onOpen).not.toHaveBeenCalled()
   })
 
+  it("a finger that landed on the row's text keeps the arbiter when the row claims its pointer, so turning off mid-swipe still closes the row", () => {
+    //a browser captures a touch to the element under the finger — here the
+    //label. The row's setPointerCapture at the lock moves that capture to the
+    //content node, and the label gets a lostpointercapture that bubbles up to
+    //the row. That is the row GAINING the pointer: it must not end the drag's
+    //hold on the arbiter, or turning the row off later has nothing to cancel
+    //and the release opens the row
+    const onOpen = vi.fn()
+    const view = render(<Row enabled onOpen={onOpen} />)
+    const { content } = parts(view.container)
+    const label = content.querySelector("span") as HTMLElement
+    const { trace } = touchDrag(content, line(30, -60), { release: false })
+    expect(trace.at(-1)).toBe(-60)
+    act(() => {
+      fireEvent.lostPointerCapture(label, {
+        pointerId: 7,
+        pointerType: "touch",
+      })
+    })
+    expect(gestureController.getCaptured()).not.toBeNull()
+    expect(gestureController.isScrollBlocked()).toBe(true)
+
+    view.rerender(<Row enabled={false} onOpen={onOpen} />)
+    expect(gestureController.getCaptured()).toBeNull()
+    settle()
+    expect(tx(content)).toBe(0)
+    act(() => {
+      content.dispatchEvent(touchEvent("touchend"))
+    })
+    settle()
+    expect(tx(content)).toBe(0)
+    expect(onOpen).not.toHaveBeenCalled()
+  })
+
   it("pre-empted past half-way, the row springs back closed, not open", () => {
     const onOpen = vi.fn()
     const { container } = render(<Row onOpen={onOpen} />)
