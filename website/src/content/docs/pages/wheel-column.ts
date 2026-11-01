@@ -155,7 +155,7 @@ const [minute, setMinute] = useState(30)
     { type: "h2", text: "Accessibility" },
     {
       type: "p",
-      text: "The column is a labelled `fieldset` and one tab stop. Arrow keys move one row. Page Up and Page Down move five. Home and End go to the first and last row.",
+      text: "The column is a labelled `fieldset` and one tab stop. Arrow keys move one row. Page Up and Page Down move five. Home and End go to the first and last row. The touch target is the column, not the row. Rows are one `WHEEL_ITEM_HEIGHT` (30px) slot and shrink as they turn away from the centre, so they are below the 44px target size on purpose. Spinning the column reaches every value, and the rows are out of the tab order. A tap on a row is a shortcut to that value, like on iOS. Keep each column at least 44px wide.",
     },
     { type: "h2", text: "Where it works" },
     {
