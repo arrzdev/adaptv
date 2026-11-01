@@ -136,14 +136,17 @@ test.describe("AvoidKeyboard driven by the keyboard seam", () => {
  *
  * The aim picks an absolute scrollTop on the focus frame; a notice inserted during
  * the 200-450ms flight moves the field down and leaves the destination where it
- * was, so the field lands 100px short, under the box's bottom edge. Measured on
- * origin/main on both engines: landed 520, clearance -76 (24 with no insertion).
- * The fix looks once more when that scroll ends.
+ * was, so the field lands 100px short, under the box's bottom edge. Measured with
+ * the second look removed: chromium lands 520, clearance -76 (24 with no
+ * insertion); WebKit stops the flight where the notice went in, landed 130,
+ * clearance -466. The fix looks once more when that scroll ends.
  *
  * The lab's Run button drives it, so a device run is the same code path: it
  * focuses the field with `preventScroll` (the browser's own scroll-into-view would
- * otherwise travel first), counts the frames on which the scroller has moved, and
- * on the third inserts the notice with `flushSync`, then waits for 30 still frames.
+ * otherwise travel first), and on the first frame the scroller has moved inserts
+ * the notice with `flushSync`, then waits for 30 still frames. Not a later frame: the
+ * flight runs on the clock and frames do not, so on a slow frame the third one had
+ * already reached the destination (WebKit, inserted at 520 of 520).
  *
  * Both Playwright engines have `scrollend`, and adaptv's iOS floor does not, so the
  * test runs twice: once as shipped, and once with every `onscrollend` handler
@@ -158,7 +161,7 @@ test.describe("AvoidKeyboard re-aims when content lands above the field mid-scro
   test.use({ viewport: { width: 390, height: 844 } })
 
   for (const mode of ["scrollend", "no scrollend"] as const) {
-    test(`${mode}: a 100px notice inserted on frame 3 of the scroll still leaves the field clear`, async ({
+    test(`${mode}: a 100px notice inserted on the first frame of the scroll still leaves the field clear`, async ({
       page,
     }, testInfo) => {
       await page.addInitScript(() => {
@@ -205,6 +208,13 @@ test.describe("AvoidKeyboard re-aims when content lands above the field mid-scro
         `ARRIVAL ${testInfo.project.name} ${mode} clearance=${clearance} ${scroll}`,
       )
 
+      //first, so a field left underneath reads as that and not as a broken premise: with
+      //no second look the landing is short of the notice, which also fails the premise
+      expect(
+        clearance,
+        "the field's bottom sits at or above the box's bottom once the scroll stops",
+      ).toBeGreaterThanOrEqual(0)
+
       //the premise: the notice went in while the FIRST aim's scroll was still short of its
       //destination. That destination is where the field would have landed with no notice,
       //which is the landing minus the notice. Comparing against the landing itself is
@@ -228,11 +238,6 @@ test.describe("AvoidKeyboard re-aims when content lands above the field mid-scro
         1,
       )
       await expect(page.getByLabel("Arrival field")).toBeFocused()
-
-      expect(
-        clearance,
-        "the field's bottom sits at or above the box's bottom once the scroll stops",
-      ).toBeGreaterThanOrEqual(0)
     })
   }
 })
