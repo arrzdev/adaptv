@@ -66,7 +66,7 @@ export function Hero() {
         </View>
 
         <p
-          className="rise mt-6 h-[2lh] w-full text-[14px] text-muted @min-[335px]:h-[1lh]"
+          className="rise mt-6 h-[2lh] w-full text-[14px] text-subtle @min-[335px]:h-[1lh]"
           style={{ animationDelay: "180ms" }}
         >
           Open source, MIT. Pre-alpha, so expect rough edges.
