@@ -75,6 +75,9 @@ worktree defaults to `41730`, so if a sibling worktree has a dev server up, Play
 it and every assertion is measured against a different checkout. It presents as mass "element not
 found" on routes that plainly exist — which reads as a broken app.
 
+CI overrides every port with one below 32768. The defaults (`417xx`) sit inside Linux's ephemeral range
+(32768–60999), where an outgoing connection can be handed the port a server is about to listen on.
+
 Running two worktrees at once? Move the port with the env vars in the table. Do not kill a
 neighbour's session.
 

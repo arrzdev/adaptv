@@ -33,11 +33,14 @@ concurrency:
 
 env:
   CI: 1
-  E2E_PORT: 41730
-  E2E_SW_PORT: 41750
-  E2E_SW_SPA_PORT: 41760
-  E2E_SW_PROMPT_PORT: 41770
-  E2E_PLAIN_PORT: 41780
+  #Below the runner's ephemeral range (32768-60999): the kernel hands those ports to outgoing
+  #connections, and a build that fetches while the server boots can hold the one we are about to
+  #listen on (EADDRINUSE, sw-spa 41760).
+  E2E_PORT: 31730
+  E2E_SW_PORT: 31750
+  E2E_SW_SPA_PORT: 31760
+  E2E_SW_PROMPT_PORT: 31770
+  E2E_PLAIN_PORT: 31780
 
 jobs:
   e2e:
