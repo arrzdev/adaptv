@@ -870,8 +870,18 @@ created moments ago: no typed-in form, no open modal, no in-flight upload to des
 
 ```
 boot → registration.waiting && navigator.serviceWorker.controller
+     → (document loaded)
      → postMessage({ type: "SKIP_WAITING" })          (no reload)
 ```
+
+**The message waits for `load`.** Chromium swaps the workers by stopping the old one. A request the
+page sends it in those few milliseconds starts it again, and that restart drops the swap: nothing
+retries it until the old worker idles out (30 s with no requests) or a 5-minute timer fires
+(`kMaxLameDuckTime`, `content/browser/service_worker/service_worker_registration.cc`). The launch keeps
+the old build and the update lands one launch late. A second `SKIP_WAITING` cannot rescue it, because
+the first one is still pending. **Measured** in the playground: 1 launch in 8 posted the message while
+the page was still loading, and a late image request restarted the stopping worker. A page sends most
+of its requests while it loads, so the apply waits for that.
 
 **The launch-apply never reloads the page.** It runs when the shell mounts, after the first paint, so a
 reload there is the app loading twice in front of the user and replaying every entry animation. An

@@ -178,8 +178,20 @@ export function registerSW(onWaiting) {
       //
       //The controller check keeps the first-ever visit out of this branch: with no
       //controller there is no old worker to replace.
+      //
+      //Posted once the document has LOADED, never while it is still fetching.
+      //Chromium swaps the workers by stopping the old one, and a request the page
+      //sends it during those few milliseconds starts it again. That restart drops
+      //the swap without a trace: nothing retries it until the old worker idles
+      //out (30 s with no requests) or a 5-minute timer fires, so the launch keeps
+      //the old build and the update lands a launch late. MEASURED: 1 launch in 8
+      //in the playground, a late image request hitting the stopping worker. A
+      //second SKIP_WAITING cannot rescue it — the first one is still pending.
+      //→ docs/design/rendering.md §3.4
       if (registration.waiting && navigator.serviceWorker.controller) {
-        apply(registration.waiting, false)
+        const applyAtLaunch = () => apply(registration.waiting, false)
+        if (document.readyState === "complete") applyAtLaunch()
+        else window.addEventListener("load", applyAtLaunch, { once: true })
       }
 
       //A worker that finishes installing DURING this session is deliberately left
@@ -195,8 +207,8 @@ export function registerSW(onWaiting) {
     }
   }
 
-  //Immediately, not on \`load\`: the sooner a pending update is applied, the
-  //fewer of this launch's requests the old worker answers.
+  //Registered immediately, not on \`load\`: the update check starts sooner. Only
+  //the launch-apply above waits for \`load\`.
   register()
 }
 `
