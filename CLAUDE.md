@@ -51,8 +51,10 @@ result in the PR's `Verify:` section.
 
 - A framework change and the playground change it forces land in the same commit.
 - A fix comes with the test that fails without it.
-- No retries in the Playwright configs. `update.spec.ts` on chromium is a known intermittent in the
-  `sw` and `sw-spa` cells; a re-run is a human decision, never a config change.
+- No retries in the Playwright configs; a re-run is a human decision, never a config change.
+  `update.spec.ts` on chromium used to fail about 1 run in 3–8 in the `sw` cells. The cause was the
+  launch-apply posting `SKIP_WAITING` while the page was still loading (`docs/design/rendering.md`
+  §3.4). If it fails again, treat it as a regression of that path, not as a flake.
 - `exports` and `files` point at `dist/`. The playground and the website run the built framework
   (`scripts/ensure-dist.mjs` rebuilds it when `src/` changed), and their typechecks read
   `dist/*.d.mts`, so run `pnpm build` first. In a checkout the CLI still loads `src/`.

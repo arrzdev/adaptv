@@ -11,9 +11,11 @@ name: E2E
 #   weekly + on demand   -> `e2e-full`: every suite x chromium + webkit, with
 #                           stress. Run it before any release of adaptv.
 #
-# No retries, in the configs or here (docs/guides/e2e.md §3.1). The worker
-# suites carry a KNOWN intermittent (`update.spec.ts` on chromium, about 1 run
-# in 3-5). A re-run is a human decision, recorded as attempt #2 on the run.
+# No retries, in the configs or here (docs/guides/e2e.md §3.1). A re-run is a
+# human decision, recorded as attempt #2 on the run. `update.spec.ts` on
+# chromium used to be intermittent in the worker suites. The cause (the
+# launch-apply posting SKIP_WAITING mid-load) is fixed, so a red one now is a
+# regression (docs/design/rendering.md §3.4).
 on:
   pull_request:
     types: [labeled, opened, synchronize, reopened]

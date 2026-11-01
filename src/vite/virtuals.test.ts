@@ -142,3 +142,74 @@ describe("adaptvPwaRegisterPlugin — the URL it registers", () => {
     expect(await registeredUrl("/a$&b/")).toBe("/a$&b/sw.js")
   })
 })
+
+describe("adaptvPwaRegisterPlugin — the launch-apply", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  /**
+   * Run the emitted module at a launch that finds a worker waiting, in a document
+   * whose `readyState` is the one given. Returns the waiting worker's
+   * `postMessage` and a function that fires the window's `load`.
+   */
+  async function launchWithWorkerWaiting(readyState: DocumentReadyState) {
+    const postMessage = vi.fn()
+    const waiting = { postMessage }
+    const register = vi.fn(async () => ({
+      waiting,
+      addEventListener() {},
+    }))
+    vi.stubGlobal("navigator", {
+      serviceWorker: { register, addEventListener() {}, controller: {} },
+    })
+    vi.stubGlobal("document", { readyState })
+    const onLoad: (() => void)[] = []
+    vi.stubGlobal("window", {
+      addEventListener(type: string, listener: () => void) {
+        if (type === "load") onLoad.push(listener)
+      },
+    })
+    const source = load(true, "auto")
+      .replaceAll("import.meta.env", "({ DEV: false })")
+      .replaceAll("export function", "function")
+      .replace("export const", "const")
+    new Function(`${source}\nregisterSW()`)()
+    await vi.waitFor(() => expect(register).toHaveBeenCalledOnce())
+    return {
+      postMessage,
+      fireLoad: () => {
+        for (const listener of onLoad) listener()
+      },
+    }
+  }
+
+  it("holds SKIP_WAITING until the launching document has loaded", async () => {
+    //Chromium swaps the workers by stopping the old one, and a request the
+    //page sends it in the few milliseconds it takes to stop starts it again.
+    //That restart drops the swap, and the update then waits for the old worker
+    //to go idle or for a 5-minute timer, so this launch keeps the old build.
+    //The page sends most of its requests while it loads, so the apply waits
+    //for `load`. → `docs/design/rendering.md §3.4`
+    const { postMessage, fireLoad } =
+      await launchWithWorkerWaiting("loading")
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(postMessage).not.toHaveBeenCalled()
+
+    fireLoad()
+    await vi.waitFor(() =>
+      expect(postMessage).toHaveBeenCalledExactlyOnceWith({
+        type: "SKIP_WAITING",
+      }),
+    )
+  })
+
+  it("applies without waiting for a `load` that already fired", async () => {
+    const { postMessage } = await launchWithWorkerWaiting("complete")
+    await vi.waitFor(() =>
+      expect(postMessage).toHaveBeenCalledExactlyOnceWith({
+        type: "SKIP_WAITING",
+      }),
+    )
+  })
+})
