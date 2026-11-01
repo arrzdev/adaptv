@@ -143,8 +143,11 @@ function LabAvoidKeyboardPage() {
  * PROBES
  * ============================================================================= */
 
-//the moving frame of the aim's smooth scroll the notice lands on, and how tall it is
-const ARRIVAL_FRAME = 3
+//the moving frame of the aim's smooth scroll the notice lands on, and how tall it is.
+//The first: the aim has committed its destination by then, and the flight is clock-driven
+//while frames are not, so on a slow frame (WebKit's first run) the third moving frame
+//already sat on the destination and the run proved nothing
+const ARRIVAL_FRAME = 1
 const ARRIVAL_PX = 100
 //a scroll is over after this many frames with nothing moving past half a pixel —
 //longer than the 120ms quiet window the no-`scrollend` fallback waits before re-aiming
@@ -237,7 +240,7 @@ function ArrivalProbe() {
   return (
     <LabSection
       title="Content arriving mid-scroll"
-      description={`Run focuses the field below and, on frame ${ARRIVAL_FRAME} of the scroll that lifts it, inserts a ${ARRIVAL_PX}px notice above it. The aim chose its destination before the notice existed, so the field must still end up clear: AvoidKeyboard looks again when that scroll ends.`}
+      description={`Run focuses the field below and, on the first frame of the scroll that lifts it, inserts a ${ARRIVAL_PX}px notice above it. The aim chose its destination before the notice existed, so the field must still end up clear: AvoidKeyboard looks again when that scroll ends.`}
     >
       <LabActions>
         <LabButton onClick={run}>Run: focus, insert mid-scroll</LabButton>
