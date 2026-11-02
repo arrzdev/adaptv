@@ -118,7 +118,15 @@ test("a step sampled fewer than 3 times is reported undersampled @tailwind", asy
   page,
 }) => {
   await openOnPausedClock(page, "/lab/drawer-keyboard?only=dismiss")
-  const results = await runOnClock(page, () => page.clock.fastForward(400))
+  //Frames at the normal pace until the sheet's content is mounted: a 400ms jump can fire the
+  //run's 600ms start timer before the sheet has rendered, and the run then has nothing to drive.
+  //Starved from there on.
+  const sheet = page.locator("[data-pwa-drawer] > div")
+  const results = await runOnClock(page, async () =>
+    (await sheet.count())
+      ? page.clock.fastForward(400)
+      : page.clock.runFor(16),
+  )
 
   const sampled = results.map((r) => ({
     step: r.step,
@@ -158,11 +166,15 @@ async function runOnClock(page: Page, advance: () => Promise<void>) {
           .__drawerConformance,
       ),
     )
-    if (done) break
+    if (done) {
+      return page.evaluate(
+        () =>
+          (window as unknown as { __drawerConformance: StepResult[] })
+            .__drawerConformance,
+      )
+    }
   }
-  return page.evaluate(
-    () =>
-      (window as unknown as { __drawerConformance: StepResult[] })
-        .__drawerConformance,
+  throw new Error(
+    "the conformance run never published window.__drawerConformance (5000 clock steps)",
   )
 }

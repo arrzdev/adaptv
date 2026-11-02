@@ -448,15 +448,31 @@ function LabDrawerKeyboardPage() {
     const content = document.querySelector<HTMLElement>(
       "[data-pwa-drawer] > div",
     )
-    if (!content) {
-      setRunning(false)
-      return
-    }
     const collected: StepResult[] = []
     const publish = () => {
       ;(
         window as unknown as { __drawerConformance?: StepResult[] }
       ).__drawerConformance = collected
+    }
+    //a run that cannot start is a verdict too: a reader waiting on the window property must not
+    //wait on a run that never began
+    if (!content) {
+      collected.push({
+        step: "run aborted",
+        samples: [],
+        checks: [
+          {
+            name: "every scenario ran",
+            pass: false,
+            detail:
+              "no sheet content ([data-pwa-drawer] > div) when the run started",
+          },
+        ],
+      })
+      setResults([...collected])
+      publish()
+      setRunning(false)
+      return
     }
     try {
       await scenarios(content, only, collected)
