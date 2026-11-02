@@ -24,8 +24,13 @@ export default defineConfig({
   //Both update specs `deploy()` a new build under a server that keeps running,
   //which is a preview property: this server baked its table and its code at
   //start, so a production deploy is a restart. The prompt spec also needs its
-  //own build (`playwright.sw-prompt.config.ts`).
-  testIgnore: ["update.spec.ts", "update-prompt.spec.ts"],
+  //own build (`playwright.sw-prompt.config.ts`), and so does `subpath.spec.ts`,
+  //a spa build under a base (`playwright.sw-subpath.config.ts`).
+  testIgnore: [
+    "update.spec.ts",
+    "update-prompt.spec.ts",
+    "subpath.spec.ts",
+  ],
   //one server, and several specs take it offline — see `playwright.sw.config.ts`
   fullyParallel: false,
   workers: 1,
