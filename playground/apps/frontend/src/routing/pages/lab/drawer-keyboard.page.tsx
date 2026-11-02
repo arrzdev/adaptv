@@ -66,6 +66,46 @@ type Trace = { samples: Sample[]; frames: number[] }
 
 const SETTLE_MS = 700
 const FRAME_TOLERANCE = 2
+const MIN_SAMPLES = 3
+
+/*
+ * `?virtual`: every animation on the page is held and moved by hand to `performance.now()`, once
+ * per frame and on every DOM change. The engine's timers and its re-aim maths already read that
+ * clock, so a test that installs Playwright's `page.clock` and steps it 16ms at a time gets one
+ * sample per 16ms of motion whatever the machine's frame rate, with the CSS transitions on the
+ * same timeline as the code that starts and re-aims them. Without the flag nothing is touched.
+ */
+let followPageClock: (() => void) | null = null
+
+function holdAnimationsToPageClock() {
+  const startedAt = new WeakMap<Animation, number>()
+  const follow = () => {
+    const now = performance.now()
+    for (const animation of document.getAnimations()) {
+      let start = startedAt.get(animation)
+      if (start === undefined) {
+        start = now - (Number(animation.currentTime) || 0)
+        startedAt.set(animation, start)
+        animation.pause()
+      }
+      const end = animation.effect?.getComputedTiming().endTime
+      if (typeof end === "number" && now - start >= end) animation.finish()
+      else animation.currentTime = now - start
+    }
+  }
+  //a transition starts on the style change that caused it; catch it before it moves on its own
+  new MutationObserver(follow).observe(document, {
+    attributes: true,
+    childList: true,
+    subtree: true,
+  })
+  const frame = () => {
+    follow()
+    requestAnimationFrame(frame)
+  }
+  requestAnimationFrame(frame)
+  return follow
+}
 
 function sampleGeometry(content: HTMLElement, startedAt: number): Sample {
   const rect = content.getBoundingClientRect()
@@ -134,6 +174,7 @@ function recordTransition(
         perturbed = true
         mid.apply()
       }
+      followPageClock?.()
       samples.push(sampleGeometry(content, startedAt))
       if (elapsed < SETTLE_MS) {
         raf = requestAnimationFrame(tick)
@@ -245,6 +286,16 @@ function checkTransition(
    * That reads the painted frames, so there is nothing to tune and nothing to fool.
    */
   const checks: Check[] = [
+    //A turn needs a sample before it, at it and after it. With fewer, the reversal checks below
+    //pass on any motion, so the step says it was not judged instead of saying it was fine.
+    {
+      name: "sampled enough to judge",
+      pass: samples.length >= MIN_SAMPLES,
+      detail:
+        samples.length >= MIN_SAMPLES
+          ? `${samples.length} samples`
+          : `undersampled: ${samples.length} samples (needs >=${MIN_SAMPLES})`,
+    },
     {
       name: "never above the safe top",
       pass: minTop >= expected.safeTop - FRAME_TOLERANCE,
@@ -342,6 +393,12 @@ function LabDrawerKeyboardPage() {
   const extraRowsRef = useRef(0)
   extraRowsRef.current = extraRows
 
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).has("virtual")) {
+      followPageClock ??= holdAnimationsToPageClock()
+    }
+  }, [])
+
   //the mock has to exist before the drawer's observer mounts
   useEffect(() => {
     setMockKeyboard(0)
@@ -391,15 +448,31 @@ function LabDrawerKeyboardPage() {
     const content = document.querySelector<HTMLElement>(
       "[data-pwa-drawer] > div",
     )
-    if (!content) {
-      setRunning(false)
-      return
-    }
     const collected: StepResult[] = []
     const publish = () => {
       ;(
         window as unknown as { __drawerConformance?: StepResult[] }
       ).__drawerConformance = collected
+    }
+    //a run that cannot start is a verdict too: a reader waiting on the window property must not
+    //wait on a run that never began
+    if (!content) {
+      collected.push({
+        step: "run aborted",
+        samples: [],
+        checks: [
+          {
+            name: "every scenario ran",
+            pass: false,
+            detail:
+              "no sheet content ([data-pwa-drawer] > div) when the run started",
+          },
+        ],
+      })
+      setResults([...collected])
+      publish()
+      setRunning(false)
+      return
     }
     try {
       await scenarios(content, only, collected)

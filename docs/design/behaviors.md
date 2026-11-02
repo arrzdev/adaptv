@@ -259,8 +259,12 @@ Rule of thumb: `app:` styles apply to **installed** (standalone **or** native); 
   installed-only, because the browser tab on the same simulator passed geometry the same day; the
   e2e spec that followed (`playground/e2e/drawer-keyboard.spec.ts`) shows it on headless Chromium
   and on Playwright's WebKit at a 390 × 844 viewport too, so the variable is the viewport the
-  scenario runs in, not the shell. The harness now names the turn on the overlay and carries the
-  sample series on every `StepResult`, and the series says what the turn is: an **overshoot**.
+  scenario runs in, not the shell. That spec runs the harness with `?virtual` on Playwright's
+  paused `page.clock`, stepped 16ms at a time, with every CSS animation held to that clock, so
+  each step reads ~44 samples whatever the runner's frame rate; a step with fewer than 3 fails as
+  `undersampled` instead of passing checks it had no series for. The harness now names the turn
+  on the overlay and carries the sample series on every `StepResult`, and the series says what
+  the turn is: an **overshoot**.
   The content edge sits at the screen bottom while the picker collapses, then moves in ONE frame
   to a point past its rest, and eases back to the rest over the next ~300ms:
 
