@@ -14,9 +14,8 @@ import { awaitClientHandover } from "./support/hydrated"
  *
  * The geometry checks are asserted here on both engines. The two TIMING checks are read but not
  * asserted, by name: "runs at frame rate" and "eased, not snapped" measure the sampler as much
- * as the sheet, and a CI runner that starves requestAnimationFrame fails them with the geometry
- * intact (docs/design/behaviors.md records the simulator doing the same). They stay in the report
- * this spec attaches, so a run that went slow is visible without being red.
+ * as the sheet, and on the page clock below every frame is 16ms by construction, so they say
+ * nothing about the machine. They stay in the report this spec attaches.
  */
 
 type Check = { name: string; pass: boolean; detail: string }
@@ -41,7 +40,7 @@ test.use({ hasTouch: true, viewport: { width: 390, height: 844 } })
 /*
  * One geometry failure is KNOWN and allowed by name, and only that one: in the scenario where the
  * picker collapses first and the keyboard lands 48ms later, the content edge overshoots its rest
- * and comes back (headless chromium at this viewport: 844 → 506, turned 8px at 129ms, 463 → 471;
+ * and comes back (both engines at this viewport, on the page clock: 844 → 506, turned 13px at 116ms;
  * the installed targets in docs/design/behaviors.md show the same turn). The harness names it so
  * the fix can be aimed; until it lands, this spec fails on ANY other geometry failure and on the
  * day the known one disappears, so the allowance is deleted the moment it is stale.
@@ -55,25 +54,11 @@ test.setTimeout(120_000)
 test("the conformance run passes every geometry check @tailwind", async ({
   page,
 }, testInfo) => {
-  await page.goto("/lab/drawer-keyboard?autorun")
-  //the SSR splash self-unmounts on hydration, and `?autorun` opens the sheet from a client
-  //effect, so nothing below is meaningful before it is gone
-  await awaitClientHandover(page)
-  //a SYNC predicate: an async one returns a Promise, which is truthy, and the wait is a no-op
-  await page.waitForFunction(
-    () =>
-      Array.isArray(
-        (window as unknown as { __drawerConformance?: unknown })
-          .__drawerConformance,
-      ),
-    null,
-    { timeout: 90_000 },
-  )
-  const results = await page.evaluate(
-    () =>
-      (window as unknown as { __drawerConformance: StepResult[] })
-        .__drawerConformance,
-  )
+  //One frame per 16ms of page time, stepped from here, with the sheet's CSS transitions held to
+  //the same clock (`?virtual`): how many samples a step gets no longer depends on how fast the
+  //runner paints (a starved webkit runner once gave "release 70%→0" two).
+  await openOnPausedClock(page, "/lab/drawer-keyboard?virtual")
+  const results = await runOnClock(page, () => page.clock.runFor(16))
   await testInfo.attach("conformance", {
     body: JSON.stringify(
       results.map(({ samples, ...rest }) => ({
@@ -156,7 +141,8 @@ async function openOnPausedClock(page: Page, url: string) {
   await page.clock.install()
   await page.goto(url)
   await awaitClientHandover(page)
-  await page.clock.pauseAt((await page.evaluate(() => Date.now())) + 1)
+  //a second ahead: the clock is still running, and pausing in its past throws
+  await page.clock.pauseAt((await page.evaluate(() => Date.now())) + 1_000)
   await page
     .getByRole("button", { name: "Open drawer (runs itself)" })
     .click()
