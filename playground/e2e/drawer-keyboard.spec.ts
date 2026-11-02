@@ -1,3 +1,4 @@
+import type { Page } from "@playwright/test"
 import { expect, test } from "@playwright/test"
 import { awaitClientHandover } from "./support/hydrated"
 
@@ -27,6 +28,10 @@ type StepResult = {
 }
 
 const TIMING_CHECKS = new Set(["runs at frame rate", "eased, not snapped"])
+
+//a turn needs a sample before it, at it and after it: with two, a reversal or an overshoot
+//cannot show, and every geometry check of the step passes without reading anything
+const MIN_SAMPLES = 3
 
 //a phone held upright: the scenarios size the keyboard as a fraction of the viewport, and the
 //interesting geometry (a sheet taller than the room left above the keyboard) needs a tall one.
@@ -105,13 +110,10 @@ test("the conformance run passes every geometry check @tailwind", async ({
   expect(known.map((c) => c.detail)).toHaveLength(1)
   expect(known[0].detail).toMatch(/turned \d+px at \d+ms/)
 
-  //every frame-sampled step carries a series to read its checks from. Only that it EXISTS is
-  //asserted: how many samples a step gets is the runner's frame rate (a starved webkit runner
-  //yielded 2 for "release 70%→0" with every geometry check passing), the same sampler
-  //dependence the TIMING_CHECKS above are exempt for. The per-step counts are in the attachment.
+  //every frame-sampled step carries a series long enough to read its checks from
   for (const r of results) {
     if (r.step === "drag with the keyboard up") continue
-    expect(r.samples.length, r.step).toBeGreaterThan(0)
+    expect(r.samples.length, r.step).toBeGreaterThanOrEqual(MIN_SAMPLES)
   }
 
   //the overlay says the same thing the data does
@@ -121,3 +123,60 @@ test("the conformance run passes every geometry check @tailwind", async ({
     failedTotal === 0 ? "PASS" : `FAIL ${failedTotal}/${checks.length}`,
   )
 })
+
+/*
+ * A starved runner, made on purpose: the page clock jumps 400ms at a time, so each 700ms step
+ * sees two frames. The run must call that out, step by step, instead of passing geometry checks
+ * it had no series to read.
+ */
+test("a step sampled fewer than 3 times is reported undersampled @tailwind", async ({
+  page,
+}) => {
+  await openOnPausedClock(page, "/lab/drawer-keyboard?only=dismiss")
+  const results = await runOnClock(page, () => page.clock.fastForward(400))
+
+  const sampled = results.map((r) => ({
+    step: r.step,
+    samples: r.samples.length,
+    check: r.checks.find((c) => c.name === "sampled enough to judge"),
+  }))
+  expect(sampled.length).toBeGreaterThan(0)
+  for (const s of sampled) {
+    expect(s.samples, s.step).toBeLessThan(MIN_SAMPLES)
+    expect(s.check?.pass, s.step).toBe(false)
+    expect(s.check?.detail, s.step).toMatch(/^undersampled: \d samples/)
+  }
+})
+
+/**
+ * The splash leaves on timers, so the clock runs through the handover; it is paused before the
+ * sheet opens, so the run's first timer is already on the paused clock.
+ */
+async function openOnPausedClock(page: Page, url: string) {
+  await page.clock.install()
+  await page.goto(url)
+  await awaitClientHandover(page)
+  await page.clock.pauseAt((await page.evaluate(() => Date.now())) + 1)
+  await page
+    .getByRole("button", { name: "Open drawer (runs itself)" })
+    .click()
+}
+
+/** Moves the page clock with `advance` until the run publishes, and returns what it published. */
+async function runOnClock(page: Page, advance: () => Promise<void>) {
+  for (let i = 0; i < 5_000; i++) {
+    await advance()
+    const done = await page.evaluate(() =>
+      Array.isArray(
+        (window as unknown as { __drawerConformance?: unknown })
+          .__drawerConformance,
+      ),
+    )
+    if (done) break
+  }
+  return page.evaluate(
+    () =>
+      (window as unknown as { __drawerConformance: StepResult[] })
+        .__drawerConformance,
+  )
+}
