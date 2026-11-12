@@ -105,11 +105,12 @@ Version pins and native gotchas live in
 | **Unit** (vitest, happy-dom) | `pnpm test` | `src/**` and the CLI's `bin/lib/*.test.mjs` |
 | **Typecheck** | `pnpm typecheck` | |
 | **Lint** | `pnpm biome:check` · `pnpm biome:check:playground` | the playground is its own pnpm project, so the root check never reaches it — both are required |
+| **Wrangler envs** | `pnpm check:wrangler-envs` | `website/wrangler.toml`: every binding and var of the dev top level repeated in `[env.production]`, explicit production name equal to the live Worker, no shared or placeholder ids (wrangler does not inherit them) |
 | **Colour** | `node scripts/check-colour.mjs` | the CLI's live layer under a pty |
 | **Publish** | `pnpm build:check` | tsdown, then `scripts/verify-dist.mjs`: dist structure, `publint --strict` and `attw` on a staged dist-shaped package |
 | **e2e** (Playwright) | `pnpm --dir playground test:e2e` | 83 specs in `playground/e2e/` |
 | **e2e, service worker** | `pnpm --dir playground test:e2e:sw:all` | `playground/e2e-sw/` across five configs (default, spa, prompt, subpath, node server) |
-| **The gate** | `pnpm gate` | lint, typecheck, unit, colour and publish — **not** the Playwright suites, which take minutes where the gate takes seconds |
+| **The gate** | `pnpm gate` | lint, typecheck, unit, wrangler envs, colour and publish — **not** the Playwright suites, which take minutes where the gate takes seconds |
 
 → [`e2e.md`](e2e.md) for what the Playwright estate covers and how it is wired.
 

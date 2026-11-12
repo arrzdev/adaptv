@@ -55,6 +55,15 @@ runs:
         BASE: ${{ inputs.base }}
       run: pnpm exec vitest run --changed "$BASE"
 
+    # Wrangler does not inherit bindings into `[env.production]`: one added to the top
+    # level only deploys fine and is undefined in production. Reads website/wrangler.toml
+    # with the wrangler the deploy pins (installed to a temp dir; no secrets or network
+    # beyond npm).
+    - name: Binding parity (wrangler envs)
+      if: inputs.mode == 'full'
+      shell: bash
+      run: pnpm check:wrangler-envs
+
     # Ink drops props it does not recognise in silence, so a mis-named colour
     # role renders the live layer flat while every unit test passes (vitest's
     # stdout is not a terminal). This runs the components under a pty and
