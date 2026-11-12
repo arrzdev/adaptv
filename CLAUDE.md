@@ -32,7 +32,7 @@ in `playground/` or `scripts/` ships.
 ## Before every commit
 
 ```bash
-pnpm gate          # biome (root + playground), tsc x2, vitest, check-colour, build:check
+pnpm gate          # biome (root + playground), tsc x2, vitest, check:wrangler-envs, check-colour, build:check
 pnpm build:check   # alone: tsdown + scripts/verify-dist.mjs (structure, publint, attw)
 ```
 

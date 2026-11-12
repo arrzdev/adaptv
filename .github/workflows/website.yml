@@ -110,6 +110,13 @@ jobs:
         if: steps.tip.outputs.go == 'true'
         run: pnpm --dir website install --frozen-lockfile
 
+      # Production has no inherited bindings or vars: a binding added to wrangler.toml's top
+      # level only would deploy and be undefined on the live site. The same check the PR
+      # gate runs, here so a deploy never ships without it.
+      - name: Binding parity (wrangler envs)
+        if: steps.tip.outputs.go == 'true'
+        run: pnpm check:wrangler-envs
+
       # The site links the checkout, whose `exports` point at `dist/`.
       - name: Build (framework)
         if: steps.tip.outputs.go == 'true'
