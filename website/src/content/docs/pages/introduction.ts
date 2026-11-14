@@ -5,7 +5,7 @@ export const page: DocPage = {
   title: "Introduction",
   summary:
     "What adaptv is, what it does for you, what you write, and its status.",
-  seoTitle: "adaptv: one React codebase for web, iOS and Android",
+  seoTitle: "Introduction to adaptv: what it does and what works today",
   seoDescription:
     "adaptv is a React framework that ships one codebase as a web app, an installed PWA and native iOS and Android apps. Pre-alpha; see what works today.",
   blocks: [

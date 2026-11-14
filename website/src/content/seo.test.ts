@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest"
 import { POSTS } from "@/content/blog"
 import { ALL_DOCS } from "@/content/docs"
+import { SITE_TITLE } from "@/content/site"
 import { Route as DocRoute } from "@/routing/pages/docs/doc.page"
 import { Route as DocsIndexRoute } from "@/routing/pages/docs.page"
 
@@ -58,6 +59,10 @@ describe("search titles and descriptions", () => {
     const meta = docHead(page.slug)
     expect(meta).toContainEqual({ title: `${page.title} — adaptv docs` })
     expect(meta).toContainEqual({ name: "description", content: page.summary })
+  })
+
+  it("the introduction has a tab title of its own, not the home page's", () => {
+    expect(docHead("introduction")[0].title).not.toBe(SITE_TITLE)
   })
 
   it("the docs home has a description", () => {
