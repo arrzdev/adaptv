@@ -26,7 +26,7 @@ describe("code panel", () => {
     const fade = screen.getByTestId("scroll-fade")
     expect(fade.dataset.more).toBe("true")
 
-    const scroller = screen.getByRole("region", { name: "Code sample" })
+    const scroller = screen.getByRole("group", { name: "Code sample" })
     scroller.scrollLeft = 360
     fireEvent.scroll(scroller)
     expect(fade.dataset.more).toBe("false")
@@ -63,7 +63,7 @@ describe("code line", () => {
     const fade = screen.getByTestId("scroll-fade")
     expect(fade.dataset.more).toBe("true")
 
-    const scroller = screen.getByRole("region", { name: "Import" })
+    const scroller = screen.getByRole("group", { name: "Import" })
     scroller.scrollLeft = 160
     fireEvent.scroll(scroller)
     expect(fade.dataset.more).toBe("false")

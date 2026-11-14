@@ -29,3 +29,27 @@ for (const { name, path } of PAGES) {
     await expect(page.locator("main, [role=main]")).toHaveCount(1)
   })
 }
+
+//A landmark that repeats a name is no help to a reader jumping between them (axe
+//`landmark-unique`). Code blocks and tables are named scrollers, so a page with many of
+//them must not turn each into a landmark. Pages with several blocks, at the phone width
+//where they overflow.
+test.describe("landmarks are unique, phone 390x844", () => {
+  test.use({ viewport: { width: 390, height: 844 } })
+
+  for (const path of ["/docs/quick-start", "/docs/project-structure", "/docs/button"]) {
+    test(`${path} names every landmark once`, async ({ page }) => {
+      await page.goto(path)
+      await expect(page.locator("h1").first()).toBeVisible()
+      const { violations } = await new AxeBuilder({ page })
+        .withRules(["landmark-unique"])
+        .analyze()
+      expect(
+        violations.map((v) => ({
+          id: v.id,
+          nodes: v.nodes.map((n) => n.target.join(" ")),
+        })),
+      ).toEqual([])
+    })
+  }
+})
