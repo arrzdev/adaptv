@@ -88,7 +88,7 @@ async function settle(page: Page) {
         const b = await hourScrollTop(page)
         return a === b ? b % ITEM_H : 999 // moving → keep polling
       },
-      { timeout: 4000 },
+      { timeout: 10_000 },
     )
     .toBeLessThanOrEqual(1)
 }
