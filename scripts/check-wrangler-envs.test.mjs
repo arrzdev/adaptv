@@ -15,8 +15,10 @@ import {
 
 const root = resolve(import.meta.dirname, "..")
 const real = readFileSync(join(root, "website/wrangler.toml"), "utf8")
-// The top level, and the [env.production] block that follows it.
-const [top, prod] = real.split("[env.production]\n")
+// The top level, and the [env.production] block that follows it, up to the next env. The
+// cases that build a config from these leave the other envs (the board preview) out.
+const [top, rest] = real.split("[env.production]\n")
+const prod = rest.split(/\n(?=\[env\.(?!production[.\]]))/)[0]
 
 const D1_A = "11111111-aaaa-4aaa-8aaa-111111111111"
 const D1_B = "22222222-bbbb-4bbb-8bbb-222222222222"
@@ -79,6 +81,13 @@ describe("check-wrangler-envs", () => {
   test("a binding repeated in both blocks passes", () => {
     const toml = `${top}${d1("", PLACEHOLDER)}\n[env.production]\n${prod}\n${d1("env.production.", D1_A)}`
     expect(check(toml)).toEqual([])
+  })
+
+  test("a binding missing from the board preview fails", () => {
+    const toml = `${top}${d1("", PLACEHOLDER)}\n[env.production]\n${prod}\n${d1("env.production.", D1_A)}\n${rest.slice(prod.length)}`
+    expect(check(toml)).toEqual([
+      "website [env.preview]: missing d1_databases DB (declared at the top level)",
+    ])
   })
 
   test("production without an explicit name fails", () => {

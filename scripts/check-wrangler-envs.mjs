@@ -38,13 +38,14 @@ const ROOT = resolve(import.meta.dirname, "..")
 // The Workers this repo deploys. `liveName` is the live production Worker, which
 // `.github/workflows/website.yml` deploys with `--env production`. Changing it is a
 // Worker rename and needs its own PR. `deployed` lists the envs that are live today,
-// where a placeholder id is an error.
+// where a placeholder id is an error: `preview` is the board preview, which
+// `.github/workflows/website-preview.yml` deploys.
 const APPS = [
   {
     app: "website",
     config: "website/wrangler.toml",
     liveName: "adaptv-website",
-    deployed: ["production"],
+    deployed: ["production", "preview"],
   },
 ]
 
