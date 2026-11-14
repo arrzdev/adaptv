@@ -158,11 +158,12 @@ configs pin `workers: 1` for this, so do not pass `--workers` to them.
 
 ## 5. What this estate does not cover
 
-**CI runs one of the five suites, on one engine**: the main config's **chromium** project, on every
-PR and push to `main`, with the HTML report and traces uploaded when it fails. Its **webkit** project
-and all five worker suites run only where someone runs them, which is why the Chromium worker wedge
-in §3.1 is still caught only by hand. Why chromium alone is recorded as **O11a**, and whether the
-native matrix can run in CI at all is still open as **O11b**
+**CI runs the browser suites off the per-PR path** (`.github/workflows/e2e.yml`, never a required
+check): a PR with the `e2e` label and the nightly run on `main` run five suites (main, `plain`, `sw`,
+`sw-spa`, `sw-prompt`) on **chromium**; the weekly `e2e-full` runs every suite on chromium and
+**webkit**. The HTML report and traces are uploaded when a suite fails. An unlabelled PR runs none of
+them, so run the specs you touched locally. The CI history is **O11a**, and whether the native
+matrix can run in CI at all is still open as **O11b**
 ([`../roadmap/open-questions.md`](../roadmap/open-questions.md)).
 
 Anything that needs a real device — motion feel, the OS keyboard, splash timing, edge-to-edge system
