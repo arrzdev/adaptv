@@ -13,17 +13,16 @@
 
 ### O11a — Browser suite in CI
 
-**Answered: all four suites, both engines.** `.github/workflows/ci.yml` job `e2e` is a matrix of
-eight parallel jobs — the main config and the three service-worker configs (`sw`, `sw-spa`,
-`sw-prompt`), each × `chromium` and `webkit` — on every PR and push to `main`. Each job installs only
-its own engine, runs its config with `CI=1` so the config boots and never reuses its own server, and
-uploads that job's HTML report with traces as `playwright-report-<suite>-<engine>` when it fails;
-`fail-fast` is off, so one red cell never hides the rest. This was first chromium-and-main-only, with
-the SW configs recorded as the follow-up; they are now in, and webkit with them, because webkit is
-the nearest thing CI has to the installed PWA's real engine. Still `retries: 0`, and the known
-`update.spec.ts` chromium intermittent (it reaches the `sw` and `sw-spa` chromium cells) is **not**
-`continue-on-error`: it goes red when it fires, and a re-run is a visible human act. `pnpm gate` still
-does not run any of this — minutes against seconds — so CI is the gate for it.
+**Answered: every suite, both engines, off the per-PR path.** `.github/workflows/e2e.yml` (never a
+required check) has two jobs. `e2e` runs five suites (main, `plain`, `sw`, `sw-spa`, `sw-prompt`) on
+`chromium` for a PR labelled `e2e` and nightly on `main`. `e2e-full` is a matrix of every suite
+(main, `plain`, `stress`, `sw`, `sw-spa`, `sw-prompt`, `sw-node`, `sw-subpath`) × `chromium` and
+`webkit`, weekly and on demand, and runs before a release. Each job installs only its own engine,
+runs with `CI=1` so the config boots and never reuses its own server, and uploads the HTML report
+with traces when it fails; `fail-fast` is off. The matrix first ran on every PR; it moved off that
+path because it spent the Actions minutes while the repo was private. Still `retries: 0`: the
+`update.spec.ts` chromium intermittent was fixed at its cause (`docs/design/rendering.md` §3.4), so a
+red run is a regression and a re-run is a visible human act. `pnpm gate` does not run any of this.
 
 ### O11b — Native matrix
 

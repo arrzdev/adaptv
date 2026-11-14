@@ -22,9 +22,9 @@ commands per target, fresh worktrees and ports. Node and pnpm versions come from
 
 ## The gate
 
-Run `pnpm gate` before every commit. It is everything the CI `gate` job runs. CI also runs the
-playground's Playwright suites on Chromium and WebKit; run the specs your change touches locally
-(see `DEVELOPMENT.md`).
+Run `pnpm gate` before every commit. It is everything the CI `gate` job runs. CI runs the
+playground's Playwright suites on a PR only with the `e2e` label (Chromium), nightly on `main`, and
+on Chromium and WebKit weekly; run the specs your change touches locally (see `DEVELOPMENT.md`).
 
 ## Commits and pull requests
 
