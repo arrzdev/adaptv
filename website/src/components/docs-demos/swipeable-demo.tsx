@@ -35,7 +35,7 @@ export function SwipeableDemo() {
                 <Swipeable.LeftActions>
                   <Pressable
                     onPress={() => setLast(`"${NOTES[row]}" pinned`)}
-                    className="flex h-full w-20 items-center justify-center bg-brand font-medium text-[13px] text-white"
+                    className="flex h-full w-20 items-center justify-center bg-brand font-medium text-[13px] text-brand-foreground"
                   >
                     Pin
                   </Pressable>
@@ -45,7 +45,7 @@ export function SwipeableDemo() {
                     onPress={() =>
                       setRows((list) => list.filter((item) => item !== row))
                     }
-                    className="flex h-full w-20 items-center justify-center bg-danger font-medium text-[13px] text-white"
+                    className="flex h-full w-20 items-center justify-center bg-danger font-medium text-[13px] text-danger-foreground"
                   >
                     Delete
                   </Pressable>

@@ -153,7 +153,7 @@ function SwipeRow({
         <Pressable
           aria-label="Delete"
           onPress={onDelete}
-          className="flex h-full w-20 items-center justify-center bg-danger text-white"
+          className="flex h-full w-20 items-center justify-center bg-danger text-danger-foreground"
         >
           <Trash2 className="size-5" />
         </Pressable>
