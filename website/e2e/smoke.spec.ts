@@ -145,13 +145,13 @@ test.describe("scrollable regions are keyboard-reachable and named, phone 390x84
           if (el.querySelector(FOCUSABLE)) continue
           const ok =
             el.getAttribute("tabindex") === "0" &&
-            el.getAttribute("role") === "region" &&
+            el.getAttribute("role") === "group" &&
             (el.getAttribute("aria-label") ?? "").trim() !== ""
           if (!ok) out.push(`${el.tagName.toLowerCase()}.${el.className}`.slice(0, 80))
         }
         return out
       })
-      expect(bad, "scrollers without tabindex=0, role=region and an aria-label").toEqual([])
+      expect(bad, "scrollers without tabindex=0, role=group and an aria-label").toEqual([])
     })
   }
 })
