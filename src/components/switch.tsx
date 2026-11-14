@@ -251,6 +251,8 @@ function resolveSwitchThumbChild(children: ReactNode): ReactNode {
  *   const { isChecked } = useSwitch()
  *   return <Switch.Thumb className={cn(isChecked && "bg-white")} />
  * }
+ * //the switch keeps one child, its thumb, found by this name
+ * BrandedThumb.displayName = "Switch.Thumb"
  *
  * <Switch aria-label="Wi-Fi" checked={on} onCheckedChange={setOn}>
  *   <BrandedThumb />
