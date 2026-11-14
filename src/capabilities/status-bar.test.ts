@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import {
   applyStatusBar,
   enableEdgeToEdge,
+  reprobeAndroidInsets,
 } from "#adaptv/capabilities/status-bar"
 
 vi.mock("@capacitor/core", () => ({
@@ -155,5 +156,27 @@ describe("enableEdgeToEdge", () => {
     expect(StatusBar.setOverlaysWebView).toHaveBeenCalledWith({
       overlay: true,
     })
+  })
+})
+
+describe("reprobeAndroidInsets", () => {
+  it("re-runs the SystemBars DOM-ready probe on Android", () => {
+    const onDOMReady = vi.fn()
+    vi.stubGlobal("CapacitorSystemBarsAndroidInterface", { onDOMReady })
+    reprobeAndroidInsets()
+    expect(onDOMReady).toHaveBeenCalledTimes(1)
+  })
+
+  it("is a no-op where the Android bridge does not exist", () => {
+    expect(() => reprobeAndroidInsets()).not.toThrow()
+  })
+
+  it("swallows a bridge that throws mid-teardown", () => {
+    vi.stubGlobal("CapacitorSystemBarsAndroidInterface", {
+      onDOMReady: () => {
+        throw new Error("bridge gone")
+      },
+    })
+    expect(() => reprobeAndroidInsets()).not.toThrow()
   })
 })

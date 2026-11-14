@@ -7,7 +7,10 @@ import {
   resetBackChain,
   runBackChain,
 } from "#adaptv/capabilities/back-chain"
-import { useAndroidBackButton } from "#adaptv/hooks/use-android-back-button"
+import {
+  adaptvBack,
+  useAndroidBackButton,
+} from "#adaptv/hooks/use-android-back-button"
 
 //The router is the one collaborator this hook reaches through React context; a
 //fake with a controllable history is the whole surface the floor handler reads.
@@ -213,5 +216,27 @@ describe("useAndroidBackButton — a rejecting bridge", () => {
     resolve({ remove })
     await settle()
     expect(remove).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("adaptvBack", () => {
+  afterEach(() => {
+    resetBackChain()
+  })
+
+  it("is false when nothing on the chain handles the press", () => {
+    expect(adaptvBack()).toBe(false)
+  })
+
+  it("runs the chain the hardware button runs, top priority first", () => {
+    const overlay = vi.fn(() => true)
+    const floor = vi.fn(() => true)
+    const offFloor = registerBackHandler(floor, BackPriority.RouterBack)
+    const offOverlay = registerBackHandler(overlay, BackPriority.Overlay)
+    expect(adaptvBack()).toBe(true)
+    expect(overlay).toHaveBeenCalledTimes(1)
+    expect(floor).not.toHaveBeenCalled()
+    offOverlay()
+    offFloor()
   })
 })

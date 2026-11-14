@@ -2,10 +2,14 @@ import { act, renderHook } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
   computeScrollIntoViewTop,
+  DEFAULT_AVOID_KEYBOARD_SCROLL_BUFFER,
+  onProgrammaticScrollSettled,
   resolveAvoidanceSpace,
   resolveReservedSpace,
+  scrollFocusedInputIntoView,
   useKeyboardAvoidance,
 } from "#adaptv/components/avoid-keyboard/use-keyboard-avoidance"
+import { CARET_SETTLE_MS } from "#adaptv/hooks/use-caret-repaint"
 
 describe("resolveAvoidanceSpace", () => {
   const viewportHeight = 800
@@ -564,5 +568,116 @@ describe("useKeyboardAvoidance — a second look when the smooth scroll ends", (
       //nothing moved, so from fresh geometry the destination is the whole 364
       expect(rig.tops()).toEqual([264, 364])
     })
+  })
+})
+
+describe("scrollFocusedInputIntoView", () => {
+  function rect(top: number, bottom: number) {
+    return DOMRect.fromRect({
+      x: 0,
+      y: top,
+      width: 300,
+      height: bottom - top,
+    })
+  }
+
+  function mount(inputTop: number) {
+    const container = document.createElement("div")
+    const input = document.createElement("input")
+    container.append(input)
+    document.body.append(container)
+    vi.spyOn(container, "getBoundingClientRect").mockReturnValue(
+      rect(0, 800),
+    )
+    vi.spyOn(input, "getBoundingClientRect").mockReturnValue(
+      rect(inputTop, inputTop + 40),
+    )
+    const scrollTo = vi.fn()
+    container.scrollTo = scrollTo as unknown as typeof container.scrollTo
+    return { container, input, scrollTo }
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    document.body.replaceChildren()
+  })
+
+  it("scrolls the container so the field clears the keyboard line by the buffer", () => {
+    //keyboard top 500, buffer 24 → line 476; field bottom 640 → up by 164
+    const { container, input, scrollTo } = mount(600)
+    const scroller = scrollFocusedInputIntoView(container, input, {
+      buffer: DEFAULT_AVOID_KEYBOARD_SCROLL_BUFFER,
+      behavior: "instant",
+      keyboardTop: 500,
+    })
+    expect(scroller).toBe(container)
+    expect(scrollTo).toHaveBeenCalledWith({
+      top: 164,
+      behavior: "instant",
+    })
+  })
+
+  it("returns null and does not scroll when the field is already clear", () => {
+    const { container, input, scrollTo } = mount(100)
+    const scroller = scrollFocusedInputIntoView(container, input, {
+      buffer: DEFAULT_AVOID_KEYBOARD_SCROLL_BUFFER,
+      behavior: "instant",
+      keyboardTop: 500,
+    })
+    expect(scroller).toBeNull()
+    expect(scrollTo).not.toHaveBeenCalled()
+  })
+})
+
+describe("onProgrammaticScrollSettled", () => {
+  let scroller: HTMLElement
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    scroller = document.createElement("div")
+    document.body.append(scroller)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    document.body.replaceChildren()
+  })
+
+  it("settles after the quiet window when the scroll never starts", () => {
+    const onSettle = vi.fn()
+    onProgrammaticScrollSettled(scroller, onSettle)
+    vi.advanceTimersByTime(CARET_SETTLE_MS - 1)
+    expect(onSettle).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(1)
+    expect(onSettle).toHaveBeenCalledTimes(1)
+  })
+
+  it("never settles once the user takes hold of the page", () => {
+    const onSettle = vi.fn()
+    onProgrammaticScrollSettled(scroller, onSettle)
+    window.dispatchEvent(new Event("pointerdown"))
+    vi.advanceTimersByTime(CARET_SETTLE_MS * 4)
+    expect(onSettle).not.toHaveBeenCalled()
+  })
+
+  it("never settles after the returned cancel runs", () => {
+    const onSettle = vi.fn()
+    const cancel = onProgrammaticScrollSettled(scroller, onSettle)
+    cancel()
+    vi.advanceTimersByTime(CARET_SETTLE_MS * 4)
+    expect(onSettle).not.toHaveBeenCalled()
+  })
+
+  it("settles once, on the scroll's end, however many scroll events came first", () => {
+    const onSettle = vi.fn()
+    onProgrammaticScrollSettled(scroller, onSettle, {
+      startWithinMs: 1000,
+    })
+    scroller.dispatchEvent(new Event("scroll"))
+    scroller.dispatchEvent(new Event("scroll"))
+    if ("onscrollend" in window)
+      scroller.dispatchEvent(new Event("scrollend"))
+    vi.advanceTimersByTime(CARET_SETTLE_MS * 4)
+    expect(onSettle).toHaveBeenCalledTimes(1)
   })
 })
