@@ -6,6 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { UseThemeResult } from "#adaptv/hooks/use-theme"
 import {
   applyUiThemePreference,
+  getResolvedUiAppearance,
+  initUiTheme,
+  readPreference,
   syncUiThemeAppearance,
   useTheme,
 } from "#adaptv/hooks/use-theme"
@@ -558,5 +561,66 @@ describe("useTheme hydration", () => {
 
     act(() => app?.unmount())
     container.remove()
+  })
+})
+
+describe("readPreference", () => {
+  it("is system when nothing is stored or painted", () => {
+    expect(readPreference()).toBe("system")
+  })
+
+  it("reads the stored choice first", () => {
+    localStorage.setItem(UI_THEME_STORAGE_KEY, "dark")
+    root.setAttribute(PREFERENCE_ATTR, "light")
+    expect(readPreference()).toBe("dark")
+  })
+
+  it("falls back to what the pre-paint script stamped when storage holds junk", () => {
+    localStorage.setItem(UI_THEME_STORAGE_KEY, "sepia")
+    root.setAttribute(PREFERENCE_ATTR, "light")
+    expect(readPreference()).toBe("light")
+  })
+
+  it("falls back to the stamp when storage throws (private mode, blocked cookies)", () => {
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new DOMException("denied", "SecurityError")
+    })
+    root.setAttribute(PREFERENCE_ATTR, "dark")
+    expect(readPreference()).toBe("dark")
+  })
+})
+
+describe("getResolvedUiAppearance", () => {
+  it("returns an explicit choice whatever the OS says", () => {
+    os.set(true)
+    expect(getResolvedUiAppearance("light")).toBe("light")
+    os.set(false)
+    expect(getResolvedUiAppearance("dark")).toBe("dark")
+  })
+
+  it("follows the OS for system", () => {
+    os.set(true)
+    expect(getResolvedUiAppearance("system")).toBe("dark")
+    os.set(false)
+    expect(getResolvedUiAppearance("system")).toBe("light")
+  })
+})
+
+describe("initUiTheme", () => {
+  it("paints the stored preference on <html> without writing it back", () => {
+    localStorage.setItem(UI_THEME_STORAGE_KEY, "dark")
+    const setItem = vi.spyOn(Storage.prototype, "setItem")
+    initUiTheme()
+    expect(htmlClass()).toBe("dark")
+    expect(root.style.colorScheme).toBe("dark")
+    expect(root.getAttribute(PREFERENCE_ATTR)).toBe("dark")
+    expect(setItem).not.toHaveBeenCalled()
+  })
+
+  it("paints a preference it is given, resolving system against the OS", () => {
+    os.set(true)
+    initUiTheme("system")
+    expect(htmlClass()).toBe("dark")
+    expect(root.getAttribute(PREFERENCE_ATTR)).toBe("system")
   })
 })

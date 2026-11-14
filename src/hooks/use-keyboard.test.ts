@@ -5,6 +5,9 @@ import {
   recordKeyboardHeight,
 } from "#adaptv/capabilities/keyboard-height-cache"
 import {
+  dismissVirtualKeyboard,
+  getActiveInputElement,
+  getVirtualKeyboardApi,
   isSuppressibleKeyboardShrink,
   useKeyboard,
   willOpenVirtualKeyboard,
@@ -1041,5 +1044,92 @@ describe("useKeyboard — native", () => {
       resizesLayoutViewport: false,
     })
     readOnly.remove()
+  })
+})
+
+describe("getActiveInputElement", () => {
+  afterEach(() => {
+    document.body.replaceChildren()
+  })
+
+  it("is the focused text field", () => {
+    const input = document.createElement("input")
+    document.body.append(input)
+    input.focus()
+    expect(getActiveInputElement()).toBe(input)
+  })
+
+  it("is null when the focused element raises no keyboard", () => {
+    const button = document.createElement("button")
+    document.body.append(button)
+    button.focus()
+    expect(getActiveInputElement()).toBeNull()
+  })
+
+  it("walks into a shadow root to the field focused inside it", () => {
+    const host = document.createElement("div")
+    document.body.append(host)
+    const shadow = host.attachShadow({ mode: "open" })
+    const input = document.createElement("textarea")
+    shadow.append(input)
+    input.focus()
+    expect(getActiveInputElement()).toBe(input)
+  })
+})
+
+describe("dismissVirtualKeyboard", () => {
+  afterEach(() => {
+    document.body.replaceChildren()
+  })
+
+  it("blurs the focused text field", () => {
+    const input = document.createElement("input")
+    document.body.append(input)
+    input.focus()
+    dismissVirtualKeyboard()
+    expect(document.activeElement).not.toBe(input)
+  })
+
+  it("leaves focus alone on an element that raises no keyboard", () => {
+    const button = document.createElement("button")
+    document.body.append(button)
+    button.focus()
+    dismissVirtualKeyboard()
+    expect(document.activeElement).toBe(button)
+  })
+})
+
+describe("getVirtualKeyboardApi", () => {
+  const restores: Array<() => void> = []
+
+  function define(target: object, key: string, value: unknown) {
+    const prev = Object.getOwnPropertyDescriptor(target, key)
+    Object.defineProperty(target, key, { value, configurable: true })
+    restores.push(() => {
+      if (prev) Object.defineProperty(target, key, prev)
+      else delete (target as Record<string, unknown>)[key]
+    })
+  }
+
+  afterEach(() => {
+    for (const restore of restores.splice(0).reverse()) restore()
+  })
+
+  it("is the browser's VirtualKeyboard in a secure context", () => {
+    const api = { boundingRect: { height: 0 } }
+    define(window, "isSecureContext", true)
+    define(navigator, "virtualKeyboard", api)
+    expect(getVirtualKeyboardApi()).toBe(api)
+  })
+
+  it("is null where the browser has no VirtualKeyboard (Safari, Firefox)", () => {
+    define(window, "isSecureContext", true)
+    expect(getVirtualKeyboardApi()).toBeNull()
+  })
+
+  it("is null outside a secure context, where the API is not exposed", () => {
+    define(window, "isSecureContext", false)
+    define(navigator, "virtualKeyboard", { boundingRect: { height: 0 } })
+    expect(getVirtualKeyboardApi()).toBeNull()
   })
 })

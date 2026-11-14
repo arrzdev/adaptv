@@ -3,10 +3,12 @@ import type { AdaptvUiConfig } from "#adaptv/config/app-config"
 import {
   applyPlatformStamp,
   getOS,
+  getOSVersion,
   getPlatformInitScript,
   isInstalledApp,
   isIOS,
   isNativePlatform,
+  isOSVersionAtLeast,
   isStandaloneDisplay,
   normalizeUiScope,
   resolvePlatformTag,
@@ -408,5 +410,61 @@ describe("applyPlatformStamp — ui stamps", () => {
     expect(readAll()).toEqual(fromScript)
     //and it actually decided something, rather than agreeing on all-false
     expect(fromScript).toEqual([true, false, true])
+  })
+})
+
+describe("getOSVersion", () => {
+  it("reads the dotted version from an iPhone UA", () => {
+    stubNavigator({ userAgent: UA_IPHONE })
+    expect(getOSVersion()).toBe("17.0")
+  })
+
+  it("keeps the patch number when the UA carries one", () => {
+    stubNavigator({
+      userAgent:
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 18_4_1 like Mac OS X) AppleWebKit/605.1.15",
+    })
+    expect(getOSVersion()).toBe("18.4.1")
+  })
+
+  it("reads iPadOS, which says CPU OS without iPhone", () => {
+    stubNavigator({
+      userAgent:
+        "Mozilla/5.0 (iPad; CPU OS 16_6 like Mac OS X) AppleWebKit/605.1.15",
+    })
+    expect(getOSVersion()).toBe("16.6")
+  })
+
+  it("reads the Android version", () => {
+    stubNavigator({ userAgent: UA_ANDROID })
+    expect(getOSVersion()).toBe("14")
+  })
+
+  it("is null on desktop, whose frozen Mac OS X 10_15_7 says nothing", () => {
+    stubNavigator({ userAgent: UA_DESKTOP })
+    expect(getOSVersion()).toBeNull()
+  })
+})
+
+describe("isOSVersionAtLeast", () => {
+  it("compares the major first", () => {
+    stubNavigator({ userAgent: UA_IPHONE })
+    expect(isOSVersionAtLeast(16)).toBe(true)
+    expect(isOSVersionAtLeast(17)).toBe(true)
+    expect(isOSVersionAtLeast(18)).toBe(false)
+  })
+
+  it("compares the minor when the major is equal", () => {
+    stubNavigator({
+      userAgent:
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 18_4 like Mac OS X) AppleWebKit/605.1.15",
+    })
+    expect(isOSVersionAtLeast(18, 4)).toBe(true)
+    expect(isOSVersionAtLeast(18, 5)).toBe(false)
+  })
+
+  it("is false when the version is unknown, so the caller keeps its workaround", () => {
+    stubNavigator({ userAgent: UA_DESKTOP })
+    expect(isOSVersionAtLeast(0)).toBe(false)
   })
 })
