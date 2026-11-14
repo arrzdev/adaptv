@@ -98,6 +98,22 @@ export function softwareJsonLd(): Record<string, unknown> {
 }
 
 /**
+ * The site itself, which the software node sits on. No SearchAction: the docs search runs
+ * in the page and has no URL a search engine could fill in.
+ */
+export function websiteJsonLd(): Record<string, unknown> {
+  return {
+    "@type": "WebSite",
+    "@id": `${SITE_URL}/#website`,
+    name: "adaptv",
+    description: SITE_DESCRIPTION,
+    url: `${SITE_URL}/`,
+    inLanguage: "en",
+    about: { "@id": `${SITE_URL}/#software` },
+  }
+}
+
+/**
  * A docs page or a post: a TechArticle, and the trail from the home page to it. `section`
  * is the middle crumb, `/docs` or `/blog`.
  */
