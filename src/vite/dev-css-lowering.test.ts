@@ -1,8 +1,12 @@
 // @vitest-environment node
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
+import type { Plugin, ResolvedConfig } from "vite"
 import { describe, expect, it } from "vitest"
-import { lowerDevCss } from "#adaptv/vite/dev-css-lowering"
+import {
+  adaptvDevCssLoweringPlugin,
+  lowerDevCss,
+} from "#adaptv/vite/dev-css-lowering"
 import {
   rewriteRingShadow,
   usesEmptyRingFallback,
@@ -367,5 +371,98 @@ describe("lowerDevCss's source map", () => {
 
   it("builds no map when the dev server does not want one", () => {
     expect(lowerDevCss(FIXTURE, "/app/src/styles/main.css").map).toBeNull()
+  })
+})
+
+describe("lowerDevCss on a rule it cannot parse", () => {
+  it("keeps going past a selector it does not know, and says where it was", () => {
+    const { code, warnings } = lowerDevCss(
+      ".probe:bogus { color: red }\n.kept { color: blue }",
+      "/app/src/probe.css",
+    )
+    expect(code).toContain(".kept")
+    expect(warnings).toHaveLength(1)
+    expect(warnings[0]).toMatch(
+      /^'bogus' is not recognized as a valid pseudo-class.* \(1:\d+\)$/,
+    )
+  })
+
+  it("keeps quiet about the pseudos a framework compiler leaves, in a Tailwind sheet only", () => {
+    //`optimize` drops these warnings too; anywhere else they are the author's typo
+    const css = ".probe :deep(.x) { color: red }"
+    expect(
+      lowerDevCss(`${TAILWIND_BANNER}${css}`, "/app/src/styles/main.css")
+        .warnings,
+    ).toEqual([])
+    expect(lowerDevCss(css, "/app/src/probe.css").warnings).toEqual([
+      expect.stringMatching(/^'deep' is not recognized/),
+    ])
+  })
+})
+
+describe("adaptvDevCssLoweringPlugin — the dev server's side of it", () => {
+  type Transformed = { code: string; map: unknown } | null
+
+  /** The plugin with `configResolved` run, and its `transform` called the way Vite would. */
+  function serve(devSourcemap: boolean) {
+    const plugin: Plugin = adaptvDevCssLoweringPlugin()
+    expect(plugin.apply).toBe("serve")
+    expect(plugin.enforce).toBeUndefined()
+    // biome-ignore lint/suspicious/noExplicitAny: calling a Vite hook outside Vite
+    ;(plugin.configResolved as any).call({}, {
+      css: { devSourcemap },
+    } as unknown as ResolvedConfig)
+    const warned: string[] = []
+    const transform = (code: string, id: string): Transformed =>
+      // biome-ignore lint/suspicious/noExplicitAny: calling a Vite hook outside Vite
+      (plugin.transform as any).call(
+        { warn: (message: string) => warned.push(message) },
+        code,
+        id,
+      )
+    return { transform, warned }
+  }
+
+  it("leaves anything that is not a stylesheet alone", () => {
+    const { transform } = serve(false)
+    expect(transform("export {}", "/app/src/main.ts")).toBeNull()
+    expect(
+      transform(".probe { & .x { color: red } }", "/app/a.css?raw"),
+    ).toBeNull()
+  })
+
+  it("serves the lowered sheet, with an empty map when the dev server wants none", () => {
+    const { transform, warned } = serve(false)
+    const result = transform(
+      ".probe { & .x { color: red } }",
+      "/app/src/probe.css",
+    )
+    expect(result?.code).toContain(".probe .x")
+    expect(result?.code).not.toContain("&")
+    //`null` would claim nothing moved; flattening moves every nested rule
+    expect(result?.map).toEqual({ mappings: "" })
+    expect(warned).toEqual([])
+  })
+
+  it("hands over lightningcss's map when css.devSourcemap is on", () => {
+    const { transform } = serve(true)
+    const result = transform(
+      ".probe { & .x { color: red } }",
+      "/app/src/probe.css",
+    )
+    expect(typeof result?.map).toBe("string")
+    expect(JSON.parse(result?.map as string).sources).toHaveLength(1)
+  })
+
+  it("passes each warning to Vite instead of failing the request", () => {
+    const { transform, warned } = serve(false)
+    const result = transform(
+      ".probe:bogus { color: red }\n.kept { color: blue }",
+      "/app/src/probe.css",
+    )
+    expect(result?.code).toContain(".kept")
+    expect(warned).toEqual([
+      expect.stringMatching(/^'bogus' is not recognized/),
+    ])
   })
 })

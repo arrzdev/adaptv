@@ -495,4 +495,61 @@ describe("adaptvSwBuildPlugin — when there is no worker to build", () => {
     )
     expect(existsSync(path.join(clientDir, "sw.js"))).toBe(false)
   })
+
+  it("refuses to build before the client output exists", async () => {
+    const { clientDir, context } = scaffold("spa", "web")
+    rmSync(clientDir, { recursive: true, force: true })
+    await expect(buildWorker(context)).rejects.toThrow(
+      /dist\/client missing — the client build must finish/,
+    )
+  })
+})
+
+describe("adaptvSwBuildPlugin — the app's own worker modules", () => {
+  /** A scaffold whose config lists `serviceWorkers`. */
+  function withServiceWorkers(serviceWorkers: string[]) {
+    const built = scaffold("spa", "web")
+    const config = requireAppConfig(built.context)
+    config.serviceWorkers = serviceWorkers
+    return built
+  }
+
+  it(
+    "bundles each module after adaptv's worker, so the framework's routes match first",
+    async () => {
+      const { appRoot, clientDir, context } = withServiceWorkers([
+        "./src/sw/push.ts",
+      ])
+      mkdirSync(path.join(appRoot, "src/sw"), { recursive: true })
+      writeFileSync(
+        path.join(appRoot, "src/sw/push.ts"),
+        'self.addEventListener("push", () => console.log("probe-push-module"))\n',
+      )
+      await buildWorker(context)
+      //the generated entry imports adaptv's worker first, then the app's module
+      const entry = readFileSync(
+        path.join(appRoot, ".adaptv/sw.gen.ts"),
+        "utf8",
+      )
+      const imports = [...entry.matchAll(/^import "(.+)"$/gm)].map(
+        (match) => match[1] as string,
+      )
+      expect(imports).toHaveLength(2)
+      expect(imports[1]).toBe(path.join(appRoot, "src/sw/push.ts"))
+      const worker = readFileSync(path.join(clientDir, "sw.js"), "utf8")
+      expect(worker).toContain("probe-push-module")
+      expect(precachedUrls(worker)).toContain("index.html")
+    },
+    BUILD_TIMEOUT,
+  )
+
+  it("names a module that does not exist, and where it looked", async () => {
+    const { appRoot, clientDir, context } = withServiceWorkers([
+      "./src/sw/missing.ts",
+    ])
+    await expect(buildWorker(context)).rejects.toThrow(
+      `[adaptv] serviceWorkers: "./src/sw/missing.ts" does not exist (resolved to ${path.join(appRoot, "src/sw/missing.ts")})`,
+    )
+    expect(existsSync(path.join(clientDir, "sw.js"))).toBe(false)
+  })
 })

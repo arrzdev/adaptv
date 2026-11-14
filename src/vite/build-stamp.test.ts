@@ -1,10 +1,21 @@
 // @vitest-environment node
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
-import { describe, expect, it } from "vitest"
+import type { Plugin, ResolvedConfig } from "vite"
+import { afterEach, describe, expect, it } from "vitest"
+import type { AdaptvContext } from "#adaptv/vite/adaptv-context.ts"
 import type { AdaptvBuildStamp } from "#adaptv/vite/build-stamp.ts"
 import {
+  adaptvBuildStampPlugin,
+  BUILD_ID_ENV,
   buildStampPath,
   bundleIsStale,
   fileHash,
@@ -131,6 +142,96 @@ describe("bundleIsStale — may this bundle be synced into the native project?",
       buildStampPath(root, "capacitor"),
     )
     expect(readBuildStamp(root, "web")).toBeNull()
+    rmSync(root, { recursive: true, force: true })
+  })
+})
+
+/** Run the plugin's two hooks the way Vite would, outside Vite. */
+async function runStampPlugin(
+  context: AdaptvContext,
+  outDir: string | undefined,
+): Promise<void> {
+  const plugin = adaptvBuildStampPlugin(context)
+  // biome-ignore lint/suspicious/noExplicitAny: calling a Vite hook outside Vite
+  ;(plugin.configResolved as any).call({}, {
+    root: context.appRoot,
+    environments: { client: { build: { outDir } } },
+  } as unknown as ResolvedConfig)
+  const hook = (plugin as Plugin).buildApp
+  if (typeof hook !== "object" || !hook.handler)
+    throw new Error(
+      "buildApp must be an object hook so `order` can be set",
+    )
+  expect(hook.order).toBe("post")
+  // biome-ignore lint/suspicious/noExplicitAny: calling a Vite hook outside Vite
+  await (hook.handler as any).call({}, {})
+}
+
+describe("adaptvBuildStampPlugin — what a build writes down about itself", () => {
+  const savedId = process.env[BUILD_ID_ENV]
+  afterEach(() => {
+    if (savedId === undefined) delete process.env[BUILD_ID_ENV]
+    else process.env[BUILD_ID_ENV] = savedId
+  })
+
+  const context = (
+    root: string,
+    target: "web" | "capacitor",
+    render?: "ssr" | "spa",
+  ): AdaptvContext => ({
+    appRoot: root,
+    loaded: null,
+    target,
+    ...(render ? { web: { render, sw: { enabled: true } } } : {}),
+  })
+
+  it("stamps where the client build wrote, the shell, its hash and the CLI's config id", async () => {
+    const root = app()
+    writeFileSync(path.join(root, OUT, "index.html"), "<html>")
+    process.env[BUILD_ID_ENV] = "cfg-1"
+    await runStampPlugin(context(root, "capacitor", "spa"), OUT)
+    expect(readBuildStamp(root, "capacitor")).toEqual({
+      target: "capacitor",
+      render: "spa",
+      outDir: OUT,
+      shell: "index.html",
+      shellHash: fileHash(path.join(root, OUT, "index.html")),
+      configId: "cfg-1",
+    })
+    //the stamp it just wrote is the one `dev ios` accepts
+    expect(bundleIsStale(root, "capacitor", "cfg-1")).toBe(false)
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  it("stamps a build that emitted no shell, and one the CLI did not run, as nothing to trust", async () => {
+    //no `web` on the context: the render defaults to ssr, whose shell is absent here
+    const root = app()
+    delete process.env[BUILD_ID_ENV]
+    await runStampPlugin(context(root, "web"), "dist/client")
+    const raw = JSON.parse(
+      readFileSync(buildStampPath(root, "web"), "utf8"),
+    ) as AdaptvBuildStamp
+    expect(raw).toEqual({
+      target: "web",
+      render: "ssr",
+      outDir: path.join("dist", "client"),
+      shell: null,
+      shellHash: null,
+      configId: null,
+    })
+    expect(bundleIsStale(root, "web", "cfg-1")).toBe(true)
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  it("refuses to stamp when the client output directory was never captured", async () => {
+    //Vite resolved no client `outDir`, so there is nothing true to write. A guessed
+    //`dist/client` here is exactly how the CLI used to name a directory the build
+    //had not touched.
+    const root = app()
+    await expect(
+      runStampPlugin(context(root, "web", "ssr"), undefined),
+    ).rejects.toThrow(/client output directory is unknown/)
+    expect(existsSync(buildStampPath(root, "web"))).toBe(false)
     rmSync(root, { recursive: true, force: true })
   })
 })
