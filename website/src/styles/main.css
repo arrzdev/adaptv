@@ -84,9 +84,10 @@
   --brand-strong: #4451c4;
   --brand-soft: #eef0fd;
   --brand-foreground: #ffffff;
-  --danger: #d6455a;
+  --danger: #cc3a4f; /* AA: 4.9:1 with --danger-foreground, 4.54:1 on --sunken */
+  --danger-foreground: #ffffff;
   --danger-soft: #fdecef;
-  --success: #12996a;
+  --success: #0b7a55; /* AA as text: 5.34:1 on --background, 4.95:1 on --sunken */
   --success-soft: #e6f6ef;
 
   /* landing-v4 cards: a surface one shade off the page, no border, no shadow */
@@ -128,6 +129,7 @@
   --brand-soft: #16172e;
   --brand-foreground: #08080a;
   --danger: #ff7a8e;
+  --danger-foreground: #08080a;
   --danger-soft: #2a1218;
   --success: #4fdca0;
   --success-soft: #0d231a;
@@ -155,6 +157,7 @@
   --color-brand-soft: var(--brand-soft);
   --color-brand-foreground: var(--brand-foreground);
   --color-danger: var(--danger);
+  --color-danger-foreground: var(--danger-foreground);
   --color-danger-soft: var(--danger-soft);
   --color-success: var(--success);
   --color-success-soft: var(--success-soft);

@@ -3,7 +3,7 @@ import { useEffect, useState } from "react"
 
 function Spinner() {
   return (
-    <span className="block size-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+    <span className="block size-3.5 animate-spin rounded-full border-2 border-brand-foreground/40 border-t-brand-foreground" />
   )
 }
 
@@ -27,7 +27,7 @@ export function ButtonDemo() {
         disabled={pending}
         aria-busy={pending}
         onClick={() => setPending(true)}
-        className="rounded-xl bg-brand px-4 py-2 font-medium text-[14px] text-white transition-transform active:scale-95 disabled:opacity-70"
+        className="rounded-xl bg-brand px-4 py-2 font-medium text-[14px] text-brand-foreground transition-transform active:scale-95 disabled:opacity-70"
       >
         {pending && (
           <Button.Leading className="pe-2">

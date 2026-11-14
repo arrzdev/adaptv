@@ -14,9 +14,9 @@ function Box() {
           : "bg-surface outline outline-1 -outline-offset-1 outline-border-strong",
       )}
     >
-      <Checkbox.Icon className="text-white" />
+      <Checkbox.Icon className="text-brand-foreground" />
       {isIndeterminate && (
-        <span className="absolute h-0.5 w-2.5 rounded-full bg-white" />
+        <span className="absolute h-0.5 w-2.5 rounded-full bg-brand-foreground" />
       )}
     </Checkbox.Box>
   )
