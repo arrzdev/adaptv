@@ -12,6 +12,7 @@ import {
   SITE_TITLE,
   socialHead,
   softwareJsonLd,
+  websiteJsonLd,
 } from "@/content/site"
 
 export const Route = createFileRoute("/")({
@@ -21,7 +22,7 @@ export const Route = createFileRoute("/")({
       title: SITE_TITLE,
       description: SITE_DESCRIPTION,
       path: "/",
-      jsonLd: [softwareJsonLd()],
+      jsonLd: [websiteJsonLd(), softwareJsonLd()],
     }),
 })
 

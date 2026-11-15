@@ -97,6 +97,15 @@ describe("structured data", () => {
       expect(software, key).not.toHaveProperty(key)
   })
 
+  it("the home page names the site, in its own language, as a WebSite", () => {
+    expect(ofType(graph(HomeRoute), "WebSite")).toMatchObject({
+      "@id": "https://adaptv.tudu.dev/#website",
+      name: "adaptv",
+      url: "https://adaptv.tudu.dev/",
+      inLanguage: "en",
+    })
+  })
+
   it("a docs page is a TechArticle under Docs", () => {
     const nodes = graph(DocRoute, "switch")
     expect(ofType(nodes, "TechArticle")).toMatchObject({
