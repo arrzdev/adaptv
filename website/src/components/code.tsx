@@ -92,6 +92,7 @@ export function CodePanel({
 }) {
   const [active, setActive] = useState(0)
   const sample = samples[active] ?? samples[0]
+  const tabs = samples.length > 1
   const [scroller, more] = useMoreToScroll<HTMLPreElement>(sample)
   if (!sample) return null
   return (
@@ -105,22 +106,40 @@ export function CodePanel({
         row
         className="items-center justify-between border-white/10 border-b pr-2 pl-3"
       >
-        <View row className="min-w-0 overflow-x-auto">
-          {samples.map((item, index) => (
-            <button
-              key={item.label}
-              type="button"
-              onClick={() => setActive(index)}
-              className={cn(
-                "cursor-pointer whitespace-nowrap border-b-2 px-3 py-3 font-mono text-[12.5px]",
-                index === active
-                  ? "border-(--code-keyword) text-code-fg"
-                  : "border-transparent text-code-muted hover:text-code-fg",
-              )}
-            >
-              {item.label}
-            </button>
-          ))}
+        <View
+          row
+          role={tabs ? "group" : undefined}
+          aria-label={tabs ? "Code files" : undefined}
+          // tabs scroll sideways (their buttons make the row reachable); a lone label wraps,
+          // so it never leaves a scroller with nothing to focus in it
+          className={cn("min-w-0", tabs && "overflow-x-auto")}
+        >
+          {samples.map((item, index) => {
+            const selected = index === active
+            const className = cn(
+              "border-b-2 px-3 py-3 font-mono text-[12.5px]",
+              tabs ? "whitespace-nowrap" : "min-w-0 break-all",
+              selected
+                ? "border-(--code-keyword) text-code-fg"
+                : "border-transparent text-code-muted hover:text-code-fg",
+            )
+            // a lone label names the file; it is not a control, so it is no button
+            return tabs ? (
+              <button
+                key={item.label}
+                type="button"
+                aria-pressed={selected}
+                onClick={() => setActive(index)}
+                className={cn("cursor-pointer", className)}
+              >
+                {item.label}
+              </button>
+            ) : (
+              <span key={item.label} className={className}>
+                {item.label}
+              </span>
+            )
+          })}
         </View>
         <CopyButton text={sample.code} />
       </View>
