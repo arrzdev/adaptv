@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react"
+import { fireEvent, render } from "@testing-library/react"
 import type { ReactNode } from "react"
 import { describe, expect, it } from "vitest"
 import { Dropdown } from "#adaptv/components/dropdown"
@@ -135,5 +135,66 @@ describe("Dropdown.Content — the locked panel structure", () => {
         ':where([data-adaptv="dropdown"][data-part="content"])',
       ),
     ).toContain("background-color: var(--color-surface);")
+  })
+})
+
+/*
+ * Dropdown.Content is `role="menu"`, so it owes the WAI-ARIA menu button keyboard model: on
+ * open focus moves to the first enabled item, ArrowDown/ArrowUp move between enabled items
+ * (wrapping), Home/End jump to the ends, and Escape returns focus to the trigger. Before this,
+ * focus stayed on the trigger and the arrows did nothing, so a keyboard user could open the
+ * menu but not reach it.
+ */
+describe("Dropdown.Content — the menu keyboard model", () => {
+  function menu() {
+    const result = render(
+      <Dropdown>
+        <Dropdown.Trigger>Menu</Dropdown.Trigger>
+        <Dropdown.Content aria-label="Menu">
+          <Dropdown.Item disabled>Locked</Dropdown.Item>
+          <Dropdown.Item>Rename</Dropdown.Item>
+          <Dropdown.Item disabled>Share</Dropdown.Item>
+          <Dropdown.Item>Duplicate</Dropdown.Item>
+          <Dropdown.Item>Delete</Dropdown.Item>
+        </Dropdown.Content>
+      </Dropdown>,
+    )
+    const trigger = result.getByRole("button", { name: "Menu" })
+    return { ...result, trigger }
+  }
+  const focused = () => document.activeElement?.textContent
+
+  it("moves focus to the first enabled item when it opens", () => {
+    const { trigger } = menu()
+    trigger.focus()
+    fireEvent.click(trigger)
+    expect(focused()).toBe("Rename")
+  })
+
+  it("moves between enabled items with the arrows, wrapping, and jumps with Home and End", () => {
+    const { trigger, getByRole } = menu()
+    fireEvent.click(trigger)
+    const panel = getByRole("menu")
+    const steps: [string, string][] = [
+      ["ArrowDown", "Duplicate"],
+      ["ArrowDown", "Delete"],
+      ["ArrowDown", "Rename"],
+      ["ArrowUp", "Delete"],
+      ["Home", "Rename"],
+      ["End", "Delete"],
+    ]
+    for (const [key, expected] of steps) {
+      fireEvent.keyDown(document.activeElement ?? panel, { key })
+      expect(focused(), `after ${key}`).toBe(expected)
+    }
+  })
+
+  it("returns focus to the trigger on Escape", () => {
+    const { trigger } = menu()
+    fireEvent.click(trigger)
+    fireEvent.keyDown(document.activeElement ?? document.body, {
+      key: "Escape",
+    })
+    expect(document.activeElement).toBe(trigger)
   })
 })
