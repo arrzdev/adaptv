@@ -9,7 +9,7 @@
     "dev": "adaptv dev web",
     "preview": "adaptv preview web",
     "build": "adaptv build web",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck": "node scripts/generate-types.mjs && tsc --noEmit -p tsconfig.json",
     "format": "../node_modules/.bin/biome format --write .",
     "lint": "../node_modules/.bin/biome check .",
     "test": "vitest run",
