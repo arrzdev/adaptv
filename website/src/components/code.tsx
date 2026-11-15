@@ -110,12 +110,15 @@ export function CodePanel({
           row
           role={tabs ? "group" : undefined}
           aria-label={tabs ? "Code files" : undefined}
-          className="min-w-0 overflow-x-auto"
+          // tabs scroll sideways (their buttons make the row reachable); a lone label wraps,
+          // so it never leaves a scroller with nothing to focus in it
+          className={cn("min-w-0", tabs && "overflow-x-auto")}
         >
           {samples.map((item, index) => {
             const selected = index === active
             const className = cn(
-              "whitespace-nowrap border-b-2 px-3 py-3 font-mono text-[12.5px]",
+              "border-b-2 px-3 py-3 font-mono text-[12.5px]",
+              tabs ? "whitespace-nowrap" : "min-w-0 break-all",
               selected
                 ? "border-(--code-keyword) text-code-fg"
                 : "border-transparent text-code-muted hover:text-code-fg",
