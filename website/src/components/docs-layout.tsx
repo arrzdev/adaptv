@@ -40,6 +40,13 @@ function matches(page: DocPage, query: string) {
     .every((word) => haystack.includes(word))
 }
 
+/** What a screen reader hears when the results change; empty while nothing is searched. */
+function resultsStatus(results: DocPage[] | null) {
+  if (!results) return ""
+  if (results.length === 0) return "No results"
+  return results.length === 1 ? "1 result" : `${results.length} results`
+}
+
 function NavLink({ item, active }: { item: DocPage; active: boolean }) {
   return (
     <Link
@@ -60,7 +67,7 @@ function NavLink({ item, active }: { item: DocPage; active: boolean }) {
 /** The sidebar's contents, shared by the desktop rail and the mobile sheet. */
 const SECTIONS = ["Guides", "Reference"] as const
 
-function DocsNav({ current }: { current: string }) {
+export function DocsNav({ current }: { current: string }) {
   const [query, setQuery] = useState("")
   const home =
     DOCS.find((group) => group.pages.some((item) => item.slug === current))
@@ -87,6 +94,11 @@ function DocsNav({ current }: { current: string }) {
           className="selectable min-w-0 flex-1 bg-transparent text-[13.5px] text-foreground outline-none placeholder:text-muted"
         />
       </label>
+      {/* Always mounted: a live region only announces changes to a node that already
+          exists (WCAG 4.1.3). The list below swaps in place, so this carries the count. */}
+      <output aria-live="polite" className="sr-only">
+        {resultsStatus(results)}
+      </output>
 
       {results ? (
         <View className="gap-1">
