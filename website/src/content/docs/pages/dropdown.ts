@@ -185,7 +185,7 @@ export const page: DocPage = {
     { type: "h2", text: "Back and keyboard" },
     {
       type: "p",
-      text: "The Android back button and `adaptvBack()` close an open menu before they change the route. The browser Back button navigates. Escape closes the menu and returns focus to the trigger. Arrow keys and type-ahead are not built.",
+      text: "The Android back button and `adaptvBack()` close an open menu before they change the route. The browser Back button navigates. Opening the menu moves focus to its first enabled item. The up and down arrows move between enabled items and wrap; Home and End jump to the first and last. Escape closes the menu and returns focus to the trigger. Type-ahead is not built.",
     },
     { type: "h2", text: "Where it works" },
     {
@@ -194,7 +194,7 @@ export const page: DocPage = {
         {
           target: "Desktop web",
           status: "yes",
-          note: "Mouse, Tab and Escape.",
+          note: "Mouse, arrow keys, Home, End and Escape.",
         },
         {
           target: "Mobile web",

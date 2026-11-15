@@ -1,6 +1,7 @@
 import type {
   CSSProperties,
   MouseEvent,
+  KeyboardEvent as ReactKeyboardEvent,
   ReactNode,
   RefObject,
 } from "react"
@@ -39,7 +40,20 @@ import { composeStyles } from "#adaptv/utils/styles"
  * `overflow: hidden` ancestor, which is exactly the occlusion case. It dismisses
  * on an outside press, on scroll/resize it re-anchors, and Escape / the back chain
  * (at the Transient band — "menus dismiss rather than navigate") close it.
+ *
+ * Keyboard, as the WAI-ARIA menu button pattern asks of a `role="menu"`: on open
+ * focus moves to the first enabled item, ArrowDown/ArrowUp move between enabled
+ * items (wrapping), Home/End jump to the ends, and Escape hands focus back to the
+ * trigger. No type-ahead.
  * ============================================================================= */
+
+function enabledItems(content: HTMLElement): HTMLButtonElement[] {
+  return Array.from(
+    content.querySelectorAll<HTMLButtonElement>(
+      '[data-adaptv="dropdown-item"]:not(:disabled)',
+    ),
+  )
+}
 
 type DropdownContextValue = {
   open: boolean
@@ -251,6 +265,37 @@ function DropdownContent({
     return () => window.removeEventListener("keydown", onKey, true)
   }, [open, setOpen, triggerRef])
 
+  //focus moves into the menu once it is placed: a `visibility: hidden` panel (the
+  //pre-measure frame) cannot take focus
+  const positioned = pos !== null
+  useEffect(() => {
+    if (!open || !positioned) return
+    const content = contentRef.current
+    if (!content || content.contains(document.activeElement)) return
+    const first = enabledItems(content)[0]
+    ;(first ?? content).focus()
+  }, [open, positioned])
+
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    const content = contentRef.current
+    if (!content) return
+    const items = enabledItems(content)
+    if (items.length === 0) return
+    const at = items.indexOf(document.activeElement as HTMLButtonElement)
+    let next: number
+    if (event.key === "ArrowDown")
+      next = at < 0 ? 0 : (at + 1) % items.length
+    else if (event.key === "ArrowUp")
+      next =
+        at < 0 ? items.length - 1 : (at - 1 + items.length) % items.length
+    else if (event.key === "Home") next = 0
+    else if (event.key === "End") next = items.length - 1
+    else return
+    //the arrows would otherwise scroll the panel or the page behind it
+    event.preventDefault()
+    items[next]?.focus()
+  }
+
   //hardware/gesture back closes the menu instead of navigating (Transient band)
   useBackHandler(() => {
     if (!open) return false
@@ -260,7 +305,6 @@ function DropdownContent({
 
   if (!open) return null
 
-  const positioned = pos !== null
   const merged = composeStyles({
     className,
     style,
@@ -287,6 +331,7 @@ function DropdownContent({
       tabIndex={-1}
       className={merged.className || undefined}
       style={merged.style}
+      onKeyDown={onKeyDown}
       {...props}
     >
       {children}

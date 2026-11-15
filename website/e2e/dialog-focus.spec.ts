@@ -114,7 +114,7 @@ test("docs menu (390): the search results stay inside the sheet", async ({ page 
   await escapeReturns(page, trigger, dialog)
 })
 
-//the Dropdown example: Escape works today, focus moving into the menu does not
+//the Dropdown example: a role="menu" owes the APG menu button model
 for (const viewport of VIEWPORTS) {
   test(`docs dropdown example (${viewport.name}): Escape closes it and returns focus to the button`, async ({
     page,
@@ -131,12 +131,9 @@ for (const viewport of VIEWPORTS) {
     await expect(trigger).toBeFocused()
   })
 
-  //KNOWN FAILURE (TUD-5644): Dropdown is role="menu" but moves no focus into it and has no
-  //arrow keys. The test must fail until that is fixed; then delete the test.fail line.
   test(`docs dropdown example (${viewport.name}): focus moves to the menu and arrows stay in it`, async ({
     page,
   }) => {
-    test.fail(true, "open bug TUD-5644: the menu never takes focus")
     await page.setViewportSize(viewport)
     await load(page, "/docs/dropdown")
     const trigger = page.getByRole("button", { name: "File actions" })

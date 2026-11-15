@@ -168,8 +168,8 @@ reader would trip on it. None is verified beyond what is stated.
   indicator slot) and the default `Offline` screen. `Dropdown` relies on the consumer's `@theme`
   defining `bg-surface`, `ring-border` and `text-foreground`.
 - **`Checkbox`** has no indeterminate mark (the lab says a dash), drops label text placed inside
-  it, and an external `<label htmlFor>` does not toggle it. **`Dropdown`** has no arrow keys,
-  type-ahead or focus move despite `role="menu"`. **`WheelColumn`** has no keyboard path and no
+  it, and an external `<label htmlFor>` does not toggle it. **`Dropdown`** has no type-ahead
+  despite `role="menu"`. **`WheelColumn`** has no keyboard path and no
   haptic tick. **`Swipeable`** slots drop every prop but `children`, and `enabled={false}` leaves
   an open row open.
 - **Haptics ordering:** `supportsHapticTick()` turns false once `useHaptics()` has installed the
