@@ -171,4 +171,22 @@ test.describe("docs structure", () => {
     await tab.waitForLoadState("networkidle")
     await expect(tab.locator("h1")).toHaveCount(1)
   })
+
+  //The sidebar list is replaced by result links as the reader types; nothing else tells a
+  //screen reader that it changed (WCAG 4.1.3). axe cannot see this, so the spec reads the region.
+  test("docs search announces the result count", async ({ page: tab }) => {
+    await tab.setViewportSize({ width: 1280, height: 800 })
+    await tab.goto("/docs/routing")
+    await tab.waitForLoadState("networkidle")
+    const status = tab.getByRole("status")
+    await expect(status).toHaveCount(1)
+    await expect(status).toHaveText("")
+    const search = tab.getByPlaceholder("Search the docs")
+    await search.fill("rout")
+    await expect(status).toHaveText(/^\d+ results?$/)
+    await search.fill("zzzzqqq")
+    await expect(status).toHaveText("No results")
+    await search.fill("")
+    await expect(status).toHaveText("")
+  })
 })

@@ -1,8 +1,9 @@
+import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import type { ReactNode } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
-import { describe, expect, it, vi } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import type { DocPage } from "@/content/docs"
-import { Pager } from "./docs-layout"
+import { DocsNav, Pager } from "./docs-layout"
 
 //the real links need a router; a plain anchor keeps the className the card passes
 vi.mock("adaptv/components", () => ({
@@ -40,6 +41,8 @@ vi.mock("@/content/docs", () => {
   return { ALL_DOCS: ["first", "middle", "last"].map(page), DOCS: [] }
 })
 
+afterEach(cleanup)
+
 describe("Pager", () => {
   //adaptv's Link paints gray-950 unless a class sets the colour; on the dark page
   //that hid the page titles, so each card must take the site's theme token
@@ -51,5 +54,41 @@ describe("Pager", () => {
     )
     expect(anchors).toHaveLength(2)
     for (const classes of anchors) expect(classes).toContain("text-foreground")
+  })
+})
+
+describe("DocsNav search", () => {
+  const search = () => screen.getByPlaceholderText("Search the docs")
+  const type = (value: string) =>
+    fireEvent.change(search(), { target: { value } })
+  //the region is in the DOM before anything is typed: a screen reader only announces
+  //changes to a live region that already exists (WCAG 4.1.3)
+  const status = () => screen.getByRole("status")
+
+  it("keeps a polite live region mounted, empty until a query is typed", () => {
+    render(<DocsNav current="" />)
+    expect(status().getAttribute("aria-live")).toBe("polite")
+    expect(status().textContent).toBe("")
+  })
+
+  it("announces how many pages match", () => {
+    render(<DocsNav current="" />)
+    type("middle")
+    expect(status().textContent).toBe("1 result")
+    type("st")
+    expect(status().textContent).toBe("2 results")
+  })
+
+  it("announces an empty result", () => {
+    render(<DocsNav current="" />)
+    type("zzz")
+    expect(status().textContent).toBe("No results")
+  })
+
+  it("goes quiet again when the query is cleared", () => {
+    render(<DocsNav current="" />)
+    type("first")
+    type("")
+    expect(status().textContent).toBe("")
   })
 })
