@@ -122,11 +122,17 @@ function DocsNav({ current }: { current: string }) {
             <LayoutGrid className="size-4 text-muted" />
             Overview
           </Link>
-          <View row className="gap-1 rounded-lg bg-sunken p-1">
+          <View
+            row
+            role="group"
+            aria-label="Docs section"
+            className="gap-1 rounded-lg bg-sunken p-1"
+          >
             {SECTIONS.map((name) => (
               <button
                 key={name}
                 type="button"
+                aria-pressed={name === section}
                 onClick={() => setSection(name)}
                 className={cn(
                   "flex-1 cursor-pointer rounded-md py-1.5 font-medium text-[13px] text-muted",

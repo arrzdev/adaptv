@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react"
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { CodeLine, CodePanel } from "@/components/code"
 
@@ -53,6 +59,29 @@ describe("code panel", () => {
     width.mockReturnValue(700)
     fireEvent.click(screen.getByRole("button", { name: "Terminal" }))
     expect(screen.getByTestId("scroll-fade").dataset.more).toBe("true")
+  })
+
+  it("tells assistive tech which file tab is selected", () => {
+    render(
+      <CodePanel
+        samples={[SAMPLE, { label: "Terminal", lang: "bash", code: "pnpm" }]}
+      />,
+    )
+    const files = screen.getByRole("group", { name: "Code files" })
+    const [first, second] = within(files).getAllByRole("button")
+    expect(first?.getAttribute("aria-pressed")).toBe("true")
+    expect(second?.getAttribute("aria-pressed")).toBe("false")
+
+    fireEvent.click(screen.getByRole("button", { name: "Terminal" }))
+    expect(first?.getAttribute("aria-pressed")).toBe("false")
+    expect(second?.getAttribute("aria-pressed")).toBe("true")
+  })
+
+  it("shows a lone file name as a title, not a button", () => {
+    render(<CodePanel samples={[SAMPLE]} />)
+    expect(screen.getByText(SAMPLE.label)).toBeTruthy()
+    expect(screen.queryByRole("button", { name: SAMPLE.label })).toBeNull()
+    expect(screen.queryByRole("group", { name: "Code files" })).toBeNull()
   })
 })
 
