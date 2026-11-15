@@ -11,7 +11,7 @@ export const page: DocPage = {
     {
       type: "note",
       tone: "warn",
-      text: "There is no install command yet. `adaptv` is private and not on npm. An app links a local checkout with pnpm's `link:` protocol. The `website/` and `playground/` folders in the repository do this.",
+      text: "There is no install command yet. `adaptv` is not on npm yet. An app links a local checkout with pnpm's `link:` protocol. The `website/` and `playground/` folders in the repository do this.",
     },
     { type: "h2", text: "Requirements" },
     {
