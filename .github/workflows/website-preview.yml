@@ -68,7 +68,7 @@ jobs:
           account=$(printf '%s' "$CLOUDFLARE_ACCOUNT_ID" | tr -cd '0-9a-fA-F')
           if [ "${#account}" != 32 ]; then echo "::error::CLOUDFLARE_ACCOUNT_ID is not 32 hex characters"; exit 1; fi
           export CLOUDFLARE_ACCOUNT_ID="$account"
-          npx --yes wrangler@4.147.0 deploy --config .output/server/wrangler.json --env preview
+          npx --yes wrangler@4.162.0 deploy --config .output/server/wrangler.json --env preview
 
       # Access answers 302 to the login page when the Worker is up, 200 only for a signed-in user.
       - name: Smoke
