@@ -165,9 +165,9 @@ config (`cli-contract.md` R39).
 **Recommended:**
 
 ```bash
-adaptv dev                    # = vite dev (web/PWA HMR)
-adaptv dev --host ios         # vite dev + cap run ios with server.url → the dev server (live-reload on device)
-adaptv dev --host android     # same for Android
+adaptv dev web                # = vite dev (web/PWA HMR)
+adaptv dev ios --host         # vite dev + cap run ios with server.url → the dev server (live-reload on device)
+adaptv dev android --host     # same for Android
 ```
 
 `--host` uses Capacitor's live-reload (`server.url` → the LAN dev-server URL) so a real device/emulator
