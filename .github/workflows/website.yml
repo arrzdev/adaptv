@@ -122,7 +122,6 @@ jobs:
         if: steps.tip.outputs.go == 'true'
         run: pnpm build
 
-      # Build first: it generates `.adaptv/routeTree.gen.ts`, which the typecheck imports.
       # The preset makes Nitro emit a Worker plus `.output/server/wrangler.json`, merged
       # from `website/wrangler.toml`.
       - name: Build
@@ -131,6 +130,7 @@ jobs:
           NITRO_PRESET: cloudflare_module
         run: pnpm --dir website build
 
+      # Writes `.adaptv/` itself (scripts/generate-types.mjs), so it needs no build before it.
       - name: Typecheck
         if: steps.tip.outputs.go == 'true'
         run: pnpm --dir website typecheck
