@@ -17,7 +17,8 @@ export const Route = createFileRoute("/docs/$slug")({
   head: ({ loaderData }) =>
     loaderData
       ? socialHead({
-          title: loaderData.title,
+          //the card names the product too: a bare "Introduction" says nothing when shared
+          title: loaderData.seoTitle ?? loaderData.title,
           tabTitle: loaderData.seoTitle ?? `${loaderData.title} — adaptv docs`,
           description: loaderData.description,
           path: `/docs/${loaderData.slug}`,

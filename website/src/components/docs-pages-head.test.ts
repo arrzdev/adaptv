@@ -17,6 +17,13 @@ vi.mock("@/content/docs", () => ({
       summary: "A toggle that follows the finger.",
       blocks: [],
     },
+    {
+      slug: "introduction",
+      title: "Introduction",
+      seoTitle: "Introduction to adaptv: what it does",
+      summary: "What adaptv is.",
+      blocks: [],
+    },
   ],
   DOCS: [],
 }))
@@ -66,6 +73,23 @@ describe("a docs page's head", () => {
       rel: "canonical",
       href: "https://adaptv.tudu.dev/docs/switch",
     })
+  })
+})
+
+describe("a docs page with a search title", () => {
+  const loader = DocRoute.options.loader as (ctx: unknown) => unknown
+  const head = (DocRoute.options.head as (ctx: unknown) => Head)({
+    loaderData: loader({ params: { slug: "introduction" } }),
+  })
+
+  //a bare "Introduction" on a shared card does not name the product
+  it("uses the search title for the tab and the card", () => {
+    expect(head.meta).toContainEqual({
+      title: "Introduction to adaptv: what it does",
+    })
+    expect(metaContent(head, "og:title")).toBe(
+      "Introduction to adaptv: what it does",
+    )
   })
 })
 
