@@ -339,6 +339,28 @@ test.describe("Tally showcase", () => {
     })
   }
 
+  //Below `sm` the intro's reserved height steps down with the hero's width, in container-query tiers.
+  //A copy edit moves where its line count changes, so every phone width is checked, not the
+  //four above: the box must be exactly as tall as the lines (TUD-5549: a longer intro needed a
+  //line more at every phone width and the showcase below it moved).
+  test("the intro's reserved height is its lines at every phone width", async ({ page }) => {
+    await open(page, 320)
+    const intro = page.getByText(/^adaptv is a React framework/)
+    const off: string[] = []
+    for (let width = 320; width < 640; width += 4) {
+      await page.setViewportSize({ width, height: 900 })
+      const fit = await intro.evaluate((el) => {
+        const range = document.createRange()
+        range.selectNodeContents(el)
+        const lines = new Set([...range.getClientRects()].map((r) => Math.round(r.top)))
+        const lineHeight = Number.parseFloat(getComputedStyle(el).lineHeight)
+        return { text: lines.size * lineHeight, box: el.getBoundingClientRect().height }
+      })
+      if (Math.abs(fit.text - fit.box) >= 1) off.push(`${width} px: ${fit.text} text, ${fit.box} box`)
+    }
+    expect(off).toEqual([])
+  })
+
   //The title's two lines are centred. Centred text starts at half its width, and the fallback
   //sets a line a few px wider or narrower than Geist (6 px at the start of line 2 at 390 px,
   //hinting makes it vary by size), so the swap moved the text: a 0.00046 layout shift of the

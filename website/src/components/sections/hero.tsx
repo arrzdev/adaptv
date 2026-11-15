@@ -34,13 +34,13 @@ export function Hero() {
             Below sm it is as many lines tall as Geist takes at that width (the fallback never takes
             more), read from the hero's content width */}
         <p
-          className="rise mt-7 max-w-[38rem] text-balance text-[17px] text-subtle leading-relaxed max-sm:h-[7lh] max-sm:@min-[285px]:h-[6lh] max-sm:@min-[339px]:h-[5lh] max-sm:@min-[413px]:h-[4lh] max-sm:@min-[560px]:h-[3lh] sm:h-[4lh] sm:text-[19px]"
+          className="rise mt-7 max-w-[38rem] text-balance text-[17px] text-subtle leading-relaxed max-sm:h-[9lh] max-sm:@min-[239px]:h-[8lh] max-sm:@min-[285px]:h-[7lh] max-sm:@min-[339px]:h-[6lh] max-sm:@min-[386px]:h-[5lh] max-sm:@min-[473px]:h-[4lh] sm:h-[4lh] sm:text-[19px]"
           style={{ animationDelay: "120ms" }}
         >
           adaptv is a React framework: one codebase ships as a web app, an
           installable PWA and native iOS and Android apps. It stops scroll
-          chaining and input zoom, and handles safe areas, the keyboard and
-          offline.
+          chaining and input zoom, and handles safe areas and the keyboard, and
+          keeps the app shell loading offline.
         </p>
 
         <View

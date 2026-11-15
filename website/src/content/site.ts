@@ -14,7 +14,7 @@ export const SITE_DESCRIPTION =
 
 //The docs home's lede, and its description
 export const DOCS_DESCRIPTION =
-  "adaptv is a React framework that ships one codebase to the web, the home screen, the App Store and Google Play. Start with a guide, or go straight to the reference."
+  "adaptv is a React framework that ships one codebase to the web, the home screen, and native iOS and Android apps. Start with a guide, or go straight to the reference."
 
 /**
  * The tags a shared link turns into a card on X, Bluesky, LinkedIn or Discord, plus the

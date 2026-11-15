@@ -55,7 +55,7 @@ const GROUP_ART: Record<string, { icon: LucideIcon; blurb: string }> = {
 const LEADS = [
   {
     slug: "quick-start",
-    kicker: "Five minutes",
+    kicker: "Run it today",
     title: "Quick start",
     text: "Get an app running in a browser, then on a simulator.",
   },
@@ -63,7 +63,7 @@ const LEADS = [
     slug: "six-targets",
     kicker: "The idea",
     title: "One codebase, six targets",
-    text: "What each target gets, and what adaptv does to make them agree.",
+    text: "What a tab, an installed app and a native build each get, and what adaptv does to make them agree.",
   },
 ] as const
 

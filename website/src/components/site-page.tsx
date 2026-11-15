@@ -139,7 +139,7 @@ function SiteFooter() {
           <p className="text-[13px] text-muted">
             This site is an adaptv app.
             <br />
-            Add it to your home screen, it opens offline!
+            Add it to your home screen and the shell opens offline.
           </p>
           <p className="text-[12px] text-muted">
             The Android robot is reproduced or modified from work created and
