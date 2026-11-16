@@ -21,6 +21,12 @@ and the docs say what is true today.
   `/vite`, `/sw`, `/styles.css`. Only document what those barrels (`../src/interface/*.index.ts`) export.
   `src/content/docs/imports.test.ts` fails when a page imports a subpath or a name the built
   package (`../dist/*.d.mts`) does not export; run `pnpm build` at the root, then `pnpm test` here.
+  `src/content/docs/samples.test.ts` typechecks every `ts` and `tsx` code block and demo
+  source against that package, so a renamed prop or a changed return fails the test. A sample
+  with no import gets the adaptv names it uses; JSX or a `return` with no component around it
+  is wrapped in one; a name you never declare (`rows`, `Title`) is a placeholder. A block that
+  still cannot compile (a route file, a service worker, a snippet cut mid-tag) takes
+  `partial: true`. Fix the sample first; the test caps how many blocks may be partial.
 - JSDoc in the source is the best starting text. Rewrite it for a reader who has never seen the
   repo: drop decision-register ids (L20, O7, B9), internal file paths and history.
 - The engines underneath (the router, the native shell) can be named when it helps someone debug,

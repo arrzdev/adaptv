@@ -17,7 +17,8 @@ export const page: DocPage = {
     {
       type: "demo",
       component: HooksDataDemo,
-      code: `import { useClipboard, useIsOffline } from "adaptv/hooks"
+      code: `import { Button, Text } from "adaptv/components"
+import { useClipboard, useIsOffline } from "adaptv/hooks"
 
 const { copy, paste, canRead, readPermission, status, text } = useClipboard()
 const isOffline = useIsOffline()

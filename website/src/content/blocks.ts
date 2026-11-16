@@ -38,13 +38,27 @@ export type Block =
   | { type: "h3"; text: string }
   | { type: "ul"; items: string[] }
   | { type: "ol"; items: string[] }
-  | { type: "code"; label: string; lang: CodeLang; code: string }
+  | {
+      type: "code"
+      label: string
+      lang: CodeLang
+      code: string
+      /** A fragment that uses names it never declares; docs/samples.test.ts skips it. */
+      partial?: boolean
+    }
   | { type: "note"; text: string; tone?: "info" | "warn" }
   /** An API table: props, options, return fields. */
   | { type: "props"; rows: PropRow[] }
   | { type: "table"; head: string[]; rows: string[][] }
   /** A running component, with the source that produced it underneath. */
-  | { type: "demo"; component: ComponentType; code?: string; lang?: CodeLang }
+  | {
+      type: "demo"
+      component: ComponentType
+      code?: string
+      lang?: CodeLang
+      /** A fragment that uses names it never declares; docs/samples.test.ts skips it. */
+      partial?: boolean
+    }
   /**
    * One function, method or hook in a reference page: a mono heading that joins the
    * table of contents, its signature, what it does, then its parameters and return value.

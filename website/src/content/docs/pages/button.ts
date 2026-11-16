@@ -17,7 +17,7 @@ export const page: DocPage = {
     {
       type: "demo",
       component: ButtonDemo,
-      code: `import { Button } from "adaptv/components"
+      code: `import { Button, Spinner } from "adaptv/components"
 
 <Button
   haptic

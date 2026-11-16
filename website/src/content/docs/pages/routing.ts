@@ -36,6 +36,7 @@ export default rootRoute([
       type: "code",
       label: "src/routing/pages/docs/doc.page.tsx",
       lang: "tsx",
+      partial: true,
       code: `import { createFileRoute, notFound } from "adaptv/router"
 
 export const Route = createFileRoute("/_providers/docs/$slug")({
@@ -79,6 +80,7 @@ function DocRoute() {
       type: "code",
       label: "src/routing/layouts/providers.layout.tsx",
       lang: "tsx",
+      partial: true,
       code: `import { createFileRoute, Outlet } from "adaptv/router"
 import AppProviders from "@/providers/app-providers"
 
@@ -135,6 +137,7 @@ export const Nav = () => (
       type: "code",
       label: "adaptv.config.ts",
       lang: "ts",
+      partial: true,
       code: `notFoundScreen: () => import("@/components/not-found-screen"),`,
     },
     { type: "h2", text: "Eject the router or the client entry" },

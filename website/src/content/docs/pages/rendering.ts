@@ -98,6 +98,7 @@ export const page: DocPage = {
       type: "code",
       label: "src/routing/pages/orders.page.tsx",
       lang: "tsx",
+      partial: true,
       code: `import { createFileRoute } from "adaptv/router"
 
 export const Route = createFileRoute("/orders")({

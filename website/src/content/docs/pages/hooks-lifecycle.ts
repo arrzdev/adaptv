@@ -17,7 +17,8 @@ export const page: DocPage = {
     {
       type: "demo",
       component: HooksLifecycleDemo,
-      code: `import { useAppState, useOnPause, useOnResume } from "adaptv/hooks"
+      code: `import { Text } from "adaptv/components"
+import { useAppState, useOnPause, useOnResume } from "adaptv/hooks"
 
 const state = useAppState()
 const [resumes, setResumes] = useState(0)
