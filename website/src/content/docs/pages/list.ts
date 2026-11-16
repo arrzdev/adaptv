@@ -134,8 +134,15 @@ const rows: Row[] = Array.from({ length: 10_000 }, (_, index) => ({
       type: "code",
       label: "feed.tsx",
       lang: "tsx",
-      partial: true,
-      code: `const loadMore = useCallback(async () => {
+      code: `import { List } from "adaptv/components"
+import { useCallback, useRef, useState } from "react"
+
+type Post = { id: string; title: string }
+
+const [posts, setPosts] = useState<Post[]>([])
+const loading = useRef(false)
+
+const loadMore = useCallback(async () => {
   if (loading.current) return
   loading.current = true
   const next = await fetchPosts({ after: posts.at(-1)?.id })
