@@ -1929,7 +1929,8 @@ async function serveWebPreview(appRoot, opts) {
           detached: true,
         })
         const seen = []
-        await new Promise((resolve, reject) => {
+        /** @type {Promise<void>} */
+        const listening = new Promise((resolve, reject) => {
           const onData = (buf) => {
             const text = String(buf)
             if (verbose) rawOut(text)
@@ -1970,6 +1971,7 @@ async function serveWebPreview(appRoot, opts) {
             )
           })
         })
+        await listening
         //the addresses are their own block under this row
         return ""
       },
@@ -2022,7 +2024,8 @@ async function holdWebPreview(state) {
   //The SAME watcher row `dev` uses — bold key, its own line — rather than a second copy of
   //the idea. `keys: false` because there is nothing to reload or rebuild from here (R17).
   state.watcher = liveWatcher({ keys: false })
-  await new Promise((resolve) => {
+  /** @type {Promise<void>} */
+  const closed = new Promise((resolve) => {
     state.child?.on("close", (code) => {
       state.stop()
       if (code && code !== 0) {
@@ -2032,6 +2035,7 @@ async function holdWebPreview(state) {
       resolve()
     })
   })
+  await closed
 }
 
 /**

@@ -10,7 +10,6 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
-    "baseUrl": ".",
     "paths": {
       "#adaptv/*": ["./src/*"],
       // The app supplies the real route tree through this same alias (adaptv stamps
