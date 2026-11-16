@@ -133,8 +133,9 @@ export default defineApp({
       type: "code",
       label: "src/sw/push.ts",
       lang: "ts",
-      partial: true,
       code: `import { onAppMessage, sendToApp } from "adaptv/sw"
+
+declare const self: ServiceWorkerGlobalScope
 
 self.addEventListener("push", (event) => {
   event.waitUntil(sendToApp({ type: "push", body: event.data?.text() }))

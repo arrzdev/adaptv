@@ -21,9 +21,10 @@ vi.mock("@/assets/captures/ios-list.png?adaptv-image", () => ({ default: {} }))
 //small: a sample with no import at all gets the adaptv imports it uses, statements and
 //JSX with no component around them are put in one, and a name the sample never declares
 //and adaptv does not export is a placeholder (`rows`, `Title`). A fragment that still
-//cannot compile sets `partial: true` on its block and is skipped: a route file (the ids
-//`createFileRoute` accepts come from the app's generated route tree, which a docs page
-//does not have), a service worker (it needs the worker's types) or a snippet cut mid-tag.
+//cannot compile sets `partial: true` on its block and is skipped, such as a snippet cut
+//mid-tag. A route file is checked against a short list of route ids (`ROUTE_IDS`, the
+//generated route tree a docs page does not have), and a module that imports `adaptv/sw`
+//against the worker lib instead of the DOM one.
 //Needs `pnpm build` at the root first, like every website test.
 
 type Sample = { id: string; ext: "ts" | "tsx"; code: string }
@@ -164,7 +165,15 @@ const options: ts.CompilerOptions = {
 const VIRTUAL_DIR = resolve(".docs-samples")
 const virtualPath = ({ id, ext }: Sample) => join(VIRTUAL_DIR, `${id}.${ext}`)
 
-//What a real app has and a sample may lean on: the ambient `createFileRoute`.
+//What a real app has and a sample may lean on: the ambient `createFileRoute`, and the
+//route ids its generated route tree would hold (`createFileRoute` accepts only those).
+const ROUTE_IDS = [
+  "/",
+  "/orders",
+  "/settings",
+  "/_providers",
+  "/_providers/docs/$slug",
+]
 const PRELUDE = join(VIRTUAL_DIR, "prelude.d.ts")
 const files = new Map<string, string>([
   [
@@ -174,6 +183,9 @@ import type { AdaptvRouter } from "adaptv/router"
 declare module "adaptv/router" {
   interface Register {
     router: AdaptvRouter
+  }
+  interface FileRoutesByPath {
+${ROUTE_IDS.map((id) => `    "${id}": { id: "${id}"; path: "${id}"; fullPath: "${id}"; preLoaderRoute: any; parentRoute: any }`).join("\n")}
   }
 }
 `,
@@ -192,7 +204,24 @@ host.getSourceFile = (path, languageVersion, ...rest) => {
     : ts.createSourceFile(path, text, languageVersion, true)
 }
 
-const program = ts.createProgram([...files.keys()], options, host)
+//a service worker module runs where `self` is the worker scope: its own program, with
+//the worker lib in place of the DOM one
+const isWorker = (sample: Sample) => /from "adaptv\/sw"/.test(sample.code)
+const workerOptions: ts.CompilerOptions = {
+  ...options,
+  lib: ["lib.es2022.d.ts", "lib.webworker.d.ts"],
+}
+const workerSamples = SAMPLES.filter(isWorker).map(virtualPath)
+const program = ts.createProgram(
+  [...files.keys()].filter((path) => !workerSamples.includes(path)),
+  options,
+  host,
+)
+const workerProgram = ts.createProgram(
+  [PRELUDE, ...workerSamples],
+  workerOptions,
+  host,
+)
 
 //Not mistakes in a fragment: a name it never declares (2304, 2552) when adaptv does not
 //export it, what that makes implicit any (7005, 7006, 7031), and the app's own modules.
@@ -207,11 +236,12 @@ function isPlaceholder(diagnostic: ts.Diagnostic): boolean {
 
 /** What the compiler says about one sample, one line each, with its position. */
 function problems(sample: Sample): string[] {
-  const file = program.getSourceFile(virtualPath(sample))
+  const owner = isWorker(sample) ? workerProgram : program
+  const file = owner.getSourceFile(virtualPath(sample))
   if (file === undefined) return ["the sample was not compiled"]
   return [
-    ...program.getSyntacticDiagnostics(file),
-    ...program.getSemanticDiagnostics(file),
+    ...owner.getSyntacticDiagnostics(file),
+    ...owner.getSemanticDiagnostics(file),
   ]
     .filter((diagnostic) => !isPlaceholder(diagnostic))
     .map((diagnostic) => {
@@ -257,11 +287,11 @@ describe("samples", () => {
   })
 
   //`partial` is for what cannot compile, not for what is inconvenient to fix
-  it("has few blocks marked partial", () => {
+  it("has no block marked partial", () => {
     const partial = ALL_DOCS.flatMap((page) => page.blocks).filter(
       (block) => "partial" in block && block.partial === true,
     )
-    expect(partial.length).toBeLessThanOrEqual(12)
+    expect(partial.length).toBe(0)
   })
 
   //a walker that stops finding blocks would pass every page below without checking anything

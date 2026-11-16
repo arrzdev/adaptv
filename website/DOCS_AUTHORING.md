@@ -24,9 +24,12 @@ and the docs say what is true today.
   `src/content/docs/samples.test.ts` typechecks every `ts` and `tsx` code block and demo
   source against that package, so a renamed prop or a changed return fails the test. A sample
   with no import gets the adaptv names it uses; JSX or a `return` with no component around it
-  is wrapped in one; a name you never declare (`rows`, `Title`) is a placeholder. A block that
-  still cannot compile (a route file, a service worker, a snippet cut mid-tag) takes
-  `partial: true`. Fix the sample first; the test caps how many blocks may be partial.
+  is wrapped in one; a name you never declare (`rows`, `Title`) is a placeholder. A route file
+  is checked against the route ids listed in `samples.test.ts` (`ROUTE_IDS`): add the id your
+  sample uses. A module that imports `adaptv/sw` is checked against the worker lib, so it
+  declares `self` as `ServiceWorkerGlobalScope`. A block that still cannot compile (a snippet cut
+  mid-tag) takes `partial: true`. Fix the sample first; the test allows no partial block today,
+  so a new one means raising that cap with the reason in the PR.
 - JSDoc in the source is the best starting text. Rewrite it for a reader who has never seen the
   repo: drop decision-register ids (L20, O7, B9), internal file paths and history.
 - The engines underneath (the router, the native shell) can be named when it helps someone debug,

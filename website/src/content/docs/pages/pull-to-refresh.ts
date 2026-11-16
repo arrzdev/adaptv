@@ -104,12 +104,13 @@ const scrollRef = useRef<HTMLDivElement>(null)
       type: "code",
       label: "dark-indicator.tsx",
       lang: "tsx",
-      partial: true,
       code: `<PullToRefresh
   onRefresh={refresh}
   scrollContainerRef={scrollRef}
   className="overflow-hidden [&_svg]:text-gray-950 dark:[&_svg]:text-white"
->`,
+>
+  <ScrollView ref={scrollRef}>{rows}</ScrollView>
+</PullToRefresh>`,
     },
     {
       type: "p",
