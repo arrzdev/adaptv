@@ -6,7 +6,6 @@
   ],
   "exclude": ["node_modules", "dist", ".output"],
   "compilerOptions": {
-    "baseUrl": ".",
     "paths": {
       "#adaptv-route-tree": ["./.adaptv/routeTree.gen.ts"],
       "@/*": ["./src/*"],

@@ -211,6 +211,7 @@ function relayOff() {
  * @param {string} command
  * @param {string[]} args
  * @param {{ cwd?: string, env?: NodeJS.ProcessEnv, onLine?: (line: string) => void }} [opts]
+ * @returns {Promise<void>}
  */
 export function exec(command, args, { cwd, env, onLine } = {}) {
   return new Promise((resolve, reject) => {

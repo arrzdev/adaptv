@@ -27,6 +27,10 @@ in `playground/` or `scripts/` ships.
   outside adaptv.
 - pnpm 11 (`packageManager`). `playground/` is a **second, independent pnpm project** with its own
   lockfile; `pnpm playground:setup` installs it.
+- Two TypeScripts. `typescript` (5.9.3) is the compiler API that tsdown's `.d.ts` build and a few
+  tests import; TypeScript 7 has no JS API. `typescript-7` (an npm alias of `typescript@7.0.2`)
+  runs `pnpm typecheck` (root and `website/`) through `node_modules/typescript-7/bin/tsc`. Do not
+  re-add `baseUrl` to a tsconfig: 7 removed it.
 - `unzip` on `PATH` — one OTA test checks the zip with a second implementation.
 
 ## Before every commit
