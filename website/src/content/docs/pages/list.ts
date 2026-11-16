@@ -134,6 +134,7 @@ const rows: Row[] = Array.from({ length: 10_000 }, (_, index) => ({
       type: "code",
       label: "feed.tsx",
       lang: "tsx",
+      partial: true,
       code: `const loadMore = useCallback(async () => {
   if (loading.current) return
   loading.current = true

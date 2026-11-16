@@ -111,6 +111,7 @@ export default rootRoute([index("pages/home.page.tsx")])`,
       type: "code",
       label: "home.page.tsx",
       lang: "tsx",
+      partial: true,
       code: `import { ScrollView, View } from "adaptv/components"
 import { createFileRoute } from "adaptv/router"
 

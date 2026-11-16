@@ -143,6 +143,7 @@ function ThemeToggle() {
       type: "code",
       label: "src/routing/pages/settings.page.tsx",
       lang: "tsx",
+      partial: true,
       code: `export const Route = createFileRoute("/settings")({
   chromeTint: "#1e0033",
   component: Settings,

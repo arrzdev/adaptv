@@ -17,7 +17,8 @@ export const page: DocPage = {
     {
       type: "demo",
       component: StorageDemo,
-      code: `import { useKv } from "adaptv/storage"
+      code: `import { Button, Text } from "adaptv/components"
+import { useKv } from "adaptv/storage"
 
 const [count, setCount] = useKv("count", 0)
 

@@ -104,6 +104,7 @@ const scrollRef = useRef<HTMLDivElement>(null)
       type: "code",
       label: "dark-indicator.tsx",
       lang: "tsx",
+      partial: true,
       code: `<PullToRefresh
   onRefresh={refresh}
   scrollContainerRef={scrollRef}

@@ -64,7 +64,8 @@ import capture from "./ios-list.png?adaptv-image"
       type: "code",
       label: "hero.tsx",
       lang: "tsx",
-      code: `import hero from "./hero.jpg?adaptv-image"
+      code: `import { Image } from "adaptv/components"
+import hero from "./hero.jpg?adaptv-image"
 
 <Image src={hero} alt="The harbour at dawn" />`,
     },

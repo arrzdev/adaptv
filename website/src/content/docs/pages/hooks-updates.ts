@@ -133,6 +133,7 @@ export default defineApp({
       type: "code",
       label: "src/sw/push.ts",
       lang: "ts",
+      partial: true,
       code: `import { onAppMessage, sendToApp } from "adaptv/sw"
 
 self.addEventListener("push", (event) => {
