@@ -161,10 +161,10 @@ configs pin `workers: 1` for this, so do not pass `--workers` to them.
 **CI runs the browser suites off the per-PR path** (`.github/workflows/e2e.yml`, never a required
 check): a PR with the `e2e` label and the nightly run on `main` run five suites (main, `plain`, `sw`,
 `sw-spa`, `sw-prompt`) on **chromium**, and the nightly also runs `stress` on chromium in two shards;
-the weekly `e2e-full` runs every suite on chromium and **webkit**. The HTML report and traces are uploaded when a suite fails. An unlabelled PR runs none of
-them, so run the specs you touched locally. The CI history is **O11a**, and whether the native
-matrix can run in CI at all is still open as **O11b**
-([`../roadmap/open-questions.md`](../roadmap/open-questions.md)).
+the weekly `e2e-full` runs every suite on chromium and **webkit**. The HTML report and traces are
+uploaded when a suite fails. An unlabelled PR runs none of them, so run the specs you touched
+locally. The CI history is **O11a**, and whether the native matrix can run in CI at all is still
+open as **O11b** ([`../roadmap/open-questions.md`](../roadmap/open-questions.md)).
 
 Anything that needs a real device — motion feel, the OS keyboard, splash timing, edge-to-edge system
 bars — is owed to a device ladder and tracked in

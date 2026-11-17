@@ -9,7 +9,7 @@ name: E2E
 #   nightly on main      -> `e2e`: same job, and `e2e-stress`: the stress suite
 #                           on chromium in two shards, beside it. Both skipped if
 #                           main has not moved since the last green scheduled
-#                           run; a red one opens an issue
+#                           run; a red night opens one issue
 #   weekly + on demand   -> `e2e-full`: every suite x chromium + webkit, with
 #                           stress. Run it before any release of adaptv.
 #   dispatch, `nightly`  -> the nightly jobs, on the ref it was dispatched on
@@ -36,8 +36,9 @@ on:
 permissions:
   contents: read
 
+# A dispatch's scope is part of the group, so a `nightly` and a `full` dispatch on one ref both run.
 concurrency:
-  group: e2e-${{ github.event.pull_request.number || github.ref }}-${{ github.event.schedule || github.event_name }}
+  group: e2e-${{ github.event.pull_request.number || github.ref }}-${{ github.event.schedule || github.event_name }}${{ inputs.scope && format('-{0}', inputs.scope) || '' }}
   cancel-in-progress: true
 
 env:
@@ -62,7 +63,6 @@ jobs:
     permissions:
       contents: read
       actions: read
-      issues: write
     steps:
       - name: Skip if main has not moved
         id: moved
@@ -128,15 +128,6 @@ jobs:
           path: playground/playwright-report/
           retention-days: 14
 
-      - name: Open an issue for a red nightly
-        if: failure() && github.event_name == 'schedule'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh issue create -R "$GITHUB_REPOSITORY" \
-            --title "nightly e2e failed on ${GITHUB_SHA:0:7}" \
-            --body "Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}. Fix forward on a PR."
-
   # The stress suite every night, so a stress regression is seen the next morning
   # rather than on Sunday. Chromium only: webkit stays in the weekly `e2e-full`.
   # One worker per config, ~30 min in one job; two shards of ~15 min run beside
@@ -151,7 +142,6 @@ jobs:
     permissions:
       contents: read
       actions: read
-      issues: write
     strategy:
       fail-fast: false
       matrix:
@@ -207,14 +197,24 @@ jobs:
           path: playground/playwright-report/
           retention-days: 14
 
+  # One issue per red night, however many of `e2e` and the two stress shards failed.
+  nightly-issue:
+    needs: [e2e, e2e-stress]
+    if: failure() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
       - name: Open an issue for a red nightly
-        if: failure() && github.event_name == 'schedule'
         env:
           GH_TOKEN: ${{ github.token }}
+          E2E: ${{ needs.e2e.result }}
+          STRESS: ${{ needs.e2e-stress.result }}
         run: |
           gh issue create -R "$GITHUB_REPOSITORY" \
-            --title "nightly e2e stress (shard ${{ matrix.shard }}/2) failed on ${GITHUB_SHA:0:7}" \
-            --body "Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}. Fix forward on a PR."
+            --title "nightly e2e failed on ${GITHUB_SHA:0:7}" \
+            --body "Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} (e2e: ${E2E}, e2e-stress: ${STRESS}). Fix forward on a PR."
 
   e2e-full:
     name: e2e-full (${{ matrix.suite }}, ${{ matrix.engine }})
