@@ -198,6 +198,21 @@ describe("pluginDir", () => {
     )
   })
 
+  it("finds a plugin whose exports map leaves out ./package.json", () => {
+    //`require.resolve("<pkg>/package.json")` throws ERR_PACKAGE_PATH_NOT_EXPORTED
+    //for these, and a null here drops the plugin out of the OTA fingerprint
+    const app = writePackage(tempDir(), {})
+    const dir = writePackage(
+      path.join(app, "node_modules/@vendor/sealed"),
+      {
+        name: "@vendor/sealed",
+        exports: { ".": "./index.js" },
+      },
+    )
+    writeFileSync(path.join(dir, "index.js"), "")
+    expect(pluginDir("@vendor/sealed", app, undefined)).toBe(dir)
+  })
+
   it("is null when neither root can see the package", () => {
     const app = writePackage(tempDir(), {})
     const adaptvRoot = writePackage(tempDir(), {})

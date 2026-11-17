@@ -8,12 +8,25 @@
 // clean build log above it. `@capawesome/capacitor-live-update` — the OTA mechanism —
 // is the first plugin adaptv ships that the prefix would have dropped, so it is the
 // fixture here rather than a synthetic name.
-import { existsSync, readFileSync } from "node:fs"
-import { createRequire } from "node:module"
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs"
+import { tmpdir } from "node:os"
 import path from "node:path"
-import { describe, expect, it } from "vitest"
-import { carriesNativeCode } from "#adaptv/native/installed-plugins.ts"
-import { ADAPTV_ROOT, adaptvCapacitorNativePkgs } from "./native.mjs"
+import { afterAll, beforeAll, describe, expect, it } from "vitest"
+import {
+  carriesNativeCode,
+  pluginDir,
+} from "#adaptv/native/installed-plugins.ts"
+import {
+  ADAPTV_ROOT,
+  adaptvCapacitorNativePkgs,
+  pkgDirResolver,
+} from "./native.mjs"
 
 const OTA_PLUGIN = "@capawesome/capacitor-live-update"
 
@@ -97,13 +110,49 @@ describe("🔴 the CLI and the OTA fingerprint must answer the same question", (
   })
 })
 
-/** Resolve from adaptv, where its own dependencies live. */
+describe("a plugin whose exports map leaves out ./package.json", () => {
+  //`require.resolve("<pkg>/package.json")` throws ERR_PACKAGE_PATH_NOT_EXPORTED for
+  //these, so a resolver built on it drops the plugin: compiled out of the binary by
+  //the CLI, and invisible to the OTA fingerprint
+  const SEALED = "@vendor/sealed"
+  let root
+  beforeAll(() => {
+    root = mkdtempSync(path.join(tmpdir(), "adaptv-sealed-"))
+    writeFileSync(
+      path.join(root, "package.json"),
+      JSON.stringify({ dependencies: { [SEALED]: "1.0.0" } }),
+    )
+    const dir = path.join(root, "node_modules", SEALED)
+    mkdirSync(path.join(dir, "android"), { recursive: true })
+    writeFileSync(
+      path.join(dir, "package.json"),
+      JSON.stringify({
+        name: SEALED,
+        capacitor: {},
+        exports: { ".": "./index.js" },
+      }),
+    )
+    writeFileSync(path.join(dir, "index.js"), "")
+  })
+  afterAll(() => rmSync(root, { recursive: true, force: true }))
+
+  it("is compiled in by the CLI", () => {
+    expect(adaptvCapacitorNativePkgs("android", root)).toContain(SEALED)
+  })
+
+  it("is found by the native injectors and preflight", () => {
+    expect(pkgDirResolver(root)(SEALED)).toBe(
+      path.join(root, "node_modules", SEALED),
+    )
+  })
+
+  it("is counted by the fingerprint, in step with the CLI", () => {
+    expect(carriesNativeCode(pluginDir(SEALED, root, root))).toBe(true)
+    expect(adaptvCapacitorNativePkgs("ios", root)).toEqual([SEALED])
+  })
+})
+
+/** Resolve from adaptv, where its own dependencies live — the fingerprint's resolver. */
 function dirOf(name) {
-  const req = createRequire(path.join(ADAPTV_ROOT, "package.json"))
-  try {
-    const dir = path.dirname(req.resolve(`${name}/package.json`))
-    return existsSync(dir) ? dir : null
-  } catch {
-    return null
-  }
+  return pluginDir(name, ADAPTV_ROOT, ADAPTV_ROOT)
 }
