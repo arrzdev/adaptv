@@ -48,7 +48,7 @@ to a ready PR only what you want merged.
 
 Browser suites in CI (`e2e.yml`, never required): the `e2e` label on a PR runs the five PR suites
 (`test:e2e`, `:plain`, `:sw`, `:sw:spa`, `:sw:prompt`) on chromium, and the same runs nightly on
-`main`; `e2e-full` (every suite × chromium + webkit, weekly or on demand) runs before a release. The
+`main` with `:stress` on chromium beside it (dispatch with `scope=nightly` to run that set on a branch); `e2e-full` (every suite × chromium + webkit, weekly or on demand) runs before a release. The
 WebKit and Android smokes run on demand or when their own files change. Before marking ready a PR
 that touches runtime or service-worker code (or anything visual or behavioural), run the specs you
 touched locally on chromium and paste the result in the PR's `Verify:` section, or add the `e2e` label.

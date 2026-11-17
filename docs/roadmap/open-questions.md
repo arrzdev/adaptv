@@ -14,8 +14,9 @@
 ### O11a — Browser suite in CI
 
 **Answered: every suite, both engines, off the per-PR path.** `.github/workflows/e2e.yml` (never a
-required check) has two jobs. `e2e` runs five suites (main, `plain`, `sw`, `sw-spa`, `sw-prompt`) on
-`chromium` for a PR labelled `e2e` and nightly on `main`. `e2e-full` is a matrix of every suite
+required check) has three jobs. `e2e` runs five suites (main, `plain`, `sw`, `sw-spa`, `sw-prompt`) on
+`chromium` for a PR labelled `e2e` and nightly on `main`; `e2e-stress` runs `stress` on `chromium`, in
+two shards, nightly beside it. `e2e-full` is a matrix of every suite
 (main, `plain`, `stress`, `sw`, `sw-spa`, `sw-prompt`, `sw-node`, `sw-subpath`) × `chromium` and
 `webkit`, weekly and on demand, and runs before a release. Each job installs only its own engine,
 runs with `CI=1` so the config boots and never reuses its own server, and uploads the HTML report
