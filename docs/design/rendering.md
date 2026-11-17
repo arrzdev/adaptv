@@ -733,9 +733,13 @@ Freshness belongs to the **data layer** (consumer-wired: TanStack Query + an IDB
 - **Activate-time cache sweep.** Runtime buckets are named `<bucket>-<buildTag>`, with the base in
   front under a subpath (`/app/static-<tag>`, because Cache Storage is per origin, not per scope); on
   `activate`, every cache whose name starts with a bucket adaptv **owns** under this app's base and
-  whose tag is not the current one is deleted. `cleanupOutdatedCaches()` does **not** do this — it only removes precaches written by *older
+  whose tag is not the current one is deleted. Precache cleanup does **not** do this — it only removes precaches written by *older
   Workbox versions* — so without the sweep every deploy mints buckets that are never freed, ending in a
   quota error on a frequently-deployed app. → `docs/decisions/register.md` B2
+
+  That precache cleanup is adaptv's own (`sw.precache.ts`), not Workbox's `cleanupOutdatedCaches()`:
+  Workbox's matches the scope as a substring, so a worker at `/` deleted the precache of an app at
+  `/docs/` on the same origin. adaptv's requires the precache name to **end** with its own scope.
 
   The owned list is exactly `static`, `pages`, `documents`, and it is an **allowlist on purpose**: a
   prefix rule like "delete anything that isn't the current tag" would take caches adaptv did not
