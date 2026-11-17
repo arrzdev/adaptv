@@ -121,7 +121,7 @@ required check on `main`. Draft PRs run only the affected tests; docs-only PRs r
 
 **The browser suites run off the per-push path** (`.github/workflows/e2e.yml`): add the label `e2e` to
 a PR to run the chromium PR suites (main, sw, sw-spa, sw-prompt) in one job; a nightly run does the
-same on `main` when it has moved, and opens an issue when red; a weekly run (and a manual dispatch)
+same on `main` when it has moved, plus `stress` on chromium, and opens an issue when red; a weekly run (and a manual dispatch)
 runs every suite on chromium **and** webkit, including `stress`. Run the full matrix before a release.
 Whether the native matrix can run in CI at all is still open (**O11b**).
 
