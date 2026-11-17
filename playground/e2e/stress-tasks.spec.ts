@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test"
 import { expect, test } from "@playwright/test"
+import { watchNetworkProcess } from "./support/browser-crash"
 import { awaitClientHandover } from "./support/hydrated"
 import {
   card,
@@ -29,6 +30,9 @@ import {
  * for the wrong reason. The reload storm counts errors only from the document
  * it settles on: WebKit reports the module imports a reload aborts in the
  * document it tore down as page errors, and those are the reload, not the app.
+ * Its count checks name a crash of WebKit's network process when there was one
+ * (`support/browser-crash.ts`): that empties the test context's storage and
+ * reads "0 pending" exactly like lost writes.
  */
 
 const MUTATIONS = "/src/data/collections/todos/mutations.ts"
@@ -127,20 +131,27 @@ test.describe("The tasks app under load", () => {
     await openApp(page)
     await createMany(page, "Kept", 50)
     await expect(taskCounts(page)).toHaveText(/50 pending/)
+    const network = watchNetworkProcess(page)
 
     //five reloads back to back, each tearing down a document still booting
     for (let reload = 0; reload < 5; reload += 1) {
       await page.reload()
     }
     await awaitClientHandover(page)
-    await expect(taskCounts(page)).toHaveText(/50 pending/)
+    await expect(
+      taskCounts(page),
+      network.explain("the storm lost tasks"),
+    ).toHaveText(/50 pending/)
     expect(await storedRows(page)).toHaveLength(50)
 
     //and the document that follows the storm boots clean, start to finish
     const errors = collectErrors(page)
     await page.reload()
     await awaitClientHandover(page)
-    await expect(taskCounts(page)).toHaveText(/50 pending/)
+    await expect(
+      taskCounts(page),
+      network.explain("the reload after the storm lost tasks"),
+    ).toHaveText(/50 pending/)
     expect(await storedRows(page)).toHaveLength(50)
     expect(errors).toEqual([])
   })
