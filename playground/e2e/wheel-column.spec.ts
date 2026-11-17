@@ -75,10 +75,13 @@ test.describe.configure({ mode: "serial" })
  * wheel from `onClick`. Fired before hydration, every one of those is silently dropped.
  */
 
-/** Wait for the drum to truly SETTLE. `%ITEM_H≈0` alone is not enough —
- *  scrollTop sweeps THROUGH whole-row multiples during the glide, so a bare
- *  snap check returns mid-animation and reads a stale row. Wait for scrollTop
- *  to stop moving across a window AND be on a row. */
+/** Wait for the drum to truly SETTLE. A bare snap check is not enough —
+ *  scrollTop sweeps THROUGH whole-row multiples during the glide, so it returns
+ *  mid-animation and reads a stale row. Wait for scrollTop to stop moving across
+ *  a window AND be within a pixel of a row, on either side: the component's own
+ *  snap leaves a rest that close alone (`commit` rolls only when it is more than
+ *  1px off), and a coast that ends 1px short of a row rests at `ITEM_H - 1`,
+ *  which a remainder check alone reads as the far end of the row. */
 async function settle(page: Page) {
   await expect
     .poll(
@@ -86,7 +89,9 @@ async function settle(page: Page) {
         const a = await hourScrollTop(page)
         await page.waitForTimeout(120)
         const b = await hourScrollTop(page)
-        return a === b ? b % ITEM_H : 999 // moving → keep polling
+        if (a !== b) return 999 // moving → keep polling
+        const off = b % ITEM_H
+        return Math.min(off, ITEM_H - off)
       },
       { timeout: 10_000 },
     )
@@ -252,16 +257,18 @@ test.describe("WheelColumn as a native scroller", () => {
     ).toBe("")
   })
 
-  //The fling is played inside the page, one move a frame and the release on the
-  //next: Playwright's mouse is a round trip per call, and on a loaded machine its
-  //release lands ~100ms after the last move, which reads as a drag that stopped
-  //before letting go (and rightly does not coast).
+  //The fling is played inside the page, in ONE task: each move 12ms after the last by
+  //spinning on the clock, and the release 12ms after the final move. The wheel reads the
+  //release speed from the moves of the last 80ms, so a timer or a Playwright round trip
+  //between two of them (a frame callback on a loaded machine runs 100ms+ late) leaves
+  //one move in the window, which reads as a drag that stopped before letting go, and
+  //rightly does not coast. Nothing can land between the events of a single task.
   test("a fast mouse fling coasts past where the pointer let go", async ({
     page,
   }) => {
     await setup(page)
     await page.evaluate(
-      async ([selector, x, y, rowHeight]) => {
+      ([selector, x, y, rowHeight]) => {
         const wheel = document.querySelector(selector as string)
         if (!wheel) throw new Error("no hour wheel")
         const fire = (type: string, clientY: number) =>
@@ -277,17 +284,21 @@ test.describe("WheelColumn as a native scroller", () => {
               clientY,
             }),
           )
-        const frame = () =>
-          new Promise((resolve) => setTimeout(resolve, 16))
+        const spin = (ms: number) => {
+          const until = performance.now() + ms
+          while (performance.now() < until) {
+            //hold the thread: the gap between two events is exactly this long
+          }
+        }
         fire("pointerdown", y as number)
         for (let step = 1; step <= 4; step++) {
-          await frame()
+          spin(12)
           fire(
             "pointermove",
             (y as number) - (step * (rowHeight as number)) / 2,
           )
         }
-        await frame()
+        spin(12)
         fire("pointerup", (y as number) - 2 * (rowHeight as number))
       },
       [HOUR, cx, cy, ITEM_H] as const,
@@ -509,6 +520,37 @@ test.describe("WheelColumn's settle", () => {
       "one scroll event, landing on the row it crossed into",
     ).toEqual([(START + 1) * ITEM_H])
     expect(await calls(), "one row crossed is one onChange").toBe(1)
+  })
+})
+
+/*
+ * A rest within a pixel of a row is a rest: the snap leaves it where it is, so `settle`
+ * has to accept it from either side. A mouse fling's coast ends on whatever pixel its
+ * friction curve reaches, so some runs end 1px short of a row, where the old
+ * remainder-only check read 29 for the whole 10s timeout.
+ */
+test.describe("WheelColumn's rest", () => {
+  test("a rest 1px short of a row stays put and counts as settled", async ({
+    page,
+  }) => {
+    await page.goto("/lab/wheel-column")
+    await awaitClientHandover(page)
+    const hour = page.locator(HOUR)
+    await expect(
+      page.locator(`${HOUR} button[data-active="true"]`),
+    ).toHaveText(label(START))
+    await hour.scrollIntoViewIfNeeded()
+    await settle(page)
+
+    const rest = (START + 1) * ITEM_H - 1
+    await hour.evaluate((el, top) => {
+      el.scrollTop = top
+    }, rest)
+    await settle(page)
+    //past the 120ms settle: a snap, had it come, has landed by now
+    await page.waitForTimeout(400)
+    expect(await hourScrollTop(page)).toBe(rest)
+    expect(await activeHour(page)).toBe(label(START + 1))
   })
 })
 
