@@ -2,8 +2,8 @@
 // affects the bundle has changed, so a re-launch goes (almost) straight to the native
 // build. → user ask: "if the web build didn't change, bypass steps, launch faster".
 //
-// The fingerprint is a hash of every app file's path + size + mtime (a superset of the
-// SPA inputs). Over-inclusive on purpose: an unrelated edit just triggers a rebuild
+// The fingerprint is a hash of every app file's path + content (a superset of the SPA
+// inputs). Over-inclusive on purpose: an unrelated edit just triggers a rebuild
 // (safe), whereas a missed edit would launch stale code (never acceptable). `--force`
 // bypasses it. This module only COMPUTES the hashes; what was last seen is remembered in
 // the `build` section of `.adaptv/state.json` (see `state.mjs`).
@@ -41,17 +41,15 @@ const SKIP_DIRS = new Set([
 const SKIP_FILES = new Set(["capacitor.config.json", ".DS_Store"])
 
 /**
- * A hash of the app's source tree — path + size + **mtime** of every non-skipped file.
+ * A hash of the app's source tree — path + **content** of every non-skipped file.
  *
- * Deliberately mtime-based, NOT content-based like `nativeFingerprint()`, and the two are
- * intentionally different for a reason: the native tree is re-stamped by `generateAssets`
- * every run (byte-identical files, fresh mtimes) so mtime there false-positives forever —
- * hence content. The web SOURCE tree has no such re-stamping: a file's mtime only moves
- * when it's genuinely edited, so mtime is both correct AND cheap here. Measured 2026-09-02
- * on the playground app (182 files / 3.5 MB): 1.7 ms median per walk, against ~4× that for
- * content over the same files — a cost that grows with the asset tree, for zero correctness
- * gain. So this stays mtime; the divergence is by design, not an oversight. Over-inclusive
- * either way: a false rebuild is free, a missed edit shipping stale code is not.
+ * Content, like `nativeFingerprint()`, for the same reason: a step that rewrites a file with
+ * identical bytes gives it a fresh mtime, and an mtime hash then throws the cache away (that is
+ * exactly how the native one never hit once). Content is the honest question — what the tree
+ * CONTAINS, not when it was last touched. The cost is not material: measured 2026-09-02 on the
+ * playground app (422 files / 11.0 MB), 11.3 ms by content against 3.0 ms by mtime, in a 29 s
+ * build. Over-inclusive either way: a false rebuild is free, a missed edit shipping stale code
+ * is not.
  */
 export function fingerprint(appRoot) {
   const h = createHash("sha1")
@@ -67,11 +65,12 @@ export function fingerprint(appRoot) {
       if (e.isDirectory()) {
         if (!SKIP_DIRS.has(e.name)) walk(path.join(dir, e.name))
       } else if (e.isFile() && !SKIP_FILES.has(e.name)) {
+        const full = path.join(dir, e.name)
         try {
-          const s = statSync(path.join(dir, e.name))
-          h.update(
-            `${path.relative(appRoot, path.join(dir, e.name))}:${s.size}:${Math.round(s.mtimeMs)}\n`,
-          )
+          const body = readFileSync(full)
+          h.update(`${path.relative(appRoot, full)}:`)
+          h.update(body)
+          h.update("\n")
         } catch {}
       }
     }
@@ -96,7 +95,7 @@ export function fingerprint(appRoot) {
  * import graph would cost an esbuild bundle on every poll to catch changes that mostly are
  * not native ones.
  *
- * mtime + size for the art, like `fingerprint()` and for the same reason: nothing re-stamps
+ * mtime + size for the art, like `cliSourceFingerprint()`: nothing re-stamps
  * the dev's SOURCE icons, so an mtime only moves when they genuinely edit one. (The native
  * tree needs content hashing precisely because `generateAssets` rewrites it every run.)
  */
@@ -161,7 +160,7 @@ const NATIVE_SKIP_FILES = new Set([".DS_Store", "local.properties"])
  * dependencies (adding/removing a native plugin), and the native project's own sources
  * (Info.plist, AndroidManifest, gradle, pbxproj, generated icons/splash).
  *
- * Hashes CONTENT, not size+mtime like `fingerprint()` does. That difference is load-
+ * Hashes CONTENT, not size+mtime, as `fingerprint()` now does too. That is load-
  * bearing: `generateAssets` re-stamps icons, colours and the launch storyboard into the
  * native project on every single run, writing byte-identical files with fresh mtimes. An
  * mtime-based hash therefore changed every run and the cache never hit once (measured).
@@ -235,7 +234,7 @@ export function nativeFingerprint(appRoot, platform) {
  * was restarted. `dev` polls this so it can SAY "restart to apply" instead of leaving the dev to
  * wonder why their framework edit did nothing.
  *
- * mtime + size, like `fingerprint()`: nothing re-stamps these sources, so an mtime only moves on a
+ * mtime + size, like the icon art in `appConfigFingerprint()`: nothing re-stamps these sources, so an mtime only moves on a
  * genuine edit. `.test.mjs` is skipped — a test edit changes no runtime behaviour, so it must not
  * nag for a restart. Zero false notices for a real (installed) consumer; the whole signal for a
  * framework dev.

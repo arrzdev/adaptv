@@ -190,4 +190,14 @@ describe("fingerprint — did anything the web bundle is built FROM change?", ()
     utimesSync(file, t, t)
     expect(fingerprint(root)).not.toBe(before)
   })
+
+  it("holds when a step rewrites a file with identical bytes and a fresh mtime — what it contains, not when it was touched", () => {
+    const root = tree()
+    const before = fingerprint(root)
+    const file = path.join(root, "src", "app.tsx")
+    writeFileSync(file, "export const a = 1")
+    const t = Date.now() / 1000 + 5
+    utimesSync(file, t, t)
+    expect(fingerprint(root)).toBe(before)
+  })
 })
