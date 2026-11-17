@@ -1,13 +1,14 @@
 # adaptv — dev-loop debt
 
-> 📐 **Four named items of debt against machinery that already works.** Was
+> 📐 **Three named items of debt against machinery that already works.** Was
 > `DEV-LOOP-REVIEW.md`; renamed and moved here 2026-08-30 because every remaining item is work not yet
 > done.
 >
-> **Five of the original nine are discharged and have been removed:**
+> **Six of the original nine are discharged and have been removed:**
 >
 > | Was | Discharged by |
 > |---|---|
+> | **§B** — "two fingerprints, two different hashing strategies" | `bin/lib/fingerprint.mjs` `fingerprint()` now hashes each file's path + content, like `nativeFingerprint()`, so a step that rewrites a file with identical bytes no longer throws the web build cache away. Measured before the switch (2026-09-02, playground app, 422 files / 11.0 MB): 11.3 ms by content against 3.0 ms by mtime, in a 29 s build. The `.output` hole that measurement turned up was fixed with it earlier (`SKIP_DIRS`). Pinned by `bin/lib/fingerprint.test.mjs` "holds when a step rewrites a file with identical bytes and a fresh mtime". |
 > | **§C** — "the `adb reverse` keeper treats a symptom; add the instance lock instead" | `bin/lib/lock.mjs` **is** that instance lock. A second `dev` now fails fast naming the pid and url, and `preview`/`build` refuse while a `dev` run owns the config. |
 > | **§D** — "`relaunchAndroidApp` still touches every connected device" | `bin/lib/native.mjs` `relaunchAndroidApp` resolves the run's serial through `androidSerialForTarget` and force-stops / relaunches on that ONE serial; the all-devices sweep is reached only when the target cannot be resolved. Pinned by `bin/lib/native-relaunch.test.mjs` — "force-stops and relaunches on the ONE serial the AVD name resolves to" and "falls back to every connected device only when the target is unresolvable". |
 > | **§F** — "`OFFLINE_PAGE` is duplicated with a *keep in sync* comment" | Still duplicated, but the duplication is now **mechanised** by `src/shell/offline-page-name.test.ts`, so drift fails the suite. The concern, not the duplication, was the item. |
@@ -86,38 +87,6 @@ with the app foreground), then decide.
 
 ---
 
-## B. Two fingerprints, two different hashing strategies
-
-**Today.** `fingerprint()` hashes the whole app tree by **path + size + mtime**.
-`nativeFingerprint()` hashes a curated native input set by **content**.
-
-**Why.** The native one *had* to be content-based: `generateAssets` re-stamps
-byte-identical icons and theme files on every run, so an mtime hash never matched
-and the cache never hit once (measured).
-
-**What to do.** Pick one strategy. The web fingerprint has the same hazard in
-principle — any step that rewrites an identical file invalidates it — and the two
-being different is a trap for whoever reads this next. Content hashing is the
-honest question ("what does it contain"), and at native scale it costs nothing.
-
-**Measured (2026-09-02, M3 Max, warm cache, median of 5×30).** Over `fingerprint()`'s
-exact walk of the playground app — 422 files / 11.0 MB — mtime costs **3.0 ms** and a
-sha1 content hash costs **11.3 ms**: 3.8×, ~8 ms absolute, called twice per
-`build ios` (both times with the same answer) in a build that takes 29 s. The native
-set is 0.93 ms (ios, 28 files) / 1.81 ms (android, 73 files) by content — the
-"22.9 ms" figure the code once cited does not reproduce. So the cost is not material
-either way; pick on honesty, not speed.
-
-**The larger finding the measurement turned up.** 242 of those 422 files (57%) and
-8.1 of the 11.0 MB (74%) were `.output/` — the SSR lineage's build output, which
-`SKIP_DIRS` did not list (it had `dist`, not `.output`). Reproduced twice:
-`build ios` 34.5 s → `build web` 4.1 s (rewrites `.output/`) → `build ios` **33.9 s**
-full rebuild with nothing under `src/` changed → `build ios` 4.2 s. Fixed in the
-same PR as this note by adding `.output` to the skip list, with a test — L14 says
-the two lineages never cross, and the fingerprint was the one place they did.
-
----
-
 ## E. `warmDevServer`'s heuristic could become a real signal
 
 Waiting for "two reads >500 bytes, then 1s of quiet" is a proxy for "Vite finished
@@ -169,6 +138,10 @@ is the transport, and the only document that travels over it is a static page ad
   unbuilt. Note it interacts with the run cache: a different appId is a different
   installed app, so the cache key needs it, and alternating modes rebuilds unless
   outputs are cached per-mode.
+- **A framework-only change reports `✓ web build · cached`** (`docs/DEVELOPMENT.md` names it "a
+  real bug"). Neither fingerprint hashes framework source: `fingerprint()` skips `node_modules`, and
+  `nativeFingerprint()` hashes the config, declared deps and the native project. Unifying their
+  hashing strategy (§B, discharged) did not change that; `--force` is the workaround.
 
 ---
 
@@ -177,12 +150,8 @@ is the transport, and the only document that travels over it is a static page ad
 1. **A** (Vite's ws events) — measured 2026-09-02 (§A): the event is now subscribed and the
    no-token fallback is gone; the proxy stays until a physical device shows whether the
    socket dies with or without a `close`. Nothing further deletes without that.
-2. **B** (unify fingerprints) — measured (§B, 2026-09-02): ~8 ms either way, so the pick is on
-   honesty, not speed; the `.output` hole the measurement turned up is already fixed. ⚠️ **This is the same bug
-   `docs/DEVELOPMENT.md` calls out**: a framework-only change reports `✓ web build · cached`, which
-   that doc names "a real bug". Two fingerprints with two hashing strategies is the cause.
-3. **E** — only if already in the file. **G** is discharged: its claim is a test now.
-4. The **Known-unfixed** list — none of it is from this work, and none of it has an owner yet.
+2. **E** — only if already in the file. **G** is discharged: its claim is a test now.
+3. The **Known-unfixed** list — none of it is from this work, and none of it has an owner yet.
 
 **A** is now the one item that changes how much code exists (**C**, its partner, has shipped as
 `bin/lib/lock.mjs`, and **D**, **H** and **I** were already in the code — what they lacked was a
