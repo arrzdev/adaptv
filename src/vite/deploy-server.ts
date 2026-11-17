@@ -1,5 +1,6 @@
 import type { Plugin, PluginOption } from "vite"
 import { esmExternalRequirePlugin } from "vite"
+import { devSsrSocketResetResend } from "#adaptv/vite/dev-ssr-socket-reset.ts"
 
 /**
  * The Vite environment the deploy plugin bundles the server into.
@@ -138,6 +139,7 @@ export async function adaptvDeployServerPlugins(
       prerender ? { prerender: PRERENDER } : undefined,
     ) as PluginOption,
     ssrReactRequireAsImport(),
+    devSsrSocketResetResend(DEPLOY_SERVER_ENVIRONMENT),
   ]
 }
 

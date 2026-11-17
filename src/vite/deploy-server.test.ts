@@ -74,12 +74,14 @@ describe("adaptvDeployServerPlugins", () => {
       .filter(Boolean)
     expect(names.length).toBeGreaterThan(0)
     //no adaptv-authored wrapper in the chain — the plugins are upstream's own, plus
-    //the one below, which only rewrites React requires in the SSR environment
+    //the one below, which only rewrites React requires in the SSR environment, and
+    //the dev-only re-send of a request whose pooled socket was reset
     expect(
       names.filter(
         (name) =>
           name?.startsWith("adaptv:") &&
-          name !== "adaptv:ssr-react-require-as-import",
+          name !== "adaptv:ssr-react-require-as-import" &&
+          name !== "adaptv:dev-ssr-socket-reset-resend",
       ),
     ).toEqual([])
   })
