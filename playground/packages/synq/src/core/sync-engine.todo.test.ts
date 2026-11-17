@@ -1,22 +1,10 @@
 import { describe, it } from "vitest"
 
 //---- Roadmap: remaining layers ------------------------------------
-//the pure core + snapshot sync engine + in-memory storage are done. what
-//is left is the ergonomic surface and the browser persistence.
+//the db factory, the live-query engine behind useCollection and the
+//IndexedDB adapter are done and tested in their own files. what is left
+//is a sync-progress signal on the React surface.
 
-describe("db factory (createSynq)", () => {
-  it.todo("exposes db[name] handles with insert/update/delete/get/query")
-  it.todo("db.sync() reconciles every collection; db[name].sync() one")
-  it.todo("insert appends an op and the read view shows it optimistically")
-})
-
-describe("react useQuery adapter", () => {
-  it.todo("serves warm memory cache instantly, then live-updates")
-  it.todo("query cache is ref-counted and GC'd after the last unmount")
+describe("react useCollection adapter", () => {
   it.todo("exposes isSyncing during a sync run")
-})
-
-describe("indexeddb storage adapter", () => {
-  it.todo("persists rows/ops/cursor across reopen (fake-indexeddb)")
-  it.todo("notifies subscribers once per atomic transaction")
 })

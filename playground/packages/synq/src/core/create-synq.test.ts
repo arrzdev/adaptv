@@ -28,14 +28,17 @@ function makeDb(config?: Partial<CollectionConfig<Todo>>) {
 }
 
 describe("createSynqStorage — local reads/writes", () => {
-  it("insert shows up optimistically as pending", async () => {
-    const { db } = makeDb()
+  it("insert appends an op and shows up optimistically as pending", async () => {
+    const { db, storage } = makeDb()
     const created = await db.todos.insert({
       title: "buy milk",
       checked: false,
       position: 0,
     })
     expect(created.$sync.$synced).toBe(false)
+    const ops = await storage.getOps("todos")
+    expect(ops).toHaveLength(1)
+    expect(ops[0]).toMatchObject({ type: "INSERT", rowId: created.$id })
     const got = await db.todos.get(created.$id)
     expect(got).toMatchObject({ title: "buy milk" })
     expect(got?.$sync.$syncStatus).toBe("pending")
@@ -191,6 +194,35 @@ describe("createSynqStorage — sync", () => {
     const got = await db.todos.get(t.$id)
     expect(got?.$sync.$synced).toBe(true)
     expect(got?.$sync.$syncStatus).toBe("synced")
+  })
+
+  it("db.sync() runs every collection; db[name].sync() runs only that one", async () => {
+    const pulled: string[] = []
+    const pullFor = (name: string) => async () => {
+      pulled.push(name)
+      return { changes: [], nextCursor: 1 }
+    }
+    const db = createSynqStorage({
+      storageAdapter: createMemoryStorage(),
+      collections: {
+        todos: {
+          name: "todos",
+          pull: pullFor("todos"),
+        } as CollectionConfig<Todo>,
+        notes: {
+          name: "notes",
+          pull: pullFor("notes"),
+        } as CollectionConfig<Todo>,
+      },
+    })
+
+    const outcomes = await db.sync()
+    expect(outcomes).toHaveLength(2)
+    expect(pulled).toEqual(["todos", "notes"])
+
+    pulled.length = 0
+    await db.notes.sync()
+    expect(pulled).toEqual(["notes"])
   })
 
   it("pulls shared remote rows into the local view", async () => {
