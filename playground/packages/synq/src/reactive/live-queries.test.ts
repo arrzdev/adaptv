@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import { createMemoryStorage } from "#synq/adapters/memory.adapter"
 import { createSynqStorage } from "#synq/core/create-synq"
 import { createLiveQueries } from "#synq/reactive/live-queries"
@@ -70,6 +70,38 @@ describe("createLiveQueries — dedup + reactivity", () => {
 })
 
 describe("createLiveQueries — gcTime semantics", () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it("is ref-counted: the observer stops only after the last unmount + gcTime", async () => {
+    const { db, handle } = makeHandle()
+    const engine = createLiveQueries(handle)
+    const a = engine.observe({ gcTime: 1000 }, () => {})
+    const b = engine.observe({ gcTime: 1000 }, () => {})
+    await flush()
+
+    vi.useFakeTimers()
+    //one of two observers leaves → still live
+    a.unsubscribe()
+    await db.todos.insert({ title: "a", checked: false, position: 0 })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(b.get().data).toHaveLength(1)
+
+    //last observer leaves → keeps processing inside the gcTime window…
+    b.unsubscribe()
+    await vi.advanceTimersByTimeAsync(999)
+    await db.todos.insert({ title: "b", checked: false, position: 1 })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(b.get().data).toHaveLength(2)
+
+    //…and is torn down once it elapses: later writes are not picked up
+    await vi.advanceTimersByTimeAsync(1)
+    await db.todos.insert({ title: "c", checked: false, position: 2 })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(b.get().data).toHaveLength(2)
+  })
+
   it("gcTime:0 stops processing on unmount but keeps last data for SWR", async () => {
     const { db, handle } = makeHandle()
     await db.todos.insert({ title: "a", checked: false, position: 0 })
