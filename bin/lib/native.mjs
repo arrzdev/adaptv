@@ -12,6 +12,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -1138,9 +1139,9 @@ export function restoreGradleWrapperMode(appRoot) {
  * plugin from anywhere else — `@capawesome/capacitor-live-update`, the OTA mechanism —
  * compiled fine and then never registered, surfacing at runtime as "plugin is not
  * implemented" with nothing in the build to explain it. */
-export function adaptvCapacitorNativePkgs(platform) {
+export function adaptvCapacitorNativePkgs(platform, root = ADAPTV_ROOT) {
   const pkg = JSON.parse(
-    readFileSync(path.join(ADAPTV_ROOT, "package.json"), "utf8"),
+    readFileSync(path.join(root, "package.json"), "utf8"),
   )
   const skip = new Set([
     "@capacitor/cli",
@@ -1157,14 +1158,8 @@ export function adaptvCapacitorNativePkgs(platform) {
   // itself, so adding it here would declare the same Gradle module twice.
   const forced = platform === "ios" ? "@capacitor/ios" : null
 
-  const req = createRequire(path.join(ADAPTV_ROOT, "package.json"))
-  const dirOf = (name) => {
-    try {
-      return path.dirname(req.resolve(`${name}/package.json`))
-    } catch {
-      return null
-    }
-  }
+  const from = path.join(root, "package.json")
+  const dirOf = (name) => packageDir(from, name)
 
   return Object.keys(pkg.dependencies ?? {}).filter(
     (n) => !skip.has(n) && (n === forced || carriesNativeCode(dirOf(n))),
@@ -1213,16 +1208,34 @@ function carriesNativeCode(dir) {
  * (R39) — preflight refuses exactly the names an injector would have had to skip, so the
  * check can never come to a different conclusion than the code it is protecting. */
 export function pkgDirResolver(appRoot) {
-  const reqAdaptv = createRequire(path.join(ADAPTV_ROOT, "package.json"))
-  const reqApp = createRequire(path.join(appRoot, "package.json"))
+  const roots = [appRoot, ADAPTV_ROOT].map((r) =>
+    path.join(r, "package.json"),
+  )
   return (name) => {
-    for (const req of [reqApp, reqAdaptv]) {
-      try {
-        return path.dirname(req.resolve(`${name}/package.json`))
-      } catch {}
+    for (const from of roots) {
+      const dir = packageDir(from, name)
+      if (dir) return dir
     }
     return null
   }
+}
+
+/** The directory of package `name` as seen from the file `from`, or null.
+ *
+ * IMPORTANT: mirrors `packageDir` in `src/native/installed-plugins.ts` (the OTA
+ * fingerprint's resolver) — same reason as `carriesNativeCode` below.
+ *
+ * Walks the `node_modules` chain node itself would search, rather than resolving
+ * `${name}/package.json`: a package whose `exports` map leaves out `./package.json`
+ * makes that resolve throw ERR_PACKAGE_PATH_NOT_EXPORTED, and the plugin silently
+ * dropped out of the build. Real path, as `require.resolve` returned. */
+function packageDir(from, name) {
+  for (const base of createRequire(from).resolve.paths(name) ?? []) {
+    const dir = path.join(base, name)
+    if (existsSync(path.join(dir, "package.json")))
+      return realpathSync(dir)
+  }
+  return null
 }
 
 /** Scan a plugin package's iOS sources for its registered class name(s) — mirrors

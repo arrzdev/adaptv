@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs"
+import { existsSync, readFileSync, realpathSync } from "node:fs"
 import { createRequire } from "node:module"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
@@ -89,11 +89,26 @@ export function pluginDir(
     path.join(appRoot, "package.json"),
     adaptvResolveFrom(adaptvRoot),
   ]) {
-    try {
-      return path.dirname(
-        createRequire(from).resolve(`${pkg}/package.json`),
-      )
-    } catch {}
+    const dir = packageDir(from, pkg)
+    if (dir) return dir
+  }
+  return null
+}
+
+/**
+ * The directory of package `name` as seen from the file `from`, or null.
+ *
+ * Walks the `node_modules` chain node itself would search, rather than resolving
+ * `${name}/package.json`: a plugin whose `exports` map leaves out `./package.json`
+ * makes that resolve throw ERR_PACKAGE_PATH_NOT_EXPORTED, and the plugin silently
+ * dropped out of the fingerprint. Real path, as `require.resolve` returned.
+ * Mirrored by `packageDir` in `bin/lib/native.mjs`.
+ */
+function packageDir(from: string, name: string): string | null {
+  for (const base of createRequire(from).resolve.paths(name) ?? []) {
+    const dir = path.join(base, name)
+    if (existsSync(path.join(dir, "package.json")))
+      return realpathSync(dir)
   }
   return null
 }
