@@ -228,6 +228,24 @@ describe("the copies it keeps of the framework", () => {
       "vite.config.ts",
     ])
   })
+
+  //`npm publish --provenance` refuses a package whose repository.url is not the https
+  //URL of the repo the workflow ran in (publish.yml), so both packages name it so.
+  it("names the repository it is published from, as the framework does", () => {
+    const own = JSON.parse(
+      readFileSync(
+        join(ROOT, "packages/create-adaptv/package.json"),
+        "utf8",
+      ),
+    )
+    expect(rootPkg.repository.url).toBe(
+      "git+https://github.com/arrzdev/adaptv.git",
+    )
+    expect(own.repository).toEqual({
+      ...rootPkg.repository,
+      directory: "packages/create-adaptv",
+    })
+  })
 })
 
 describe("names", () => {
